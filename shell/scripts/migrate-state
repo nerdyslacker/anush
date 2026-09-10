@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+
+import json
+import os
+from pathlib import Path
+import sys
+
+
+target = Path(sys.argv[1])
+template = Path(sys.argv[2])
+legacy = Path(sys.argv[3])
+
+if target.exists():
+    raise SystemExit(0)
+
+state = json.loads(template.read_text())
+
+
+def text(name):
+    path = legacy / name
+    return path.read_text().strip() if path.is_file() else ""
+
+
+def json_value(name):
+    value = text(name)
+    if not value:
+        return None
+    try:
+        return json.loads(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def number(name, conversion):
+    try:
+        return conversion(text(name))
+    except (TypeError, ValueError):
+        return None
+
+
+height = number("bar-height", int)
+scale = number("bar-scale", float)
+opacity = number("bar-transparent", float)
+widgets = json_value("bar-widgets.json")
+keyboard = json_value("keyboard-layout.json")
+tray = json_value("tray-hidden.json")
+tags = json_value("tags.json")
+pomo = text("pomodoro").split()
+
+if height is not None:
+    state["bar"]["height"] = max(28, min(80, height))
+if scale is not None:
+    state["bar"]["scale"] = max(0.7, min(2.0, scale))
+if opacity is not None:
+    state["bar"]["backgroundOpacity"] = max(0, min(1, opacity))
+elif text("bar-transparent") in ("true", "false"):
+    state["bar"]["backgroundOpacity"] = 0 if text("bar-transparent") == "true" else 1
+if isinstance(widgets, dict):
+    state["bar"]["widgets"] = {
+        key: value for key, value in widgets.items()
+        if isinstance(value, bool) and key != "showOnAllMonitors"
+    }
+    state["bar"]["clusters"] = widgets.get("clusters", {})
+    state["bar"]["showOnAllMonitors"] = widgets.get("showOnAllMonitors", True)
+    state["bar"]["position"] = widgets.get("barPosition", "top")
+
+state["weather"]["location"] = text("weather-location")
+units = text("weather-units").lower()
+state["weather"]["units"] = units if units in ("c", "f") else ""
+if isinstance(keyboard, dict):
+    state["keyboard"]["layout"] = keyboard
+if isinstance(tray, list):
+    state["tray"]["hidden"] = tray
+if isinstance(tags, dict):
+    state["tags"].update(tags)
+if len(pomo) >= 2:
+    try:
+        state["pomodoro"] = {"endMs": float(pomo[0]), "minutes": int(pomo[1])}
+    except ValueError:
+        pass
+
+accent = text("theme-accent")
+default_accent = text("srcery-accent")
+if accent:
+    state["theme"]["accent"] = accent
+if default_accent:
+    state["theme"]["defaultAccent"] = default_accent
+state["theme"]["wallpaperEnabled"] = text("wallpaper-theme-enabled") == "true"
+palette = json_value("wallpaper-palette.json")
+if isinstance(palette, dict):
+    state["theme"]["palette"] = palette
+
+gap = number("window-gap", int)
+if gap is not None:
+    state["windowManager"]["gap"] = max(0, min(40, gap))
+state["desktop"]["nightLight"] = text("night-light") == "1"
+
+target.parent.mkdir(parents=True, exist_ok=True)
+temporary = target.with_name(target.name + ".tmp")
+temporary.write_text(json.dumps(state, indent=2) + "\n")
+os.replace(temporary, target)

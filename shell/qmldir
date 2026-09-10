@@ -1,0 +1,59 @@
+singleton ShellState common/ShellState.qml
+singleton Theme common/Theme.qml
+singleton Wm common/Wm.qml
+singleton Sys common/Sys.qml
+singleton KeyboardState components/Keyboard/KeyboardState.qml
+singleton ClipboardState components/Clipboard/ClipboardState.qml
+singleton TagConfig components/Workspaces/TagConfig.qml
+singleton LauncherState components/Launcher/LauncherState.qml
+singleton BarVisibility components/Bar/BarVisibility.qml
+singleton TrayState components/Tray/TrayState.qml
+Bar components/Bar/Bar.qml
+BarModule components/Bar/BarModule.qml
+BarSettingsPopup components/Bar/BarSettingsPopup.qml
+Volume components/Audio/Volume.qml
+MicMute components/Audio/MicMute.qml
+AudioPopup components/Audio/AudioPopup.qml
+AudioSlider components/Audio/AudioSlider.qml
+AudioDeviceSelector components/Audio/AudioDeviceSelector.qml
+Battery components/Battery/Battery.qml
+BatteryPopup components/Battery/BatteryPopup.qml
+Brightness components/Battery/Brightness.qml
+BrightnessPopup components/Battery/BrightnessPopup.qml
+Clipboard components/Clipboard/Clipboard.qml
+ClipboardPopup components/Clipboard/ClipboardPopup.qml
+CapsLock components/Keyboard/CapsLock.qml
+KeyboardLayout components/Keyboard/KeyboardLayout.qml
+KeyboardLayoutPicker components/Keyboard/KeyboardLayoutPicker.qml
+KeyboardLayoutSettings components/Keyboard/KeyboardLayoutSettings.qml
+Launcher components/Launcher/Launcher.qml
+ApplicationLauncher components/Launcher/ApplicationLauncher.qml
+Media components/Media/Media.qml
+MediaPopup components/Media/MediaPopup.qml
+Metrics components/Metrics/Metrics.qml
+MetricsPopup components/Metrics/MetricsPopup.qml
+Updates components/Metrics/Updates.qml
+Network components/Network/Network.qml
+NetworkPopup components/Network/NetworkPopup.qml
+Bell components/Notifications/Bell.qml
+NotifyPopup components/Notifications/NotifyPopup.qml
+Clock components/Session/Clock.qml
+CalendarPopup components/Session/CalendarPopup.qml
+Commands components/Session/Commands.qml
+Screenshot components/Session/Screenshot.qml
+Tray components/Tray/Tray.qml
+TrayPopup components/Tray/TrayPopup.qml
+WallpaperPicker components/Wallpaper/WallpaperPicker.qml
+Weather components/Weather/Weather.qml
+WeatherPopup components/Weather/WeatherPopup.qml
+WeatherSettings components/Weather/WeatherSettings.qml
+Tags components/Workspaces/Tags.qml
+LayoutButton components/Workspaces/LayoutButton.qml
+LayoutPicker components/Workspaces/LayoutPicker.qml
+TagSettingsPopup components/Workspaces/TagSettingsPopup.qml
+Title components/Workspaces/Title.qml
+ScratchpadsPopup components/Workspaces/ScratchpadsPopup.qml
+Scratchpads components/Workspaces/Scratchpads.qml
+WindowOverview components/Workspaces/WindowOverview.qml
+Popout common/Popout.qml
+TweakSlider common/TweakSlider.qml

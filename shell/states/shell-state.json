@@ -1,0 +1,42 @@
+{
+  "bar": {
+    "height": 34,
+    "scale": 1.0,
+    "backgroundOpacity": 1.0,
+    "widgets": {},
+    "clusters": {},
+    "showOnAllMonitors": true,
+    "position": "top"
+  },
+  "weather": {
+    "location": "",
+    "units": "c"
+  },
+  "keyboard": {
+    "layout": {}
+  },
+  "tray": {
+    "hidden": []
+  },
+  "tags": {
+    "count": 9,
+    "showNumbers": true,
+    "dynamicWorkspaces": false
+  },
+  "pomodoro": {
+    "endMs": 0,
+    "minutes": 25
+  },
+  "theme": {
+    "accent": "orange",
+    "defaultAccent": "brightYellow",
+    "wallpaperEnabled": false,
+    "palette": null
+  },
+  "windowManager": {
+    "gap": 8
+  },
+  "desktop": {
+    "nightLight": false
+  }
+}
