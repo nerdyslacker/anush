@@ -225,7 +225,7 @@ Popout {
         Repeater {
             model: [
                 { label: "Cancel", primary: false },
-                { label: "Save", primary: true }
+                { label: "Apply", primary: true }
             ]
             Rectangle {
                 required property var modelData

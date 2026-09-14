@@ -101,8 +101,13 @@ shell/shell.qml         Quickshell entry point
 Persistent settings live in
 `${XDG_STATE_HOME:-$HOME/.local/state}/anush/shell-state.json`. Set
 `ANUSH_STATE_DIR` to override that directory. The sections are `bar`,
-`weather`, `keyboard`, `tray`, `tags`, `pomodoro`, `theme`, `windowManager`,
-and `desktop`.
+`weather`, `launcher`, `keyboard`, `tray`, `tags`, `pomodoro`, `theme`,
+`windowManager`, and `desktop`.
+
+Right-click the launcher button to choose an icon-theme icon or an image file.
+Image paths inside the anush config directory are stored relative to that
+directory for portability. An unavailable or deleted custom icon falls back to
+the built-in anush glyph; **Reset** clears the saved customization.
 
 Rounded corners are controlled by the canonical `theme.cornerRadius` value.
 It is watched at runtime along with the rest of the state, so editing the state

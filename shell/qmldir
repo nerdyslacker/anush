@@ -28,6 +28,7 @@ KeyboardLayoutPicker components/Keyboard/KeyboardLayoutPicker.qml
 KeyboardLayoutSettings components/Keyboard/KeyboardLayoutSettings.qml
 Launcher components/Launcher/Launcher.qml
 ApplicationLauncher components/Launcher/ApplicationLauncher.qml
+LauncherIconPicker components/Launcher/LauncherIconPicker.qml
 Media components/Media/Media.qml
 MediaPopup components/Media/MediaPopup.qml
 Metrics components/Metrics/Metrics.qml

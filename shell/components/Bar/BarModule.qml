@@ -7,8 +7,10 @@ Rectangle {
     id: root
 
     property string icon: ""
+    property url iconSource: ""
     property color iconColor: Theme.accent
     property string compactIcon: icon
+    property url compactIconSource: iconSource
     property color compactIconColor: iconColor
     property string compactLabel: ""
     // some glyphs (e.g. Font Logos ) are missing from JetBrainsMono NF here
@@ -57,13 +59,25 @@ Rectangle {
         spacing: Math.round(7 * Theme.barScale)
 
         Text {
-            visible: root.icon !== ""
+            visible: root.icon !== "" && (root.iconSource.toString() === ""
+                || rowIcon.status !== Image.Ready)
             anchors.verticalCenter: parent.verticalCenter
             text: root.icon
             color: root.iconColor
             font.family: root.iconFont
             font.pixelSize: Theme.iconSize
             Behavior on color { ColorAnimation { duration: 250 } }
+        }
+
+        Image {
+            id: rowIcon
+            visible: root.iconSource.toString() !== "" && status === Image.Ready
+            anchors.verticalCenter: parent.verticalCenter
+            width: Theme.iconSize
+            height: Theme.iconSize
+            source: root.iconSource
+            fillMode: Image.PreserveAspectFit
+            asynchronous: true
         }
 
         Text {
@@ -85,12 +99,26 @@ Rectangle {
 
         Text {
             visible: root.compactIcon !== ""
+                && (root.compactIconSource.toString() === ""
+                    || compactImage.status !== Image.Ready)
             anchors.horizontalCenter: parent.horizontalCenter
             text: root.compactIcon
             color: root.compactIconColor
             font.family: root.iconFont
             font.pixelSize: Theme.iconSize
             Behavior on color { ColorAnimation { duration: 250 } }
+        }
+
+        Image {
+            id: compactImage
+            visible: root.compactIconSource.toString() !== ""
+                && status === Image.Ready
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: Theme.iconSize
+            height: Theme.iconSize
+            source: root.compactIconSource
+            fillMode: Image.PreserveAspectFit
+            asynchronous: true
         }
 
         Text {

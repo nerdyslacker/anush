@@ -41,6 +41,7 @@ Singleton {
                 position: "top"
             },
             weather: { location: "", units: "c" },
+            launcher: { icon: "" },
             keyboard: { layout: {} },
             tray: { hidden: [] },
             tags: { count: 9, showNumbers: true, dynamicWorkspaces: false },

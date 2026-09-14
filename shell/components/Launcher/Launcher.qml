@@ -1,20 +1,30 @@
 import QtQuick
 import "../.."
 
-// Left click opens the native application launcher. Wallpaper actions live on
-// the layout button alongside the other desktop appearance controls.
+// Left click opens the application launcher; right click edits its icon.
 BarModule {
     id: root
 
-    icon: "󰀻"
+    icon: LauncherState.defaultGlyph
+    iconSource: LauncherState.resolveIcon(LauncherState.icon)
     iconColor: Theme.accent
     onClicked: mouse => {
-        if (mouse.button === Qt.LeftButton)
+        if (mouse.button === Qt.LeftButton) {
+            iconPicker.visible = false
             applications.toggle()
+        } else if (mouse.button === Qt.RightButton) {
+            applications.visible = false
+            iconPicker.toggle()
+        }
     }
 
     ApplicationLauncher {
         id: applications
+        anchorItem: root
+    }
+
+    LauncherIconPicker {
+        id: iconPicker
         anchorItem: root
     }
 }
