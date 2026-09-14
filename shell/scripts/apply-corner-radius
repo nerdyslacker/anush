@@ -4,6 +4,7 @@
 set -u
 
 radius=${1:-}
+wm_message=${2:-}
 case $radius in
     ''|*[!0-9]*) exit 2 ;;
 esac
@@ -29,5 +30,8 @@ chmod 644 "$temporary"
 mv "$temporary" "$config_file"
 trap - EXIT HUP INT TERM
 
-message=$(command -v skarwm-msg 2>/dev/null || true)
+message=$(command -v "$wm_message" 2>/dev/null || true)
+if [ -z "$message" ]; then
+    message=$(command -v skarwm-msg 2>/dev/null || true)
+fi
 [ -z "$message" ] || "$message" reload >/dev/null 2>&1 || true

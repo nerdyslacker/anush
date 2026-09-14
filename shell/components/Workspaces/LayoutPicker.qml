@@ -31,6 +31,36 @@ Popout {
         topPadding: 5
     }
 
+    component SettingSwitch: Rectangle {
+        id: control
+        property bool checked: false
+        signal toggled()
+
+        width: 34
+        height: 18
+        radius: Math.min(height / 2, Theme.radiusSmall)
+        color: checked ? Theme.accent : Qt.alpha(Theme.foreground, 0.15)
+        Behavior on color { ColorAnimation { duration: 150 } }
+
+        Rectangle {
+            x: control.checked ? parent.width - width - 2 : 2
+            anchors.verticalCenter: parent.verticalCenter
+            width: 14
+            height: 14
+            radius: Math.min(width / 2, Theme.radiusSmall)
+            color: control.checked ? Theme.background
+                : Qt.alpha(Theme.foreground, 0.7)
+            Behavior on x {
+                NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: control.toggled()
+        }
+    }
+
     Column {
         id: content
         anchors.left: parent.left
@@ -160,6 +190,37 @@ Popout {
                         onClicked: Theme.setAccent(swatch.modelData)
                     }
                 }
+            }
+        }
+
+        Row {
+            width: parent.width
+            height: 30
+            spacing: 9
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Dark theme"
+                color: Theme.light ? Theme.foregroundMuted : Theme.accent
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize - 1
+                font.bold: !Theme.light
+            }
+
+            SettingSwitch {
+                anchors.verticalCenter: parent.verticalCenter
+                checked: Theme.light
+                onToggled: Theme.persistThemeMode(
+                    Theme.light ? "dark" : "light")
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Light theme"
+                color: Theme.light ? Theme.accent : Theme.foregroundMuted
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize - 1
+                font.bold: Theme.light
             }
         }
     }

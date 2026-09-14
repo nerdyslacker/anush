@@ -43,7 +43,9 @@ Popout {
         Quickshell.execDetached([
             Theme.scriptsDir + "/wallpaper-theme",
             path,
-            Theme.wallpaperThemeEnabled ? "true" : "false"
+            Theme.wallpaperThemeEnabled ? "true" : "false",
+            Theme.mode,
+            Wm.msgPath
         ])
         visible = false
     }

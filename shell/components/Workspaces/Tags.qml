@@ -49,7 +49,7 @@ Item {
                     anchors.centerIn: parent
                     visible: TagConfig.showNumbers
                     text: tag.index + 1
-                    color: tag.selected ? Theme.hardBlack : Theme.brightWhite
+                    color: tag.selected ? Theme.accentForeground : Theme.foreground
                     font.family: Theme.fontFamily
                     font.pixelSize: 12
                     font.bold: tag.selected
@@ -62,7 +62,7 @@ Item {
                     height: width
                     radius: width / 2
                     color: tag.selected || tag.urgent
-                        ? Theme.hardBlack
+                        ? Theme.accentForeground
                         : Qt.alpha(Theme.fg, tag.occupied ? 0.55 : 0.28)
                 }
                 MouseArea {

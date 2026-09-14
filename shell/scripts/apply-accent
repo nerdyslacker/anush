@@ -4,6 +4,7 @@
 set -u
 
 accent=${1:-}
+wm_message=${2:-}
 case $accent in
     \#*) ;;
     *) exit 2 ;;
@@ -53,6 +54,9 @@ if [ "${ANUSH_ACCENT_NO_RELOAD:-0}" != 1 ]; then
     elif command -v pkill >/dev/null 2>&1; then
         pkill -HUP -x dunst 2>/dev/null || true
     fi
-    message=$(command -v skarwm-msg 2>/dev/null || true)
+    message=$(command -v "$wm_message" 2>/dev/null || true)
+    if [ -z "$message" ]; then
+        message=$(command -v skarwm-msg 2>/dev/null || true)
+    fi
     [ -z "$message" ] || "$message" reload >/dev/null 2>&1 || true
 fi

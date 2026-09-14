@@ -35,7 +35,8 @@
     "defaultAccent": "brightYellow",
     "wallpaperEnabled": false,
     "palette": null,
-    "cornerRadius": 0
+    "cornerRadius": 0,
+    "mode": "dark"
   },
   "windowManager": {
     "gap": 8

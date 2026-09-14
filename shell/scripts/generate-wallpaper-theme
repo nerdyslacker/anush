@@ -27,6 +27,89 @@ def hex_color(hue, saturation, lightness):
     return f"#{round(red * 255):02x}{round(green * 255):02x}{round(blue * 255):02x}"
 
 
+def blend(first, second, amount):
+    """Blend two #RRGGBB colors; amount is the share of second."""
+    left = tuple(int(first[index:index + 2], 16) for index in (1, 3, 5))
+    right = tuple(int(second[index:index + 2], 16) for index in (1, 3, 5))
+    mixed = (round(a * (1 - amount) + b * amount)
+             for a, b in zip(left, right))
+    return "#" + "".join(f"{channel:02x}" for channel in mixed)
+
+
+def darken(color, factor):
+    red, green, blue = (int(color[index:index + 2], 16) / 255
+                        for index in (1, 3, 5))
+    hue, lightness, saturation = colorsys.rgb_to_hls(red, green, blue)
+    return hex_color(hue * 360, saturation, lightness / factor)
+
+
+def relative_luminance(color):
+    channels = [int(color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
+    linear = [channel / 12.92 if channel <= 0.04045
+              else ((channel + 0.055) / 1.055) ** 2.4
+              for channel in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def ensure_contrast(color, background, target=4.5):
+    background_luminance = relative_luminance(background)
+    adjusted = color
+    for _ in range(24):
+        foreground_luminance = relative_luminance(adjusted)
+        ratio = ((max(background_luminance, foreground_luminance) + 0.05)
+                 / (min(background_luminance, foreground_luminance) + 0.05))
+        if ratio >= target:
+            return adjusted
+        adjusted = darken(adjusted, 1.06)
+    return adjusted
+
+
+def wallpaper_light_background(color):
+    """Lift the wallpaper's dominant background hue into a usable light tone."""
+    red, green, blue = (int(color[index:index + 2], 16) / 255
+                        for index in (1, 3, 5))
+    hue, _, saturation = colorsys.rgb_to_hls(red, green, blue)
+    # Near-neutral wallpapers stay neutral; colorful wallpapers retain enough
+    # chroma to feel derived from the image instead of default Srcery cream.
+    lifted_saturation = clamp(saturation * 1.2, 0.04, 0.30)
+    return hex_color(hue * 360, lifted_saturation, 0.90)
+
+
+def palette_for_mode(semantic, ansi, mode, preserve_primary=False):
+    if mode != "light":
+        return semantic, ansi
+
+    cream = "#FCE8C3"
+    ink = "#121110"
+    background = (cream if preserve_primary
+                  else wallpaper_light_background(semantic["background"]))
+    light_semantic = {
+        "background": background,
+        "background-alt": blend(background, ink, 0.065),
+        "foreground": ink,
+        "border": blend(background, ink, 0.32),
+        "primary": semantic["primary"] if preserve_primary
+                   else darken(semantic["primary"], 1.35),
+        "secondary": darken(semantic["secondary"], 1.28),
+        "alert": darken(semantic["alert"], 1.28),
+        "disabled": blend(ink, background, 0.42),
+    }
+    for role in ("primary", "secondary", "alert"):
+        light_semantic[role] = ensure_contrast(light_semantic[role], background)
+    factors = [1, 1.28, 1.35, 1.65, 1.25, 1.28, 1.38, 1]
+    light_ansi = [light_semantic["background-alt"]]
+    light_ansi.extend(darken(ansi[index], factors[index]) for index in range(1, 7))
+    light_ansi.append(blend(ink, background, 0.22))
+    light_ansi.append(blend(ink, background, 0.42))
+    bright_factors = [1.35, 1.45, 1.75, 1.28, 1.38, 1.48]
+    light_ansi.extend(darken(ansi[index + 9], bright_factors[index])
+                      for index in range(6))
+    light_ansi.append(ink)
+    for index in list(range(1, 7)) + list(range(9, 15)):
+        light_ansi[index] = ensure_contrast(light_ansi[index], background)
+    return light_semantic, light_ansi
+
+
 def palette_from(image):
     raw = subprocess.check_output([
         "magick", image, "-auto-orient", "-resize", "96x54!",
@@ -168,8 +251,13 @@ def atomic_write(path, text):
     temporary.replace(path)
 
 
-def apply_files(image, semantic, ansi, config_dir, state_file):
-    data = {"image": image, "semantic": semantic, "ansi": ansi}
+def apply_files(image, semantic, ansi, config_dir, state_file, mode,
+                preserve_primary=False):
+    output_semantic, output_ansi = palette_for_mode(
+        semantic, ansi, mode, preserve_primary)
+    semantic = output_semantic
+    ansi = output_ansi
+    data = {"image": image, "semantic": semantic, "ansi": ansi, "mode": mode}
     atomic_write(config_dir / "rofi/colors.rasi", f"""/* Generated from wallpaper: {Path(image).name} */
 
 * {{
@@ -243,29 +331,44 @@ mark3_background {semantic['secondary']}
     atomic_write(state_file, json.dumps(state, indent=2) + "\n")
 
 
-def reload_components():
+def reload_components(wm_message=""):
     if os.environ.get("ANUSH_THEME_NO_RELOAD") == "1":
         return
     for process, sig in (("kitty", signal.SIGUSR1), ("dunst", signal.SIGHUP)):
         subprocess.run(["pkill", f"-{sig.value}", "-x", process], check=False,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    message = shutil.which("skarwm-msg")
+    message = shutil.which(wm_message) if wm_message else None
+    if not message:
+        message = shutil.which("skarwm-msg")
     if message:
         subprocess.run([message, "reload"], check=False, stdout=subprocess.DEVNULL,
                        stderr=subprocess.DEVNULL)
 
 
 def main():
+    arguments = sys.argv[1:]
+    wm_message = ""
+    if "--wm-msg" in arguments:
+        option_index = arguments.index("--wm-msg")
+        if option_index + 1 >= len(arguments):
+            raise SystemExit("generate-wallpaper-theme: --wm-msg requires a value")
+        wm_message = arguments[option_index + 1]
+        del arguments[option_index:option_index + 2]
+
     root = Path(__file__).resolve().parent.parent.parent
     config_dir = Path(os.environ.get("ANUSH_CONFIG_DIR", root / "config"))
     default_state = Path(os.environ.get(
         "XDG_STATE_HOME", os.path.expanduser("~/.local/state"))) / "anush"
     state_dir = Path(os.environ.get("ANUSH_STATE_DIR", default_state))
     state_file = state_dir / "shell-state.json"
-    if len(sys.argv) >= 2 and sys.argv[1] == "--default":
-        accent = sys.argv[2] if len(sys.argv) >= 3 else "#FED06E"
+    preserve_primary = False
+    if arguments and arguments[0] == "--default":
+        mode = arguments[1] if len(arguments) >= 2 and arguments[1] in ("dark", "light") else "dark"
+        accent_index = 2 if len(arguments) >= 2 and arguments[1] in ("dark", "light") else 1
+        accent = arguments[accent_index] if len(arguments) > accent_index else "#FED06E"
         if not re.fullmatch(r"#[0-9a-fA-F]{6}", accent):
             accent = "#FED06E"
+        preserve_primary = True
         image = "Srcery"
         semantic = {
             "background": "#121110", "background-alt": "#262522",
@@ -279,13 +382,17 @@ def main():
             "#917E6B", "#F75341", "#98BC37", "#FED06E",
             "#68A8E4", "#FF5C8F", "#2BE4D0", "#FCE8C3",
         ]
-    elif len(sys.argv) == 2 and Path(sys.argv[1]).is_file():
-        image = str(Path(sys.argv[1]).resolve())
+    elif arguments and Path(arguments[0]).is_file():
+        mode = arguments[1] if len(arguments) >= 2 and arguments[1] in ("dark", "light") else "dark"
+        image = str(Path(arguments[0]).resolve())
         semantic, ansi = palette_from(image)
     else:
-        raise SystemExit("usage: generate-wallpaper-theme IMAGE | --default [ACCENT]")
-    apply_files(image, semantic, ansi, config_dir, state_file)
-    reload_components()
+        raise SystemExit(
+            "usage: generate-wallpaper-theme IMAGE [dark|light] | "
+            "--default [dark|light] [ACCENT] [--wm-msg PATH]")
+    apply_files(image, semantic, ansi, config_dir, state_file, mode,
+                preserve_primary)
+    reload_components(wm_message)
 
 
 if __name__ == "__main__":

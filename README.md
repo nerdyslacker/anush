@@ -125,6 +125,27 @@ Committing the corner-radius slider also updates `corner_radius` in
 Set `ANUSH_CONFIG_DIR` when anush's writable configuration lives somewhere
 other than its installed `config/` directory.
 
+The layout/appearance popup switches between the built-in Srcery `dark` and
+`light` modes below the accent colors. The selection is stored as `theme.mode`
+and updates the running shell immediately:
+
+```json
+"theme": {
+  "mode": "light"
+}
+```
+
+`Theme.qml` exposes mode-independent roles including `background`, `surface`,
+`surfaceVariant`, `foreground`, `foregroundMuted`, `accent`,
+`accentForeground`, `outline`, `hover`, `pressed`, `error`, `warning`,
+`success`, `shadow`, and `overlay`. Built-in and wallpaper-derived palettes
+both populate this API, allowing future palette generators to remain separate
+from component styling.
+
+In light mode, wallpaper-derived palettes lift the wallpaper's dominant
+background hue into a light surface and enforce readable contrast for text and
+accent roles; the fixed Srcery light theme continues to use its canonical cream.
+
 `ShellState.qml` merges section updates and writes the complete document
 atomically. On first launch, it imports compatible state from the former
 skarwm files when present; afterward `shell-state.json` is the only active
