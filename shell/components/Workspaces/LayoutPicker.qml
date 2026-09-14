@@ -56,6 +56,7 @@ Popout {
 
                     width: (layoutGrid.width - 10) / 3
                     height: 52
+                    radius: Theme.radiusSmall
                     color: current ? Theme.selbg
                         : layoutMouse.containsMouse ? Qt.alpha(Theme.fg, 0.12)
                         : Qt.alpha(Theme.fg, 0.05)
@@ -105,6 +106,16 @@ Popout {
             persistFn: value => Wm.persistGaps(value)
         }
 
+        TweakSlider {
+            label: "corner radius"
+            from: 0
+            to: 24
+            value: Theme.cornerRadius
+            suffix: " px"
+            applyFn: value => Theme.cornerRadius = Math.max(0, Math.round(value))
+            persistFn: value => Theme.persistCornerRadius(value)
+        }
+
         SectionLabel { text: "Accent color" }
 
         Grid {
@@ -126,6 +137,7 @@ Popout {
 
                     width: (accentGrid.width - accentGrid.spacing * 6) / 7
                     height: 31
+                    radius: Theme.radiusSmall
                     color: swatchMouse.containsMouse
                         ? Theme.gray3 : Theme.gray2
                     border.width: swatch.current ? 2 : 1
@@ -135,6 +147,7 @@ Popout {
                     Rectangle {
                         anchors.fill: parent
                         anchors.margins: swatch.current ? 5 : 6
+                        radius: Theme.radiusSmall
                         color: swatch.swatchColor
                         border.width: 1
                         border.color: Qt.alpha(Theme.fg, 0.35)

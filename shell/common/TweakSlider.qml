@@ -52,7 +52,7 @@ Item {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 7
         height: 4
-        radius: 0
+        radius: Math.min(height / 2, Theme.radiusSmall)
         color: Qt.alpha(Theme.fg, 0.12)
 
         Rectangle {
@@ -60,7 +60,7 @@ Item {
                 (ts.shown - ts.from) / (ts.to - ts.from), 0), 1)
             width: frac * parent.width
             height: parent.height
-            radius: 0
+            radius: parent.radius
             color: Theme.accent
         }
         Rectangle {
@@ -70,7 +70,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             width: 12
             height: 12
-            radius: 0
+            radius: Math.min(width / 2, Theme.radiusSmall)
             color: Theme.fg
             border.width: 2
             border.color: Theme.bg

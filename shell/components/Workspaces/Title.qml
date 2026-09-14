@@ -19,7 +19,7 @@ Item {
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         width: root.hasTitle ? parent.width : 0
-        radius: 0
+        radius: Math.min(height / 2, Theme.radiusMedium)
         color: Theme.barSurface(0.07)
         border.width: 1
         border.color: Theme.gray5

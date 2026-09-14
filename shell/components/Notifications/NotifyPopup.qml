@@ -152,7 +152,7 @@ Popout {
                     required property var modelData
                     width: notifCol.width
                     height: content.implicitHeight + 14
-                    radius: 0
+                    radius: Theme.radiusMedium
                     color: Qt.alpha(Theme.fg, cardMa.containsMouse ? 0.1 : 0.06)
                     Behavior on color { ColorAnimation { duration: 120 } }
 
@@ -162,7 +162,7 @@ Popout {
                         anchors.bottom: parent.bottom
                         anchors.margins: 6
                         width: 3
-                        radius: 0
+                        radius: Math.min(width / 2, Theme.radiusSmall)
                         color: ncard.modelData.urgency === "CRITICAL" ? Theme.red
                              : ncard.modelData.urgency === "LOW" ? Qt.alpha(Theme.fg, 0.25)
                              : Theme.accent

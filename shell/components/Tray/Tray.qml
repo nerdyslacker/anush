@@ -19,7 +19,7 @@ Rectangle {
     implicitHeight: BarVisibility.verticalBar
         ? trayRow.implicitHeight + Math.round(8 * Theme.barScale)
         : Theme.moduleHeight
-    radius: 0
+    radius: Math.min(height / 2, Theme.radiusMedium)
     color: Theme.barSurface(0.07)
     border.width: 1
     border.color: Theme.gray5
@@ -90,6 +90,7 @@ Rectangle {
 
             Rectangle {
                 anchors.fill: parent
+                radius: Theme.radiusSmall
                 color: overflowButton.containsMouse ? Theme.gray3 : "transparent"
             }
 

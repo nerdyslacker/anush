@@ -236,7 +236,7 @@ Popout {
                         anchors.centerIn: parent
                         width: 26
                         height: 26
-                        radius: 0
+                        radius: Theme.radiusSmall
                         color: cell.isToday ? Theme.selbg : "transparent"
 
                         Text {
@@ -254,8 +254,9 @@ Popout {
                             visible: cell.hasEvent && !cell.isToday
                             anchors.horizontalCenter: parent.horizontalCenter
                             anchors.bottom: parent.bottom
-                            width: 12
-                            height: 3
+                        width: 12
+                        height: 3
+                        radius: Math.min(height / 2, Theme.radiusSmall)
                             color: Theme.orange
                         }
 
@@ -293,6 +294,7 @@ Popout {
                 required property var modelData
                 width: parent.width
                 height: 42
+                radius: Theme.radiusSmall
                 color: eventMouse.containsMouse
                     ? Qt.alpha(Theme.orange, 0.14) : Theme.gray2
                 border.width: 1
@@ -306,6 +308,7 @@ Popout {
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
                     width: 3
+                    radius: Math.min(width / 2, Theme.radiusSmall)
                     color: Theme.orange
                 }
 

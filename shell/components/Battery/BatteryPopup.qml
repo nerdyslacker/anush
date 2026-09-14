@@ -72,6 +72,7 @@ Popout {
     component SettingButton: Rectangle {
         id: button
         required property string buttonIcon
+        radius: Theme.radiusSmall
         required property string title
         required property string detail
         required property bool active

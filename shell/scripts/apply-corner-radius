@@ -1,0 +1,33 @@
+#!/bin/sh
+
+# Keep skarwm's client corners in sync with the shell appearance setting.
+set -u
+
+radius=${1:-}
+case $radius in
+    ''|*[!0-9]*) exit 2 ;;
+esac
+[ "$radius" -le 4096 ] || exit 2
+
+config_dir=${ANUSH_CONFIG_DIR:-$(CDPATH= cd "$(dirname "$0")/../../config" && pwd)}
+config_file=$config_dir/skarwm/config.rc
+
+[ -f "$config_file" ] && [ -w "$config_file" ] || exit 0
+
+temporary=$(mktemp "${config_file}.corner-radius.XXXXXX") || exit 1
+trap 'rm -f "$temporary"' EXIT HUP INT TERM
+
+if grep -Eq '^[[:space:]]*corner_radius[[:space:]]*:' "$config_file"; then
+    sed -E "/^[[:space:]]*corner_radius[[:space:]]*:/ s/(:[[:space:]]*)[0-9]+/\1$radius/" \
+        "$config_file" > "$temporary" || exit 1
+else
+    sed '$a\
+corner_radius : '"$radius" "$config_file" > "$temporary" || exit 1
+fi
+
+chmod 644 "$temporary"
+mv "$temporary" "$config_file"
+trap - EXIT HUP INT TERM
+
+message=$(command -v skarwm-msg 2>/dev/null || true)
+[ -z "$message" ] || "$message" reload >/dev/null 2>&1 || true

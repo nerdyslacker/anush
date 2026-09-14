@@ -104,6 +104,22 @@ Persistent settings live in
 `weather`, `keyboard`, `tray`, `tags`, `pomodoro`, `theme`, `windowManager`,
 and `desktop`.
 
+Rounded corners are controlled by the canonical `theme.cornerRadius` value.
+It is watched at runtime along with the rest of the state, so editing the state
+file updates open shell surfaces without a restart. `0` keeps every non-circular
+surface square; larger values derive coherent small, medium, and large radii:
+
+```json
+"theme": {
+  "cornerRadius": 10
+}
+```
+
+Committing the corner-radius slider also updates `corner_radius` in
+`config/skarwm/config.rc` atomically and requests a skarwm configuration reload.
+Set `ANUSH_CONFIG_DIR` when anush's writable configuration lives somewhere
+other than its installed `config/` directory.
+
 `ShellState.qml` merges section updates and writes the complete document
 atomically. On first launch, it imports compatible state from the former
 skarwm files when present; afterward `shell-state.json` is the only active

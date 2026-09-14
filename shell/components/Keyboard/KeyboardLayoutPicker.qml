@@ -42,6 +42,7 @@ Popout {
 
                 width: parent.width
                 height: 29
+                radius: Theme.radiusSmall
                 readonly property bool active: KeyboardState.currentSpec === KeyboardState.groupSpec(index)
                     || (KeyboardState.currentLayout === modelData
                         && KeyboardState.currentSpec.indexOf("(") === -1)

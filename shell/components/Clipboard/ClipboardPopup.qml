@@ -206,6 +206,7 @@ Popout {
         Rectangle {
             width: parent.width
             height: 36
+            radius: Theme.radiusSmall
             color: Theme.gray2
             border.width: 1
             border.color: searchInput.activeFocus ? Theme.accent : Theme.gray5
@@ -297,6 +298,7 @@ Popout {
                 // gutter instead of allowing rows beneath the thumb.
                 width: historyList.width - 14
                 height: 62
+                radius: Theme.radiusSmall
                 color: index === historyList.currentIndex
                     ? Qt.alpha(Theme.accent, 0.2)
                     : rowMouse.containsMouse ? Theme.gray3 : Theme.gray2
@@ -352,6 +354,7 @@ Popout {
                 interactive: true
 
                 background: Rectangle {
+                    radius: Math.min(width / 2, Theme.radiusSmall)
                     color: Theme.gray2
                     border.width: 1
                     border.color: Theme.gray5
@@ -360,6 +363,7 @@ Popout {
                 contentItem: Rectangle {
                     implicitWidth: 6
                     implicitHeight: 28
+                    radius: Math.min(width / 2, Theme.radiusSmall)
                     color: historyScroll.pressed ? Theme.brightOrange
                         : historyScroll.hovered ? Theme.orange : Theme.gray6
                 }

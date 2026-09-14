@@ -196,6 +196,7 @@ BarModule {
 
         width: (parent.width - 7) / 2
         height: 48
+        radius: Theme.radiusMedium
         color: active ? Qt.alpha(accentColor, 0.26)
             : pointer.containsMouse ? Qt.alpha(accentColor, 0.18)
             : Qt.alpha(Theme.fg, 0.05)
@@ -229,6 +230,7 @@ BarModule {
             anchors.left: parent.left
             anchors.bottom: parent.bottom
             height: 2
+            radius: Math.min(height / 2, Theme.radiusSmall)
             width: Math.max(0, Math.min(1,
                 button.modelData.progress ?? 0)) * parent.width
             color: button.accentColor
@@ -256,6 +258,7 @@ BarModule {
 
         width: parent.width
         height: 34
+        radius: Theme.radiusSmall
         color: pointer.containsMouse ? Qt.alpha(Theme.fg, 0.12) : "transparent"
         Behavior on color { ColorAnimation { duration: 120 } }
 
@@ -295,6 +298,7 @@ BarModule {
         signal activated()
 
         height: 36
+        radius: Theme.radiusSmall
         color: primary
             ? (confirmationMouse.containsMouse
                 ? Qt.lighter(accentColor, 1.15) : accentColor)
@@ -433,7 +437,8 @@ BarModule {
                 Rectangle {
                     width: 48
                     height: 48
-                    radius: 24
+                    // Avatars remain circular regardless of the surface setting.
+                    radius: width / 2
                     clip: true
                     color: Theme.gray3
                     border.width: 1

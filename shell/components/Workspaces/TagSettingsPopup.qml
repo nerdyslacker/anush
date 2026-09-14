@@ -26,6 +26,7 @@ Popout {
 
         width: 30
         height: 28
+        radius: Theme.radiusSmall
         color: !enabled ? Qt.alpha(Theme.fg, 0.04)
             : pointer.containsMouse ? Theme.gray4 : Theme.gray2
         border.width: 1
@@ -54,6 +55,7 @@ Popout {
 
         width: 34
         height: 18
+        radius: Math.min(height / 2, Theme.radiusSmall)
         color: checked ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
         Behavior on color { ColorAnimation { duration: 150 } }
 
@@ -62,6 +64,7 @@ Popout {
             anchors.verticalCenter: parent.verticalCenter
             width: 14
             height: 14
+            radius: Math.min(width / 2, Theme.radiusSmall)
             color: control.checked ? Theme.bg : Qt.alpha(Theme.fg, 0.7)
             Behavior on x {
                 NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
@@ -175,6 +178,7 @@ Popout {
         Rectangle {
             width: parent.width
             height: 34
+            radius: Theme.radiusSmall
             color: saveMouse.containsMouse ? Theme.brightOrange : Theme.accent
             Text {
                 anchors.centerIn: parent

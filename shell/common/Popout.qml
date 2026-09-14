@@ -241,7 +241,7 @@ PopupWindow {
             NumberAnimation { target: card; property: "opacity"; from: 0; to: 1
                               duration: 160 }
         }
-        radius: 0
+        radius: Theme.radiusLarge
         color: Theme.bg
         border.width: 1
         border.color: Qt.alpha(Theme.accent, 0.4)

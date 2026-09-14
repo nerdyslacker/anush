@@ -91,6 +91,7 @@ Popout {
 
         width: 34
         height: 18
+        radius: Math.min(height / 2, Theme.radiusSmall)
         color: checked ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
         Behavior on color { ColorAnimation { duration: 150 } }
 
@@ -99,6 +100,7 @@ Popout {
             anchors.verticalCenter: parent.verticalCenter
             width: 14
             height: 14
+            radius: Math.min(width / 2, Theme.radiusSmall)
             color: control.checked ? Theme.bg : Qt.alpha(Theme.fg, 0.7)
             Behavior on x {
                 NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
@@ -162,7 +164,7 @@ Popout {
             Rectangle {
                 anchors.fill: parent
                 anchors.margins: 4
-                radius: 0
+                radius: Theme.radiusMedium
                 color: Theme.gray1
                 border.width: cell.modelData === root.selectedPath
                     ? 3 : mouse.containsMouse ? 2 : 1

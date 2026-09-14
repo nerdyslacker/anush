@@ -23,6 +23,12 @@ Singleton {
     property real barBackgroundOpacity: 1.0
     property bool wallpaperThemeEnabled: false
     property string defaultAccentName: "brightYellow"
+    // A single persisted appearance value feeds every non-circular surface.
+    // Keep the tiers integral so borders and clipping stay pixel-aligned.
+    property int cornerRadius: 0
+    readonly property int radiusSmall: Math.round(cornerRadius * 0.5)
+    readonly property int radiusMedium: cornerRadius
+    readonly property int radiusLarge: Math.round(cornerRadius * 1.5)
 
     property int _barStateLoads: 0
     readonly property bool barStateReady: _barStateLoads >= 2
@@ -152,6 +158,15 @@ Singleton {
         ShellState.updateSection("bar", { backgroundOpacity: barBackgroundOpacity })
     }
 
+    function persistCornerRadius(value) {
+        cornerRadius = Math.max(0, Math.round(Number(value) || 0))
+        ShellState.updateSection("theme", { cornerRadius: cornerRadius })
+        Quickshell.execDetached([
+            root.scriptsDir + "/apply-corner-radius",
+            String(cornerRadius)
+        ])
+    }
+
     function persistWallpaperThemeEnabled(enabled, wallpaperPath) {
         if (enabled && !wallpaperThemeEnabled) {
             defaultAccentName = accentName
@@ -265,6 +280,7 @@ Singleton {
         accentName = accentNames.indexOf(theme.accent) >= 0
             ? theme.accent : "orange"
         wallpaperThemeEnabled = theme.wallpaperEnabled === true
+        cornerRadius = Math.max(0, Math.round(Number(theme.cornerRadius) || 0))
         if (wallpaperThemeEnabled && theme.palette)
             applyWallpaperPalette(theme.palette)
         else

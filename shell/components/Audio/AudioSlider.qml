@@ -21,11 +21,13 @@ Item {
         anchors.rightMargin: 10
         anchors.verticalCenter: parent.verticalCenter
         height: 4
+        radius: Math.min(height / 2, Theme.radiusSmall)
         color: Qt.alpha(Theme.fg, 0.14)
 
         Rectangle {
             width: Math.min(Math.max(root.shownVolume, 0), 1) * parent.width
             height: parent.height
+            radius: parent.radius
             color: root.accent
         }
 
@@ -35,6 +37,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             width: 11
             height: 11
+            radius: Math.min(width / 2, Theme.radiusSmall)
             color: Theme.fg
             border.width: 2
             border.color: Theme.bg

@@ -400,6 +400,7 @@ Popout {
 
             implicitWidth: actionLabel.implicitWidth + 24
             height: 28
+            radius: Theme.radiusSmall
             color: !enabled ? Theme.gray2
                 : filled ? (actionMouse.containsMouse
                     ? Qt.lighter(accentColor, 1.12) : accentColor)
@@ -467,7 +468,7 @@ Popout {
                     anchors.verticalCenter: parent.verticalCenter
                     width: 84
                     height: 24
-                    radius: 0
+                    radius: Theme.radiusSmall
                     color: Qt.alpha(Theme.fg, scanMa.containsMouse ? 0.18 : 0.1)
                     Text {
                         anchors.centerIn: parent
@@ -494,7 +495,7 @@ Popout {
                     required property var modelData
                     width: parent.width
                     height: 30
-                    radius: 0
+                    radius: Theme.radiusSmall
                     color: devRow.modelData.state === "connected"
                         ? Qt.alpha(Theme.accent, 0.16) : Theme.gray2
                     border.width: 1
@@ -544,7 +545,7 @@ Popout {
                         anchors.verticalCenter: parent.verticalCenter
                         width: 34
                         height: 18
-                        radius: 0
+                        radius: Math.min(height / 2, Theme.radiusSmall)
                         color: win.wifiOn ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
                         Behavior on color { ColorAnimation { duration: 150 } }
 
@@ -553,7 +554,7 @@ Popout {
                             anchors.verticalCenter: parent.verticalCenter
                             width: 14
                             height: 14
-                            radius: 0
+                            radius: Math.min(width / 2, Theme.radiusSmall)
                             color: win.wifiOn ? Theme.bg : Qt.alpha(Theme.fg, 0.7)
                             Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                         }
@@ -593,7 +594,7 @@ Popout {
                     required property var modelData
                     width: parent.width
                     height: 30
-                    radius: 0
+                    radius: Theme.radiusSmall
                     color: vpnRow.modelData.active
                         ? Qt.alpha(Theme.green, 0.14) : Theme.gray2
                     border.width: 1
@@ -639,14 +640,15 @@ Popout {
                         anchors.verticalCenter: parent.verticalCenter
                         width: 34
                         height: 18
-                        radius: 0
+                        radius: Math.min(height / 2, Theme.radiusSmall)
                         color: vpnRow.modelData.active ? Theme.green : Qt.alpha(Theme.fg, 0.15)
                         Behavior on color { ColorAnimation { duration: 150 } }
 
                         Rectangle {
                             x: vpnRow.modelData.active ? parent.width - width - 2 : 2
                             anchors.verticalCenter: parent.verticalCenter
-                            width: 14; height: 14; radius: 0
+                            width: 14; height: 14
+                            radius: Math.min(width / 2, Theme.radiusSmall)
                             color: vpnRow.modelData.active ? Theme.bg : Qt.alpha(Theme.fg, 0.7)
                             Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                         }
@@ -693,7 +695,7 @@ Popout {
                     anchors.verticalCenter: parent.verticalCenter
                     width: 74
                     height: 24
-                    radius: 0
+                    radius: Theme.radiusSmall
                     color: Qt.alpha(Theme.fg, btScanMa.containsMouse ? 0.18 : 0.1)
                     Text {
                         anchors.centerIn: parent
@@ -716,7 +718,7 @@ Popout {
                     anchors.verticalCenter: parent.verticalCenter
                     width: 34
                     height: 18
-                    radius: 0
+                    radius: Math.min(height / 2, Theme.radiusSmall)
                     color: win.btOn ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
                     Behavior on color { ColorAnimation { duration: 150 } }
 
@@ -725,7 +727,7 @@ Popout {
                         anchors.verticalCenter: parent.verticalCenter
                         width: 14
                         height: 14
-                        radius: 0
+                        radius: Math.min(width / 2, Theme.radiusSmall)
                         color: win.btOn ? Theme.bg : Qt.alpha(Theme.fg, 0.7)
                         Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                     }
@@ -764,6 +766,7 @@ Popout {
                                 win.expandedBluetooth === modelData.mac
                             width: parent.width
                             height: 30 + (expanded ? 40 : 0)
+                            radius: Theme.radiusSmall
                             clip: true
                             color: Theme.gray2
                             Behavior on height {
@@ -777,6 +780,7 @@ Popout {
                                 Rectangle {
                                     width: parent.width
                                     height: 30
+                                    radius: Theme.radiusSmall
                                     color: btRow.modelData.connected
                                         ? Qt.alpha(Theme.accent, 0.22)
                                         : btMa.containsMouse ? Theme.gray3 : Theme.gray2
@@ -848,6 +852,7 @@ Popout {
 
                             Rectangle {
                                 anchors.fill: parent
+                                radius: Theme.radiusSmall
                                 z: 2
                                 color: "transparent"
                                 border.width: 1
@@ -868,6 +873,7 @@ Popout {
                                 win.expandedBluetooth === modelData.mac
                             width: parent.width
                             height: 30 + (expanded ? 40 : 0)
+                            radius: Theme.radiusSmall
                             clip: true
                             color: Theme.gray2
                             Behavior on height {
@@ -881,6 +887,7 @@ Popout {
                                 Rectangle {
                                     width: parent.width
                                     height: 30
+                                    radius: Theme.radiusSmall
                                     color: btNewMa.containsMouse
                                         ? Theme.gray3 : Theme.gray2
 
@@ -934,6 +941,7 @@ Popout {
 
                             Rectangle {
                                 anchors.fill: parent
+                                radius: Theme.radiusSmall
                                 z: 2
                                 color: "transparent"
                                 border.width: 1
@@ -952,6 +960,7 @@ Popout {
                         : Controls.ScrollBar.AlwaysOff
                     interactive: true
                     background: Rectangle {
+                        radius: Math.min(width / 2, Theme.radiusSmall)
                         color: Theme.gray2
                         border.width: 1
                         border.color: Theme.gray5
@@ -959,6 +968,7 @@ Popout {
                     contentItem: Rectangle {
                         implicitWidth: 6
                         implicitHeight: 28
+                        radius: Math.min(width / 2, Theme.radiusSmall)
                         color: btScroll.pressed ? Theme.brightOrange
                              : btScroll.hovered ? Theme.orange : Theme.gray6
                     }
@@ -1013,6 +1023,7 @@ Popout {
                                 win.expandedWifi === modelData.ssid
                             width: netCol.width
                             height: 34 + (expanded ? 40 : 0) + (asking ? 38 : 0)
+                            radius: Theme.radiusSmall
                             clip: true
                             color: Theme.gray2
                             Behavior on height {
@@ -1026,7 +1037,7 @@ Popout {
                                 Rectangle {
                                     width: parent.width
                                     height: 34
-                                    radius: 0
+                                    radius: Theme.radiusSmall
                                     color: netRow.modelData.inUse ? Qt.alpha(Theme.accent, 0.22)
                                          : netMa.containsMouse ? Theme.gray3 : Theme.gray2
 
@@ -1103,7 +1114,7 @@ Popout {
                                     Rectangle {
                                         anchors.fill: parent
                                         anchors.margins: 4
-                                        radius: 0
+                                        radius: Theme.radiusSmall
                                         color: Qt.alpha(Theme.fg, 0.08)
 
                                         TextInput {
@@ -1134,7 +1145,7 @@ Popout {
                                             anchors.verticalCenter: parent.verticalCenter
                                             width: 64
                                             height: 24
-                                            radius: 0
+                                            radius: Theme.radiusSmall
                                             color: Theme.accent
                                             Text {
                                                 anchors.centerIn: parent
@@ -1155,6 +1166,7 @@ Popout {
 
                             Rectangle {
                                 anchors.fill: parent
+                                radius: Theme.radiusSmall
                                 z: 2
                                 color: "transparent"
                                 border.width: 1
@@ -1174,6 +1186,7 @@ Popout {
                         : Controls.ScrollBar.AlwaysOff
                     interactive: true
                     background: Rectangle {
+                        radius: Math.min(width / 2, Theme.radiusSmall)
                         color: Theme.gray2
                         border.width: 1
                         border.color: Theme.gray5
@@ -1181,6 +1194,7 @@ Popout {
                     contentItem: Rectangle {
                         implicitWidth: 6
                         implicitHeight: 28
+                        radius: Math.min(width / 2, Theme.radiusSmall)
                         color: wifiScroll.pressed ? Theme.brightOrange
                              : wifiScroll.hovered ? Theme.orange : Theme.gray6
                     }

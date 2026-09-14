@@ -284,6 +284,7 @@ Popout {
 
                             width: applicationList.width
                             height: 54
+                            radius: Theme.radiusSmall
                             color: Theme.gray2
                             border.width: 1
                             border.color: Theme.gray5
@@ -364,6 +365,7 @@ Popout {
                         : Controls.ScrollBar.AlwaysOff
                     interactive: true
                     background: Rectangle {
+                        radius: Math.min(width / 2, Theme.radiusSmall)
                         color: Theme.gray2
                         border.width: 1
                         border.color: Theme.gray5
@@ -371,6 +373,7 @@ Popout {
                     contentItem: Rectangle {
                         implicitWidth: 6
                         implicitHeight: 28
+                        radius: Math.min(width / 2, Theme.radiusSmall)
                         color: applicationScroll.pressed ? Theme.brightOrange
                              : applicationScroll.hovered ? Theme.orange : Theme.gray6
                     }

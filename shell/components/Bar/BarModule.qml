@@ -38,7 +38,7 @@ Rectangle {
         : Theme.moduleHeight
     implicitWidth: BarVisibility.verticalBar ? Theme.moduleHeight
         : row.implicitWidth + Math.round(18 * Theme.barScale)
-    radius: 0
+    radius: Math.min(height / 2, Theme.radiusMedium)
     color: mouse.containsMouse && interactive
         ? Theme.barSurface(0.14) : Theme.barSurface(0.07)
     border.width: 1
@@ -111,7 +111,7 @@ Rectangle {
         anchors.leftMargin: root.radius
         anchors.bottomMargin: 2
         height: 2
-        radius: 0
+        radius: Math.min(height / 2, Theme.radiusSmall)
         width: Math.min(Math.max(root.progress, 0), 1) * (parent.width - 2 * root.radius)
         color: Theme.accent
         opacity: 0.9

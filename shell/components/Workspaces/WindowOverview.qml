@@ -207,6 +207,7 @@ Popout {
 
                 width: 112
                 height: workspaceList.height
+                radius: Theme.radiusMedium
                 color: selected ? Qt.alpha(Theme.accent, 0.2) : Theme.gray2
                 border.width: selected ? 2 : 1
                 border.color: selected ? Theme.accent : Theme.gray5
@@ -312,6 +313,7 @@ Popout {
 
                     width: windowGrid.cellWidth - 7
                     height: windowGrid.cellHeight - 7
+                    radius: Theme.radiusMedium
                     color: selected ? Qt.alpha(Theme.accent, 0.22) : Theme.gray2
                     border.width: selected ? 2 : 1
                     border.color: selected ? Theme.accent : Theme.gray5

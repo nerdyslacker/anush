@@ -148,7 +148,9 @@ PanelWindow {
         id: panel
         anchors.fill: parent
         color: Qt.alpha(Theme.bg, Theme.barBackgroundOpacity)
-        radius: 0
+        // The panel is flush with screen edges, so only round it when the
+        // configured radius can be shown without changing its geometry.
+        radius: Theme.radiusMedium
 
         WidgetCluster {
             id: leftCluster

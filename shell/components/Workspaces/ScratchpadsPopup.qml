@@ -69,6 +69,7 @@ Popout {
 
                 width: list.width
                 height: root.rowHeight
+                radius: Theme.radiusSmall
                 color: entryMouse.containsMouse
                     ? Qt.alpha(Theme.accent, 0.18)
                     : Qt.alpha(Theme.fg, 0.05)

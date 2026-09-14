@@ -69,6 +69,7 @@ Popout {
                     : Controls.ScrollBar.AlwaysOff
                 interactive: true
                 background: Rectangle {
+                    radius: Math.min(width / 2, Theme.radiusSmall)
                     color: Theme.gray2
                     border.width: 1
                     border.color: Theme.gray5
@@ -76,6 +77,7 @@ Popout {
                 contentItem: Rectangle {
                     implicitWidth: 6
                     implicitHeight: 28
+                    radius: Math.min(width / 2, Theme.radiusSmall)
                     color: trayScroll.pressed ? Theme.brightOrange
                         : trayScroll.hovered ? Theme.orange : Theme.gray6
                 }
@@ -88,6 +90,7 @@ Popout {
 
                 width: list.width
                 height: root.rowHeight
+                radius: Theme.radiusSmall
                 color: entryMouse.containsMouse ? Theme.gray3 : Theme.gray2
                 border.width: 1
                 border.color: Theme.gray5
@@ -167,6 +170,7 @@ Popout {
                     anchors.verticalCenter: parent.verticalCenter
                     width: Math.round(52 * Theme.barScale)
                     height: Math.round(24 * Theme.barScale)
+                    radius: Theme.radiusSmall
                     color: placementMouse.containsMouse ? Theme.gray4 : Theme.gray3
                     border.width: 1
                     border.color: entry.hidden ? Theme.gray5 : Theme.accent

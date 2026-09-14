@@ -25,6 +25,7 @@ Column {
         id: selector
         width: root.width
         height: 34
+        radius: Theme.radiusSmall
         color: selectorMouse.containsMouse ? Theme.gray3 : Theme.gray2
         border.width: 1
         border.color: root.expanded ? Theme.accent : Theme.gray5
@@ -75,6 +76,7 @@ Column {
 
             width: root.width
             height: 32
+            radius: Theme.radiusSmall
             color: current ? Theme.accent
                 : (optionMouse.containsMouse ? Theme.gray3 : Theme.gray2)
             border.width: 1

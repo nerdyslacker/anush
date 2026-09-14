@@ -135,6 +135,7 @@ Popout {
         anchors.top: selectedLabel.bottom
         anchors.topMargin: 5
         height: 36
+        radius: Theme.radiusSmall
         color: Theme.gray2
         border.width: 1
         border.color: searchInput.activeFocus ? Theme.accent : Theme.gray5
@@ -203,6 +204,7 @@ Popout {
 
             width: layoutList.width
             height: 32
+            radius: Theme.radiusSmall
             readonly property int selectedIndex: root.selectedLayouts.indexOf(modelData.code)
             readonly property bool selected: selectedIndex !== -1
             color: selected ? Qt.alpha(Theme.accent, 0.22)
@@ -216,6 +218,7 @@ Popout {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 16
                 height: 16
+                radius: Theme.radiusSmall
                 color: layoutRow.selected ? Theme.accent : "transparent"
                 border.width: 1
                 border.color: layoutRow.selected ? Theme.brightOrange : Theme.gray6
@@ -270,6 +273,7 @@ Popout {
             interactive: true
 
             background: Rectangle {
+                radius: Math.min(width / 2, Theme.radiusSmall)
                 color: Theme.gray2
                 border.width: 1
                 border.color: Theme.gray5
@@ -278,6 +282,7 @@ Popout {
             contentItem: Rectangle {
                 implicitWidth: 6
                 implicitHeight: 28
+                radius: Math.min(width / 2, Theme.radiusSmall)
                 color: layoutScroll.pressed ? Theme.brightOrange
                     : layoutScroll.hovered ? Theme.orange : Theme.gray6
             }
@@ -302,6 +307,7 @@ Popout {
         anchors.top: variantsLabel.bottom
         anchors.topMargin: 5
         height: 36
+        radius: Theme.radiusSmall
         color: Theme.gray2
         border.width: 1
         border.color: variantsInput.activeFocus ? Theme.accent : Theme.gray5
@@ -348,6 +354,7 @@ Popout {
                 required property var modelData
                 width: presetText.implicitWidth + 18
                 height: 30
+                radius: Theme.radiusSmall
                 readonly property bool selected: customInput.text.trim() === modelData.value
                 color: selected ? Theme.accent
                     : (presetMouse.containsMouse ? Theme.gray3 : Theme.gray2)
@@ -394,6 +401,7 @@ Popout {
         anchors.top: optionLabel.bottom
         anchors.topMargin: 5
         height: 36
+        radius: Theme.radiusSmall
         color: Theme.gray2
         border.width: 1
         border.color: customInput.activeFocus ? Theme.accent : Theme.gray5
@@ -440,6 +448,7 @@ Popout {
                 required property var modelData
                 width: 82
                 height: 34
+                radius: Theme.radiusSmall
                 color: modelData.primary ? Theme.accent
                     : (actionMouse.containsMouse ? Theme.gray3 : Theme.gray2)
                 border.width: 1

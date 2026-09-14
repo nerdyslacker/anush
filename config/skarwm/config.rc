@@ -17,10 +17,15 @@ mod_key : super
 # Pixels of empty space around the work area / between tiled windows.
 outer_gap : 8
 inner_gap : 8
-# `gap : N` seeds both outer_gap and inner_gap at once.
+# `gap : N` seeds both outer_gap and inner_gap at once. Only the focused
+# window draws a border; unfocused windows still occupy the complete tile.
 border_width : 2
+# Rounded client corners in pixels. Set to 0 for square windows. Fullscreen
+# windows and bars remain square.
+corner_radius : 5
 
-# Window border colours as #RRGGBB.
+# Window border colours as #RRGGBB. The normal colour remains accepted for
+# config compatibility; unfocused windows currently have no border.
 norm_outer_border : #705c6a
 sel_outer_border  : #7973ca
 
@@ -49,14 +54,15 @@ autostart : "lxqt-policykit-agent"
 # first session, when Feh has not created ~/.fehbg yet.
 autostart : "if [ -f ~/.fehbg ]; then sh ~/.fehbg; else feh --bg-fill ${ANUSH_CONFIG_DIR:-$HOME/.config/anush/config}/wallpaper/hadrut_srcery.jpeg; fi"
 autostart : "dunst -config ${ANUSH_CONFIG_DIR:-$HOME/.config/anush/config}/dunst/dunstrc"
-autostart : "picom --config ${ANUSH_CONFIG_DIR:-$HOME/.config/anush/config}/picom/picom.conf ${ANUSH_PICOM_ARGS:-} -b"
+autostart : "picom --config ${ANUSH_CONFIG_DIR:-$HOME/.config/anush/config}/picom/picom.conf ${ANUSH_PICOM_ARGS:---no-use-damage} -b"
 autostart : "${ANUSH_ROOT:-$HOME/.config/anush}/shell/scripts/clipboard-history daemon"
 autostart : "qs --no-duplicate -p ${ANUSH_ROOT:-$HOME/.config/anush}/shell"
 autostart : "xss-lock -- betterlockscreen -l"
 autostart : "udiskie --smart-tray"
 
 # ---- key actions (call) ---------------------------------------------------------
-# Action tokens: focusleft/right/up/down moveleft/right/up/down ws_up ws_down
+# Action tokens: focusleft/right/up/down resizeleft/right/up/down
+# moveleft/right/up/down ws_up ws_down
 # ws_next ws_prev togglefloating togglefullscreen layout_tabbed layout_stacked
 # toggle_tabbed show_bindings focus_output_next/prev move_to_output_next/prev
 # scratchpad_toggle N scratchpad_toggle_float N scratchpad_remove N
@@ -66,6 +72,14 @@ call : mod + h : focusleft
 call : mod + j : focusdown
 call : mod + k : focusup
 call : mod + l : focusright
+
+# Resize steps: left/up make the focused tile narrower/shorter;
+# right/down make it wider/taller. Other columns keep their widths, while the
+# remaining rows in a vertical stack share the leftover height proportionally.
+call : mod + Control + h : resizeleft
+call : mod + Control + j : resizedown
+call : mod + Control + k : resizeup
+call : mod + Control + l : resizeright
 
 call : mod + Shift + h : moveleft
 call : mod + Shift + j : movedown
@@ -103,10 +117,10 @@ call : mod + Shift + period : move_to_output_next
 
 # Fixed mouse actions use mod_key: Mod+wheel up/down scrolls the workspace strip
 # under the pointer. Mod+left-drag moves floating windows or drops tiled windows
-# into another column; both work across monitors. Tiled dragging shows four
-# choices per monitor: top/bottom insert vertically in the focused column, and
-# left/right create a horizontal column at the corresponding workspace edge.
-# Mod+right-drag resizes floaters.
+# across monitors. The nearest tiled window is the target:
+# left/right inserts a column beside it and top/bottom inserts a row beside it.
+# Mod+right-drag resizes floaters; on a tile, outward grows the column/row and
+# inward shrinks it from the side where the drag began.
 
 # ---- dynamic workspaces --------------------------------------------------------
 # A workspace is created on demand the first time it is shown, so ids are not

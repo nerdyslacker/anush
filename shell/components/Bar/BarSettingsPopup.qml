@@ -17,6 +17,7 @@ Popout {
 
         width: 34
         height: 18
+        radius: Math.min(height / 2, Theme.radiusSmall)
         color: checked ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
         Behavior on color { ColorAnimation { duration: 150 } }
 
@@ -25,6 +26,7 @@ Popout {
             anchors.verticalCenter: parent.verticalCenter
             width: 14
             height: 14
+            radius: Math.min(width / 2, Theme.radiusSmall)
             color: control.checked ? Theme.bg : Qt.alpha(Theme.fg, 0.7)
             Behavior on x {
                 NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
@@ -47,6 +49,7 @@ Popout {
 
         width: parent.width
         height: 36
+        radius: Theme.radiusSmall
         color: dragging
             ? Qt.alpha(Theme.accent, 0.22) : Qt.alpha(Theme.fg, 0.045)
         border.width: 1
@@ -90,6 +93,7 @@ Popout {
 
             Rectangle {
                 anchors.fill: parent
+                radius: Theme.radiusSmall
                 visible: widgetRow.dragging
                 color: Theme.gray2
                 border.width: 2
@@ -184,6 +188,7 @@ Popout {
             id: dropPanel
             width: parent.width
             height: Math.max(64, rows.implicitHeight + 8)
+            radius: Theme.radiusMedium
             color: dropArea.containsDrag
                 ? Qt.alpha(Theme.accent, 0.09) : "transparent"
             border.width: 1
@@ -266,6 +271,7 @@ Popout {
                 id: positionPanel
                 width: (parent.width - barOptions.spacing) / 2
                 height: parent.height
+                radius: Theme.radiusMedium
                 color: "transparent"
                 border.width: 1
                 border.color: Theme.gray5
@@ -305,6 +311,7 @@ Popout {
                                 BarVisibility.barPosition === modelData.key
                             width: (positionButtons.width - positionButtons.spacing * 3) / 4
                             height: positionButtons.height
+                            radius: Theme.radiusSmall
                             color: selected ? Theme.accent
                                 : positionMouse.containsMouse ? Theme.gray3 : Theme.gray2
                             border.width: 1
@@ -351,6 +358,7 @@ Popout {
                 id: monitorPanel
                 width: (parent.width - barOptions.spacing) / 2
                 height: parent.height
+                radius: Theme.radiusMedium
                 color: "transparent"
                 border.width: 1
                 border.color: Theme.gray5

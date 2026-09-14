@@ -46,7 +46,7 @@ Popout {
                 id: artFrame
                 width: 84
                 height: 84
-                radius: 0
+                radius: Theme.radiusMedium
                 color: Qt.alpha(Theme.fg, 0.06)
                 clip: true
 
@@ -141,13 +141,13 @@ Popout {
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: 3
                 height: 4
-                radius: 0
+                radius: Math.min(height / 2, Theme.radiusSmall)
                 color: Qt.alpha(Theme.fg, 0.12)
 
                 Rectangle {
                     width: Math.min(root.media.pos / root.media.len, 1) * parent.width
                     height: parent.height
-                    radius: 0
+                    radius: parent.radius
                     color: Theme.accent
                 }
             }
@@ -197,7 +197,7 @@ Popout {
 
                 width: col.width
                 height: 26
-                radius: 0
+                radius: Theme.radiusSmall
                 color: current ? Theme.selbg
                      : pMa.containsMouse ? Qt.alpha(Theme.fg, 0.12)
                      : Qt.alpha(Theme.fg, 0.04)

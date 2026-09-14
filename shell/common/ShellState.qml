@@ -47,7 +47,7 @@ Singleton {
             pomodoro: { endMs: 0, minutes: 25 },
             theme: {
                 accent: "orange", defaultAccent: "brightYellow",
-                wallpaperEnabled: false, palette: null
+                wallpaperEnabled: false, palette: null, cornerRadius: 0
             },
             windowManager: { gap: 8 },
             desktop: { nightLight: false }

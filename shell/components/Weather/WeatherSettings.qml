@@ -106,6 +106,7 @@ Popout {
         anchors.top: locationLabel.bottom
         anchors.topMargin: 6
         height: 38
+        radius: Theme.radiusSmall
         color: Theme.gray2
         border.width: 1
         border.color: locationInput.activeFocus ? Theme.accent : Theme.gray5
@@ -140,6 +141,7 @@ Popout {
         anchors.top: locationBox.top
         width: 72
         height: locationBox.height
+        radius: Theme.radiusSmall
         color: autoMouse.containsMouse ? Theme.gray3 : Theme.gray2
         border.width: 1
         border.color: Theme.gray5
@@ -191,6 +193,7 @@ Popout {
                 required property var modelData
                 width: (unitsRow.width - unitsRow.spacing * 2) / 3
                 height: 34
+                radius: Theme.radiusSmall
                 color: root.unitsDraft === modelData.value ? Theme.accent
                     : (unitMouse.containsMouse ? Theme.gray3 : Theme.gray2)
                 border.width: 1
@@ -228,6 +231,7 @@ Popout {
                 required property var modelData
                 width: 82
                 height: 34
+                radius: Theme.radiusSmall
                 color: modelData.primary ? Theme.accent
                     : (actionMouse.containsMouse ? Theme.gray3 : Theme.gray2)
                 border.width: 1

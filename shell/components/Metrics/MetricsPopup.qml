@@ -134,6 +134,7 @@ Popout {
 
         width: (parent.width - 12) / 3
         height: 104
+        radius: Theme.radiusMedium
         color: Qt.alpha(Theme.fg, 0.05)
         border.width: 1
         border.color: Theme.gray5
@@ -191,10 +192,12 @@ Popout {
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 10
             height: 4
+            radius: Math.min(height / 2, Theme.radiusSmall)
             color: Qt.alpha(Theme.fg, 0.12)
             Rectangle {
                 width: Math.max(0, Math.min(1, card.usage / 100)) * parent.width
                 height: parent.height
+                radius: parent.radius
                 color: card.accentColor
                 Behavior on width { NumberAnimation { duration: 300 } }
             }
@@ -249,6 +252,7 @@ Popout {
         Rectangle {
             width: parent.width
             height: 55
+            radius: Theme.radiusSmall
             color: Qt.alpha(Theme.fg, 0.04)
             border.width: 1
             border.color: Theme.gray5
@@ -305,6 +309,7 @@ Popout {
         Rectangle {
             width: parent.width
             height: 24
+            radius: Theme.radiusSmall
             color: Theme.gray3
             Text {
                 anchors.left: parent.left
@@ -358,6 +363,7 @@ Popout {
                 required property int index
                 width: content.width
                 height: 29
+                radius: Theme.radiusSmall
                 color: index % 2 === 0 ? Qt.alpha(Theme.fg, 0.035) : "transparent"
 
                 Text {

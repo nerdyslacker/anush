@@ -33,7 +33,7 @@ Item {
                 width: BarVisibility.verticalBar ? Theme.moduleHeight
                     : selected ? 30 : 24
                 height: Theme.moduleHeight
-                radius: 0
+                radius: Math.min(height / 2, Theme.radiusMedium)
                 color: urgent ? Theme.red
                     : selected ? Theme.accent
                     : Theme.barSurface(occupied ? 0.12 : 0.07)

@@ -31,7 +31,8 @@
     "accent": "orange",
     "defaultAccent": "brightYellow",
     "wallpaperEnabled": false,
-    "palette": null
+    "palette": null,
+    "cornerRadius": 0
   },
   "windowManager": {
     "gap": 8

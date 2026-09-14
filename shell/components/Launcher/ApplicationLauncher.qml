@@ -127,6 +127,7 @@ Popout {
         Rectangle {
             width: parent.width
             height: 42
+            radius: Theme.radiusMedium
             color: Theme.gray2
             border.width: 1
             border.color: search.activeFocus ? Theme.accent : Theme.gray5
@@ -215,6 +216,7 @@ Popout {
 
                 width: appList.width
                 height: 52
+                radius: Theme.radiusSmall
                 color: index === appList.currentIndex
                     ? Theme.selbg
                     : rowMouse.containsMouse ? Qt.alpha(Theme.fg, 0.12) : "transparent"
@@ -281,7 +283,7 @@ Popout {
                     color: Theme.gray2
                     border.width: 1
                     border.color: Theme.gray5
-                    radius: 0
+                    radius: Math.min(width / 2, Theme.radiusSmall)
                 }
 
                 contentItem: Rectangle {
@@ -289,7 +291,7 @@ Popout {
                     implicitHeight: 28
                     color: parent.pressed ? Theme.brightOrange
                          : parent.hovered ? Theme.orange : Theme.gray6
-                    radius: 0
+                    radius: Math.min(width / 2, Theme.radiusSmall)
 
                     Behavior on color { ColorAnimation { duration: 100 } }
                 }
