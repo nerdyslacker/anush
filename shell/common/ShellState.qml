@@ -38,7 +38,8 @@ Singleton {
             bar: {
                 height: 34, scale: 1.0, backgroundOpacity: 1.0,
                 widgets: {}, clusters: {}, showOnAllMonitors: true,
-                position: "top"
+                position: "top", fitContent: false, floating: false,
+                separateSections: false
             },
             weather: { location: "", units: "c" },
             launcher: { icon: "" },

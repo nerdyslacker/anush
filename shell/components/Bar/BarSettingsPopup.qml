@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls as Controls
 import "../.."
 
 Popout {
@@ -36,6 +37,62 @@ Popout {
         MouseArea {
             anchors.fill: parent
             onClicked: control.toggled()
+        }
+    }
+
+    component CompactSetting: Rectangle {
+        id: setting
+        required property string iconText
+        required property string title
+        required property string detail
+        property bool checked: false
+        signal toggled()
+
+        height: 48
+        radius: Theme.radiusMedium
+        color: "transparent"
+        border.width: 1
+        border.color: Theme.gray5
+
+        Text {
+            id: settingIcon
+            anchors.left: parent.left
+            anchors.leftMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
+            text: setting.iconText
+            color: Theme.accent
+            font.family: Theme.fontFamily
+            font.pixelSize: 15
+        }
+
+        Column {
+            anchors.left: settingIcon.right
+            anchors.leftMargin: 7
+            anchors.right: settingSwitch.left
+            anchors.rightMargin: 7
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 0
+            Text {
+                text: setting.title
+                color: Theme.fg
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize - 1
+            }
+            Text {
+                text: setting.detail
+                color: Theme.brightBlack
+                font.family: Theme.fontFamily
+                font.pixelSize: Math.max(8, Theme.fontSize - 3)
+            }
+        }
+
+        ToggleSwitch {
+            id: settingSwitch
+            anchors.right: parent.right
+            anchors.rightMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
+            checked: setting.checked
+            onToggled: setting.toggled()
         }
     }
 
@@ -264,147 +321,146 @@ Popout {
         Row {
             id: barOptions
             width: parent.width
-            height: 68
+            height: 48
             spacing: 8
 
-            Rectangle {
-                id: positionPanel
-                width: (parent.width - barOptions.spacing) / 2
+            Controls.ComboBox {
+                id: positionSelector
+                width: (barOptions.width - barOptions.spacing * 4) / 5
                 height: parent.height
-                radius: Theme.radiusMedium
-                color: "transparent"
-                border.width: 1
-                border.color: Theme.gray5
+                textRole: "label"
+                model: [
+                    { key: "top", label: "Top" },
+                    { key: "bottom", label: "Bottom" },
+                    { key: "left", label: "Left" },
+                    { key: "right", label: "Right" }
+                ]
+                currentIndex: ["top", "bottom", "left", "right"]
+                    .indexOf(BarVisibility.barPosition)
+                onActivated: index => BarVisibility.setBarPosition(
+                    positionSelector.model[index].key)
 
-                Text {
-                    anchors.left: parent.left
-                    anchors.leftMargin: 8
-                    anchors.top: parent.top
-                    anchors.topMargin: 6
-                    text: "Position"
+                delegate: Controls.ItemDelegate {
+                    id: positionOption
+                    required property int index
+                    required property var modelData
+                    width: positionSelector.width - 8
+                    height: 30
+                    highlighted: positionSelector.highlightedIndex === index
+
+                    contentItem: Text {
+                        leftPadding: 7
+                        text: positionOption.modelData.label
+                        color: positionOption.highlighted
+                            || positionOption.index === positionSelector.currentIndex
+                            ? Theme.accent : Theme.fg
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize - 1
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Rectangle {
+                        radius: Theme.radiusSmall
+                        color: positionOption.highlighted
+                            ? Theme.gray3
+                            : positionOption.index === positionSelector.currentIndex
+                            ? Qt.alpha(Theme.accent, 0.16) : "transparent"
+                    }
+                }
+
+                popup: Controls.Popup {
+                    y: positionSelector.height + 4
+                    width: positionSelector.width
+                    implicitHeight: positionList.contentHeight + 8
+                    padding: 4
+
+                    contentItem: ListView {
+                        id: positionList
+                        clip: true
+                        implicitHeight: contentHeight
+                        model: positionSelector.popup.visible
+                            ? positionSelector.delegateModel : null
+                        currentIndex: positionSelector.highlightedIndex
+                    }
+                    background: Rectangle {
+                        radius: Theme.radiusMedium
+                        color: Theme.gray2
+                        border.width: 1
+                        border.color: Theme.gray5
+                    }
+                }
+
+                contentItem: Text {
+                    leftPadding: 10
+                    rightPadding: 25
+                    text: "Position · " + positionSelector.displayText
                     color: Theme.fg
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize - 1
+                    verticalAlignment: Text.AlignVCenter
+                    elide: Text.ElideRight
                 }
 
-                Row {
-                    id: positionButtons
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    anchors.margins: 6
-                    height: 36
-                    spacing: 5
+                indicator: Text {
+                    x: positionSelector.width - width - 9
+                    y: (positionSelector.height - height) / 2
+                    text: positionSelector.popup.visible ? "󰅀" : "󰅂"
+                    color: Theme.brightBlack
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 13
+                }
 
-                    Repeater {
-                        model: [
-                            { key: "top", label: "Top", icon: "󰁝" },
-                            { key: "bottom", label: "Bottom", icon: "󰁅" },
-                            { key: "left", label: "Left", icon: "󰁍" },
-                            { key: "right", label: "Right", icon: "󰁔" }
-                        ]
-
-                        Rectangle {
-                            id: positionButton
-                            required property var modelData
-                            readonly property bool selected:
-                                BarVisibility.barPosition === modelData.key
-                            width: (positionButtons.width - positionButtons.spacing * 3) / 4
-                            height: positionButtons.height
-                            radius: Theme.radiusSmall
-                            color: selected ? Theme.accent
-                                : positionMouse.containsMouse ? Theme.gray3 : Theme.gray2
-                            border.width: 1
-                            border.color: selected ? Theme.brightOrange : Theme.gray5
-
-                            Row {
-                                anchors.centerIn: parent
-                                height: parent.height
-                                spacing: 4
-                                Text {
-                                    width: 15
-                                    height: parent.height
-                                    verticalAlignment: Text.AlignVCenter
-                                    horizontalAlignment: Text.AlignHCenter
-                                    text: positionButton.modelData.icon
-                                    color: positionButton.selected ? Theme.selfg : Theme.accent
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: 14
-                                }
-                                Text {
-                                    height: parent.height
-                                    verticalAlignment: Text.AlignVCenter
-                                    text: positionButton.modelData.label
-                                    color: positionButton.selected ? Theme.selfg : Theme.fg
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: Math.max(9, Theme.fontSize - 2)
-                                    font.bold: positionButton.selected
-                                }
-                            }
-
-                            MouseArea {
-                                id: positionMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: BarVisibility.setBarPosition(
-                                    positionButton.modelData.key)
-                            }
-                        }
-                    }
+                background: Rectangle {
+                    radius: Theme.radiusMedium
+                    color: positionSelector.pressed ? Theme.gray4
+                        : positionSelector.hovered ? Theme.gray3
+                        : "transparent"
+                    border.width: 1
+                    border.color: positionSelector.popup.visible
+                        ? Theme.accent : Theme.gray5
                 }
             }
 
-            Rectangle {
-                id: monitorPanel
-                width: (parent.width - barOptions.spacing) / 2
-                height: parent.height
-                radius: Theme.radiusMedium
-                color: "transparent"
-                border.width: 1
-                border.color: Theme.gray5
+            CompactSetting {
+                width: (barOptions.width - barOptions.spacing * 4) / 5
+                iconText: "󰍹"
+                title: "Monitors"
+                detail: BarVisibility.showOnAllMonitors ? "All" : "Main only"
+                checked: BarVisibility.showOnAllMonitors
+                onToggled: BarVisibility.setShowOnAllMonitors(
+                    !BarVisibility.showOnAllMonitors)
+            }
 
-                Text {
-                    id: monitorIcon
-                    anchors.left: parent.left
-                    anchors.leftMargin: 9
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "󰍹"
-                    color: Theme.accent
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 17
-                }
+            CompactSetting {
+                width: (barOptions.width - barOptions.spacing * 4) / 5
+                iconText: "󰘖"
+                title: "Fit content"
+                detail: BarVisibility.fitContent ? "Compact"
+                    : BarVisibility.verticalBar ? "Full height" : "Full width"
+                checked: BarVisibility.fitContent
+                onToggled: BarVisibility.setFitContent(
+                    !BarVisibility.fitContent)
+            }
 
-                Column {
-                    anchors.left: monitorIcon.right
-                    anchors.leftMargin: 9
-                    anchors.right: monitorSwitch.left
-                    anchors.rightMargin: 9
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 1
-                    Text {
-                        text: "Show bar on all monitors"
-                        color: Theme.fg
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize - 1
-                    }
-                    Text {
-                        text: BarVisibility.showOnAllMonitors
-                            ? "Every connected monitor" : "Main monitor only"
-                        color: Theme.brightBlack
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Math.max(8, Theme.fontSize - 3)
-                    }
-                }
+            CompactSetting {
+                width: (barOptions.width - barOptions.spacing * 4) / 5
+                iconText: "󰖝"
+                title: "Floating"
+                detail: BarVisibility.floating
+                    ? Theme.surfaceGap + " px inset" : "Flush"
+                checked: BarVisibility.floating
+                onToggled: BarVisibility.setFloating(
+                    !BarVisibility.floating)
+            }
 
-                ToggleSwitch {
-                    id: monitorSwitch
-                    anchors.right: parent.right
-                    anchors.rightMargin: 9
-                    anchors.verticalCenter: parent.verticalCenter
-                    checked: BarVisibility.showOnAllMonitors
-                    onToggled: BarVisibility.setShowOnAllMonitors(
-                        !BarVisibility.showOnAllMonitors)
-                }
+            CompactSetting {
+                width: (barOptions.width - barOptions.spacing * 4) / 5
+                iconText: "󰧞"
+                title: "Sections"
+                detail: BarVisibility.fitContent ? "Full bar only"
+                    : BarVisibility.separateSections ? "3 pillows" : "Joined"
+                checked: BarVisibility.separateSections
+                onToggled: BarVisibility.setSeparateSections(
+                    !BarVisibility.separateSections)
             }
         }
 

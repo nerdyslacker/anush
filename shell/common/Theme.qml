@@ -31,6 +31,7 @@ Singleton {
     readonly property int radiusSmall: Math.round(cornerRadius * 0.5)
     readonly property int radiusMedium: cornerRadius
     readonly property int radiusLarge: Math.round(cornerRadius * 1.5)
+    readonly property int surfaceGap: 8
 
     property int _barStateLoads: 0
     readonly property bool barStateReady: _barStateLoads >= 2

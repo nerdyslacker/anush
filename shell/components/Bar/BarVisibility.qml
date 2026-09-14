@@ -66,6 +66,9 @@ Singleton {
     property var clusters: defaultClusters
     property bool showOnAllMonitors: true
     property string barPosition: "top"
+    property bool fitContent: false
+    property bool floating: false
+    property bool separateSections: false
     readonly property bool verticalBar: barPosition === "left"
         || barPosition === "right"
 
@@ -108,6 +111,21 @@ Singleton {
         if (barPosition === next)
             return
         barPosition = next
+        writeState(widgets, showOnAllMonitors, clusters)
+    }
+
+    function setFitContent(enabled) {
+        fitContent = enabled
+        writeState(widgets, showOnAllMonitors, clusters)
+    }
+
+    function setFloating(enabled) {
+        floating = enabled
+        writeState(widgets, showOnAllMonitors, clusters)
+    }
+
+    function setSeparateSections(enabled) {
+        separateSections = enabled
         writeState(widgets, showOnAllMonitors, clusters)
     }
 
@@ -174,7 +192,10 @@ Singleton {
             widgets: savedWidgets,
             clusters: clusterState,
             showOnAllMonitors: showAll,
-            position: root.barPosition
+            position: root.barPosition,
+            fitContent: root.fitContent,
+            floating: root.floating,
+            separateSections: root.separateSections
         })
     }
 
@@ -202,6 +223,9 @@ Singleton {
         root.showOnAllMonitors = saved.showOnAllMonitors !== false
         root.barPosition = ["top", "bottom", "left", "right"]
             .indexOf(saved.position) >= 0 ? saved.position : "top"
+        root.fitContent = saved.fitContent === true
+        root.floating = saved.floating === true
+        root.separateSections = saved.separateSections === true
     }
 
     Connections {

@@ -13,7 +13,7 @@ manager; a WM configuration starts the shell by pointing Quickshell at
 `anush/shell`.
 
 <div align="center">
-<img src="assets/anush_screenshot.jpg"/>
+<img src="assets/screenshot.png"/>
 </div>
 
 ## Dependencies
@@ -145,6 +145,27 @@ from component styling.
 In light mode, wallpaper-derived palettes lift the wallpaper's dominant
 background hue into a light surface and enforce readable contrast for text and
 accent roles; the fixed Srcery light theme continues to use its canonical cream.
+
+Bars can optionally shrink along their long axis to their natural widget size
+while the native panel window remains centered on each screen. This keeps the
+surrounding desktop clickable and preserves the bar's workspace reservation:
+
+```json
+"bar": {
+  "fitContent": true,
+  "floating": true,
+  "separateSections": false
+}
+```
+
+These settings are also available as **Fit to content** and **Floating**
+in the bar layout popup. Floating mode uses the same 8-pixel gap as bar
+popups; a full-width horizontal bar is inset from the left and right edges as
+well. The workspace reservation remains intact.
+
+On full-length bars, **Sections** can replace the continuous background with
+separate start, center, and end surfaces. Empty sections are not drawn; side
+bars arrange the three surfaces vertically.
 
 `ShellState.qml` merges section updates and writes the complete document
 atomically. On first launch, it imports compatible state from the former

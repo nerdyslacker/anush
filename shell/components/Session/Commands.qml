@@ -335,7 +335,7 @@ BarModule {
         readonly property bool rebooting: action === "reboot"
 
         anchorItem: root
-        alignRight: true
+        alignRight: !BarVisibility.fitContent || BarVisibility.verticalBar
         cardWidth: 310
         cardHeight: confirmationContent.implicitHeight + 2 * cardPadding
 
@@ -414,7 +414,7 @@ BarModule {
     Popout {
         id: menu
         anchorItem: root
-        alignRight: true
+        alignRight: !BarVisibility.fitContent || BarVisibility.verticalBar
         cardWidth: 330
         cardHeight: content.implicitHeight + 2 * cardPadding
 

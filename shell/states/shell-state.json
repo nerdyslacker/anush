@@ -6,7 +6,10 @@
     "widgets": {},
     "clusters": {},
     "showOnAllMonitors": true,
-    "position": "top"
+    "position": "top",
+    "fitContent": false,
+    "floating": false,
+    "separateSections": false
   },
   "weather": {
     "location": "",

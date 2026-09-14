@@ -131,16 +131,18 @@ PopupWindow {
         const bottomEdge = screenY + screenHeight - cardHeight - screenMargin
         let requestedX = positionCentered
             ? centerRectX + (centerRectWidth - cardWidth) / 2
-            : positionAtPoint ? pointX + 12
-            : openDirection === "left" ? anchorRight + 12
-            : openDirection === "right" ? anchorLeft - cardWidth - 12
+            : positionAtPoint ? pointX + Theme.surfaceGap
+            : openDirection === "left" ? anchorRight + Theme.surfaceGap
+            : openDirection === "right"
+            ? anchorLeft - cardWidth - Theme.surfaceGap
             : alignRight ? rightEdge
             : anchorCenterX - cardWidth / 2
         let requestedY = positionCentered
             ? centerRectY + (centerRectHeight - cardHeight) / 2
-            : positionAtPoint ? pointY + 12
-            : openDirection === "top" ? anchorBottom + 12
-            : openDirection === "bottom" ? anchorTop - cardHeight - 12
+            : positionAtPoint ? pointY + Theme.surfaceGap
+            : openDirection === "top" ? anchorBottom + Theme.surfaceGap
+            : openDirection === "bottom"
+            ? anchorTop - cardHeight - Theme.surfaceGap
             : anchorCenterY - cardHeight / 2
         const desiredX = Math.min(Math.max(requestedX, leftEdge), rightEdge)
         const desiredY = Math.min(Math.max(requestedY, topEdge), bottomEdge)
