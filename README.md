@@ -4,7 +4,7 @@
 <a href="https://github.com/nerdyslacker/anush"><img src="assets/anush_logo.png" width="150"/></a>
 </div>
 
-anush is a desktop shell named after my wife currently integrated with
+**anush** (_[ɑˈnuʃ]_) is a desktop shell named after my wife (_Անուշ_) currently integrated with
 [skarwm](https://github.com/nerdyslacker/skarwm) to make it as beautiful as she
 makes my life. It owns the bar, launchers,
 clipboard, tray, weather, notifications, wallpaper tooling, desktop
