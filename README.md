@@ -174,6 +174,13 @@ On full-length bars, **Sections** can replace the continuous background with
 separate start, center, and end surfaces. Empty sections are not drawn; side
 bars arrange the three surfaces vertically.
 
+The power menu's **Display settings** item opens a centered XRandR-backed
+configuration surface. Changes are staged until **Apply**; mode, refresh rate,
+scale, orientation, enabled state, primary output, mirroring, and snapped
+monitor positions are configured together. Potentially disruptive changes
+must be confirmed within 15 seconds or the independent rollback watchdog
+restores the previous layout. XRandR remains the persistence owner.
+
 `ShellState.qml` merges section updates and writes the complete document
 atomically. On first launch, it imports compatible state from the former
 skarwm files when present; afterward `shell-state.json` is the only active

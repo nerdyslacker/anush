@@ -8,6 +8,7 @@ singleton TagConfig components/Workspaces/TagConfig.qml
 singleton LauncherState components/Launcher/LauncherState.qml
 singleton BarVisibility components/Bar/BarVisibility.qml
 singleton TrayState components/Tray/TrayState.qml
+singleton DisplayConfigurationService components/Displays/DisplayConfigurationService.qml
 Bar components/Bar/Bar.qml
 BarModule components/Bar/BarModule.qml
 BarSettingsPopup components/Bar/BarSettingsPopup.qml
@@ -20,6 +21,7 @@ Battery components/Battery/Battery.qml
 BatteryPopup components/Battery/BatteryPopup.qml
 Brightness components/Battery/Brightness.qml
 BrightnessPopup components/Battery/BrightnessPopup.qml
+DisplayPopup components/Displays/DisplayPopup.qml
 Clipboard components/Clipboard/Clipboard.qml
 ClipboardPopup components/Clipboard/ClipboardPopup.qml
 CapsLock components/Keyboard/CapsLock.qml

@@ -329,6 +329,11 @@ BarModule {
         anchorItem: root
     }
 
+    DisplayPopup {
+        id: displaySettings
+        anchorItem: root
+    }
+
     Popout {
         id: powerConfirmation
         property string action: ""
@@ -544,6 +549,11 @@ BarModule {
 
             Repeater {
                 model: [
+                    { icon: "󰍹", label: "Display settings",
+                      run: () => {
+                          menu.visible = false
+                          displaySettings.openCentered()
+                      } },
                     { icon: "󰚰", label: "Check updates",
                       run: () => root.run(["sh", "-c",
                           "if command -v kitty >/dev/null 2>&1; then " +
