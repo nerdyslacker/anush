@@ -16,7 +16,7 @@ Rectangle {
     property color compactIconColor: iconColor
     property string compactLabel: ""
     // some glyphs (e.g. Font Logos ) are missing from JetBrainsMono NF here
-    property string iconFont: Theme.fontFamily
+    property string iconFont: Theme.iconFontFamily
     property string label: ""
     property color labelColor: Theme.fg
     property int labelPixelSize: Theme.fontSize

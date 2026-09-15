@@ -21,6 +21,12 @@ Popout {
         ? batteryDevice.state === UPowerService.UPowerDeviceState.Charging
             || batteryDevice.state === UPowerService.UPowerDeviceState.PendingCharge
         : Sys.batteryCharging
+    readonly property bool fullyCharged:
+        batteryReady
+            && batteryDevice.state === UPowerService.UPowerDeviceState.FullyCharged
+        || batteryPercentage >= 99.5
+            && (!batteryReady || batteryDevice.state
+                !== UPowerService.UPowerDeviceState.Discharging)
     readonly property int chargeTarget: Math.max(1, Math.min(100,
         Math.round(Sys.batteryChargeLimit)))
     readonly property string batteryState: batteryReady
@@ -37,7 +43,9 @@ Popout {
     onVisibleChanged: if (visible) stateQuery.running = true
 
     function formatDuration(seconds) {
-        if (!isFinite(seconds) || seconds <= 0)
+        // Ignore missing and clearly invalid UPower estimates. Some firmware
+        // reports a huge time-to-empty sentinel while the battery is full.
+        if (!isFinite(seconds) || seconds <= 0 || seconds > 7 * 24 * 60 * 60)
             return ""
         const minutes = Math.round(seconds / 60)
         const hours = Math.floor(minutes / 60)
@@ -52,15 +60,18 @@ Popout {
     readonly property string estimate: {
         if (!batteryReady)
             return ""
-        const seconds = batteryDevice.state
+        const isCharging = batteryDevice.state
             === UPowerService.UPowerDeviceState.Charging
+        const isDischarging = batteryDevice.state
+            === UPowerService.UPowerDeviceState.Discharging
+        if (!isCharging && !isDischarging)
+            return ""
+        const seconds = isCharging
             ? batteryDevice.timeToFull : batteryDevice.timeToEmpty
         const duration = formatDuration(seconds)
         if (duration === "")
             return ""
-        return duration + (batteryDevice.state
-            === UPowerService.UPowerDeviceState.Charging
-            ? " until full" : " remaining")
+        return duration + (isCharging ? " until full" : " remaining")
     }
 
     readonly property var batteryDetails: batteryReady ? [
@@ -249,7 +260,9 @@ Popout {
             readonly property int percent: Math.round(root.batteryPercentage)
             readonly property int targetRemaining:
                 Math.max(0, root.chargeTarget - percent)
-            text: root.charging
+            text: root.fullyCharged
+                ? percent + "% charged"
+                : root.charging
                 ? percent + "% charged · " + targetRemaining + "% to "
                     + (root.chargeTarget < 100
                         ? root.chargeTarget + "% limit" : "full")

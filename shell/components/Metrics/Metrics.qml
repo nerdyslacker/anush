@@ -43,7 +43,7 @@ BarModule {
             anchors.verticalCenter: parent.verticalCenter
             text: parent.icon
             color: parent.tagColor
-            font.family: Theme.fontFamily
+            font.family: Theme.iconFontFamily
             font.pixelSize: Theme.iconSize
             Behavior on color { ColorAnimation { duration: 250 } }
         }

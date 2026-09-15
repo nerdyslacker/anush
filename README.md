@@ -22,7 +22,8 @@ Required:
 
 - Quickshell;
 - Python 3 for state migration and shell helpers;
-- a JetBrainsMono Nerd Font for the intended icons and typography;
+- JetBrainsMono Nerd Font for typography and Symbols Nerd Font Mono for
+  consistently sized bar icons;
 - for the current skarwm adapter, `skarwm-msg` available in `PATH`.
 
 Optional desktop integrations:

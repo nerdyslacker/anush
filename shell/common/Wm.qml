@@ -4,8 +4,6 @@ import ".."
 import Quickshell
 import Quickshell.Io
 
-// skarwm state/control adapter. Its reusable public properties keep visual
-// modules independent of the wire protocol.
 Singleton {
     id: root
 
@@ -15,12 +13,7 @@ Singleton {
     property var registeredScratchpads: []
     signal overviewCommand(string action)
     signal uiEvent(var event)
-    // Highest workspace currently reported by skarwm. Tags.qml combines this
-    // with the user's configured minimum, ensuring an active high tag remains
-    // reachable without forcing the configured count back to nine.
     property int tagCount: 1
-    // Dynamic mode shows every occupied/focused workspace plus exactly one
-    // empty workspace after the highest occupied one.
     readonly property int dynamicTagCount: {
         let highestOccupied = 0
         let focused = 1

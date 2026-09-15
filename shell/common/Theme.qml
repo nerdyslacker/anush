@@ -120,6 +120,9 @@ Singleton {
     }
 
     readonly property string fontFamily: "JetBrainsMono Nerd Font"
+    // Patched text fonts scale individual icon sets differently. Prefer the
+    // dedicated symbol font so bar glyphs retain consistent visual bounds.
+    readonly property string iconFontFamily: "Symbols Nerd Font Mono"
 
     readonly property real barScale: barUserScale
     readonly property int fontSize: Math.round(12 * barScale)
