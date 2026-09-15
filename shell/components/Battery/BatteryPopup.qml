@@ -2,15 +2,29 @@ import QtQuick
 import "../.."
 import Quickshell
 import Quickshell.Io
+import Quickshell.Services.UPower as UPowerService
 
-// Power profile, display blanking, and night colour controls live with the
-// battery instead of in the general command menu.
+// Battery-oriented power profile and display blanking controls.
 Popout {
     id: root
 
     property string profile: "balanced"
-    property bool caffeine: false
-    property bool nightLight: false
+    readonly property var batteryDevice:
+        UPowerService.UPower.devices.values.find(device =>
+            device.isLaptopBattery && device.isPresent)
+        ?? UPowerService.UPower.displayDevice
+    readonly property bool batteryReady: batteryDevice?.ready === true
+        && batteryDevice?.isPresent === true
+    readonly property real batteryPercentage: Math.max(0, Math.min(100,
+        batteryReady ? batteryDevice.percentage * 100 : Sys.battery))
+    readonly property bool charging: batteryReady
+        ? batteryDevice.state === UPowerService.UPowerDeviceState.Charging
+            || batteryDevice.state === UPowerService.UPowerDeviceState.PendingCharge
+        : Sys.batteryCharging
+    readonly property int chargeTarget: Math.max(1, Math.min(100,
+        Math.round(Sys.batteryChargeLimit)))
+    readonly property string batteryState: batteryReady
+        ? UPowerService.UPowerDeviceState.toString(batteryDevice.state) : "Unknown"
     readonly property var profileOrder: ["performance", "balanced", "power-saver"]
     readonly property var profileIcons: ({
         performance: "󰃅",
@@ -22,6 +36,47 @@ Popout {
     cardHeight: content.implicitHeight + 2 * cardPadding
     onVisibleChanged: if (visible) stateQuery.running = true
 
+    function formatDuration(seconds) {
+        if (!isFinite(seconds) || seconds <= 0)
+            return ""
+        const minutes = Math.round(seconds / 60)
+        const hours = Math.floor(minutes / 60)
+        const remainder = minutes % 60
+        return (hours > 0 ? hours + "h " : "") + remainder + "m"
+    }
+
+    function formatEnergy(value) {
+        return isFinite(value) && value > 0 ? value.toFixed(1) + " Wh" : "—"
+    }
+
+    readonly property string estimate: {
+        if (!batteryReady)
+            return ""
+        const seconds = batteryDevice.state
+            === UPowerService.UPowerDeviceState.Charging
+            ? batteryDevice.timeToFull : batteryDevice.timeToEmpty
+        const duration = formatDuration(seconds)
+        if (duration === "")
+            return ""
+        return duration + (batteryDevice.state
+            === UPowerService.UPowerDeviceState.Charging
+            ? " until full" : " remaining")
+    }
+
+    readonly property var batteryDetails: batteryReady ? [
+        { label: "Energy", value: formatEnergy(batteryDevice.energy)
+            + " / " + formatEnergy(batteryDevice.energyCapacity) },
+        { label: batteryDevice.state === UPowerService.UPowerDeviceState.Charging
+            || batteryDevice.state === UPowerService.UPowerDeviceState.PendingCharge
+            ? "Charge rate" : "Power draw",
+          value: batteryDevice.changeRate > 0
+            ? batteryDevice.changeRate.toFixed(1) + " W" : "—" },
+        { label: "Health", value: batteryDevice.healthSupported
+            ? Math.round(batteryDevice.healthPercentage * 100) + "%" : "—" },
+        { label: "State", value: batteryState },
+        { label: "Model", value: batteryDevice.model || batteryDevice.nativePath }
+    ] : []
+
     function cycleProfile() {
         const at = profileOrder.indexOf(profile)
         const next = profileOrder[(Math.max(0, at) + 1) % profileOrder.length]
@@ -30,44 +85,24 @@ Popout {
     }
 
     function setCaffeine(enabled) {
-        caffeine = enabled
-        Quickshell.execDetached(["sh", "-c",
-            enabled ? "xset s off -dpms" : "xset s on +dpms"])
+        Sys.setKeepAwake(enabled)
     }
 
-    function setNightLight(enabled) {
-        nightLight = enabled
-        ShellState.updateSection("desktop", { nightLight: enabled })
-        Quickshell.execDetached(enabled
-            ? ["redshift", "-P", "-O", "4500"] : ["redshift", "-x"])
+    function setShowPercentage(enabled) {
+        ShellState.updateSection("desktop", { showBatteryPercentage: enabled })
     }
 
     Process {
         id: stateQuery
-        command: ["sh", "-c",
-            "printf '%s\\n' \"$(powerprofilesctl get 2>/dev/null)\" " +
-            "\"$(xset q 2>/dev/null | awk '/timeout:/{print $2}')\""]
+        command: ["powerprofilesctl", "get"]
         stdout: StdioCollector {
             onStreamFinished: {
-                const lines = text.split("\n")
-                if (root.profileOrder.indexOf(lines[0]) >= 0)
-                    root.profile = lines[0]
-                if (lines[1] === "0" || Number(lines[1]) > 0)
-                    root.caffeine = lines[1] === "0"
-                root.nightLight = ShellState.state.desktop.nightLight === true
+                const value = text.trim()
+                if (root.profileOrder.indexOf(value) >= 0)
+                    root.profile = value
             }
         }
     }
-
-    Connections {
-        target: ShellState
-        function onStateChanged() {
-            root.nightLight = ShellState.state.desktop.nightLight === true
-        }
-    }
-
-    Component.onCompleted: root.nightLight =
-        ShellState.state.desktop.nightLight === true
 
     component SettingButton: Rectangle {
         id: button
@@ -125,6 +160,76 @@ Popout {
         }
     }
 
+    component SettingSwitch: Rectangle {
+        id: setting
+        required property string title
+        required property string detail
+        required property bool checked
+        signal toggled()
+
+        width: parent.width
+        height: 48
+        radius: Theme.radiusSmall
+        color: switchMouse.containsMouse ? Qt.alpha(Theme.fg, 0.12)
+            : Qt.alpha(Theme.fg, 0.05)
+        border.width: 1
+        border.color: Theme.gray5
+        Behavior on color { ColorAnimation { duration: 120 } }
+
+        Column {
+            anchors.left: parent.left
+            anchors.leftMargin: 11
+            anchors.right: toggle.left
+            anchors.rightMargin: 9
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 1
+            Text {
+                text: setting.title
+                color: Theme.fg
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize
+                font.bold: true
+            }
+            Text {
+                text: setting.detail
+                color: Theme.brightBlack
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize - 2
+            }
+        }
+
+        Rectangle {
+            id: toggle
+            anchors.right: parent.right
+            anchors.rightMargin: 11
+            anchors.verticalCenter: parent.verticalCenter
+            width: 34
+            height: 18
+            radius: Math.min(height / 2, Theme.radiusSmall)
+            color: setting.checked ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
+            Behavior on color { ColorAnimation { duration: 150 } }
+
+            Rectangle {
+                x: setting.checked ? parent.width - width - 2 : 2
+                anchors.verticalCenter: parent.verticalCenter
+                width: 14
+                height: 14
+                radius: Math.min(width / 2, Theme.radiusSmall)
+                color: setting.checked ? Theme.bg : Qt.alpha(Theme.fg, 0.7)
+                Behavior on x {
+                    NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+                }
+            }
+        }
+
+        MouseArea {
+            id: switchMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            onClicked: setting.toggled()
+        }
+    }
+
     Column {
         id: content
         anchors.left: parent.left
@@ -132,17 +237,78 @@ Popout {
         spacing: 7
 
         Text {
-            text: Sys.batteryCharging ? "Battery · charging" : "Battery"
+            text: root.batteryReady ? "Battery · "
+                + root.batteryState.toLowerCase()
+                : Sys.batteryCharging ? "Battery · charging" : "Battery"
             color: Theme.fg
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize + 1
             font.bold: true
         }
         Text {
-            text: Math.round(Sys.battery) + "% remaining"
+            readonly property int percent: Math.round(root.batteryPercentage)
+            readonly property int targetRemaining:
+                Math.max(0, root.chargeTarget - percent)
+            text: root.charging
+                ? percent + "% charged · " + targetRemaining + "% to "
+                    + (root.chargeTarget < 100
+                        ? root.chargeTarget + "% limit" : "full")
+                : percent + "% remaining"
             color: Theme.brightBlack
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize
+        }
+        Text {
+            visible: root.estimate !== ""
+            text: root.estimate
+            color: Theme.accent
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize - 1
+        }
+
+        Rectangle {
+            visible: root.batteryDetails.length > 0
+            width: parent.width
+            height: details.implicitHeight + 16
+            radius: Theme.radiusSmall
+            color: Qt.alpha(Theme.fg, 0.05)
+            border.width: 1
+            border.color: Theme.gray5
+
+            Column {
+                id: details
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 8
+                spacing: 5
+
+                Repeater {
+                    model: root.batteryDetails
+                    Row {
+                        id: detailRow
+                        required property var modelData
+                        width: details.width
+                        Text {
+                            width: parent.width * 0.38
+                            text: detailRow.modelData.label
+                            color: Theme.brightBlack
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize - 1
+                        }
+                        Text {
+                            width: parent.width * 0.62
+                            horizontalAlignment: Text.AlignRight
+                            text: detailRow.modelData.value
+                            color: Theme.fg
+                            elide: Text.ElideRight
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize - 1
+                            font.bold: true
+                        }
+                    }
+                }
+            }
         }
         Rectangle { width: parent.width; height: 1; color: Theme.gray5 }
 
@@ -156,16 +322,15 @@ Popout {
         SettingButton {
             buttonIcon: "󰅶"
             title: "Keep awake"
-            detail: root.caffeine ? "Screen blanking disabled" : "Screen blanking enabled"
-            active: root.caffeine
-            onActivated: root.setCaffeine(!root.caffeine)
+            detail: Sys.keepAwake ? "Screen blanking disabled" : "Screen blanking enabled"
+            active: Sys.keepAwake
+            onActivated: root.setCaffeine(!Sys.keepAwake)
         }
-        SettingButton {
-            buttonIcon: "󱩌"
-            title: "Night mode"
-            detail: root.nightLight ? "4500 K" : "Off"
-            active: root.nightLight
-            onActivated: root.setNightLight(!root.nightLight)
+        SettingSwitch {
+            title: "Battery percentage"
+            detail: checked ? "Shown on bar" : "Hidden from bar"
+            checked: ShellState.state.desktop.showBatteryPercentage !== false
+            onToggled: root.setShowPercentage(!checked)
         }
     }
 }

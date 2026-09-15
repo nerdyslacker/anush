@@ -53,7 +53,7 @@ Singleton {
                 mode: "dark"
             },
             windowManager: { gap: 8 },
-            desktop: { nightLight: false }
+            desktop: { nightLight: false, showBatteryPercentage: true }
         }
     }
 

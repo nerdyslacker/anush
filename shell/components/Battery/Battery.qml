@@ -7,6 +7,8 @@ BarModule {
     id: root
 
     visible: BarVisibility.enabled("battery") && Sys.hasBattery
+    leadingIcon: Sys.keepAwake ? "󰅶" : ""
+    leadingIconColor: Theme.blue
     icon: Sys.batteryCharging ? "󰂄"
         : Sys.battery < 15 ? "󰁺"
         : Sys.battery < 40 ? "󰁼"
@@ -16,7 +18,8 @@ BarModule {
         : Sys.battery < 15 ? Theme.red
         : Sys.battery < 40 ? Theme.yellow
         : Theme.green
-    label: Math.round(Sys.battery) + "%"
+    label: ShellState.state.desktop.showBatteryPercentage === false
+        ? "" : Math.round(Sys.battery) + "%"
     labelColor: !Sys.batteryCharging && Sys.battery < 15
         ? Theme.red : Theme.fg
 

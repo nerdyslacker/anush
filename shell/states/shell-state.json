@@ -45,6 +45,7 @@
     "gap": 8
   },
   "desktop": {
-    "nightLight": false
+    "nightLight": false,
+    "showBatteryPercentage": true
   }
 }

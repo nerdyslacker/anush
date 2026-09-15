@@ -14,6 +14,8 @@ Singleton {
     property bool hasBattery: false
     property real battery: 0
     property bool batteryCharging: false
+    property real batteryChargeLimit: 100
+    property bool keepAwake: false
     readonly property string netName: NetworkService.primaryName
     readonly property string netType: NetworkService.primaryType
     readonly property bool vpnOn: NetworkService.vpnOn
@@ -41,7 +43,10 @@ Singleton {
         id: statProc
         command: ["sh", "-c",
             "head -1 /proc/stat; grep -E '^(MemTotal|MemAvailable)' /proc/meminfo; df --output=pcent / | tail -1; " +
-            "for b in /sys/class/power_supply/BAT*; do [ -r \"$b/capacity\" ] && echo \"BAT $(cat \"$b/capacity\") $(cat \"$b/status\")\" && break; done; true"]
+            "for b in /sys/class/power_supply/BAT*; do " +
+            "[ -r \"$b/capacity\" ] && echo \"BAT $(cat \"$b/capacity\") " +
+            "$(cat \"$b/charge_control_end_threshold\" 2>/dev/null || echo 100) " +
+            "$(cat \"$b/status\")\" && break; done; true"]
         stdout: StdioCollector {
             onStreamFinished: root.parseStat(text)
         }
@@ -68,7 +73,8 @@ Singleton {
                 const parts = line.split(/\s+/)
                 foundBattery = true
                 battery = parseInt(parts[1])
-                batteryCharging = parts[2] === "Charging"
+                batteryChargeLimit = parseInt(parts[2]) || 100
+                batteryCharging = parts.slice(3).join(" ") === "Charging"
             } else if (line.indexOf("%") !== -1) {
                 disk = parseInt(line)
             }
@@ -102,14 +108,33 @@ Singleton {
 
     Process {
         id: capsProc
-        command: ["sh", "-c", "xset q 2>/dev/null | awk '/Caps Lock/{print $4}'"]
+        // One xset query supplies both keyboard-lock and screen-blanking state.
+        command: ["sh", "-c",
+            "xset q 2>/dev/null | awk '" +
+            "/timeout:/{timeout=$2} /Caps Lock:/{caps=$4} " +
+            "END{print caps, timeout}'"]
         stdout: StdioCollector {
             onStreamFinished: {
-                const state = text.trim()
-                if (state === "on" || state === "off")
-                    root.capsOn = state === "on"
+                const values = text.trim().split(/\s+/)
+                if (values[0] === "on" || values[0] === "off")
+                    root.capsOn = values[0] === "on"
+                if (values[1] === "0" || Number(values[1]) > 0)
+                    root.keepAwake = values[1] === "0"
             }
         }
+    }
+
+    function setKeepAwake(enabled) {
+        keepAwake = enabled
+        keepAwakeProc.running = false
+        keepAwakeProc.command = ["sh", "-c",
+            enabled ? "xset s off -dpms" : "xset s on +dpms"]
+        keepAwakeProc.running = true
+    }
+
+    Process {
+        id: keepAwakeProc
+        onExited: root.restartQuery(capsProc)
     }
 
     Process {

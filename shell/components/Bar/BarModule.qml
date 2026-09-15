@@ -9,6 +9,8 @@ Rectangle {
     property string icon: ""
     property url iconSource: ""
     property color iconColor: Theme.accent
+    property string leadingIcon: ""
+    property color leadingIconColor: Theme.accent
     property string compactIcon: icon
     property url compactIconSource: iconSource
     property color compactIconColor: iconColor
@@ -57,6 +59,16 @@ Rectangle {
         visible: !BarVisibility.verticalBar
         anchors.centerIn: parent
         spacing: Math.round(7 * Theme.barScale)
+
+        Text {
+            visible: root.leadingIcon !== ""
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.leadingIcon
+            color: root.leadingIconColor
+            font.family: root.iconFont
+            font.pixelSize: Theme.iconSize
+            Behavior on color { ColorAnimation { duration: 250 } }
+        }
 
         Text {
             visible: root.icon !== "" && (root.iconSource.toString() === ""
