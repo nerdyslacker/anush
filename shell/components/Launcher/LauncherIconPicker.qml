@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Dialogs
 import "../.."
 
 // Launcher-specific appearance editor. Bare values use the desktop icon
@@ -20,9 +19,13 @@ Popout {
     readonly property string resolvedDraft: LauncherState.resolveIcon(iconInput.text)
     readonly property bool customRequested: iconInput.text.trim() !== ""
     readonly property bool previewReady: previewImage.status === Image.Ready
+    property bool browsing: false
+    signal browseRequested()
 
     cardWidth: 390
     cardHeight: content.implicitHeight + 2 * cardPadding
+    closeOnOutside: false
+    grabFocus: !browsing
 
     function toggle() {
         if (visible) {
@@ -42,6 +45,15 @@ Popout {
         if (path.startsWith(configRoot + "/"))
             return path.slice(configRoot.length + 1)
         return source
+    }
+
+    function acceptFile(url) {
+        iconInput.text = portableFileSpec(url)
+    }
+
+    function restoreEditorFocus() {
+        if (visible)
+            Qt.callLater(() => iconInput.forceActiveFocus())
     }
 
     component ActionButton: Rectangle {
@@ -249,10 +261,6 @@ Popout {
                         color: Theme.brightBlack
                         font: iconInput.font
                     }
-                    Keys.onReturnPressed: {
-                        LauncherState.setIcon(text)
-                        root.visible = false
-                    }
                 }
             }
 
@@ -260,7 +268,7 @@ Popout {
                 id: browseButton
                 width: 76
                 label: "Browse…"
-                onActivated: fileDialog.open()
+                onActivated: root.browseRequested()
             }
         }
 
@@ -272,10 +280,7 @@ Popout {
             ActionButton {
                 width: (parent.width - parent.spacing * 2) / 3
                 label: "Reset"
-                onActivated: {
-                    LauncherState.resetIcon()
-                    root.visible = false
-                }
+                onActivated: iconInput.text = ""
             }
             ActionButton {
                 width: (parent.width - parent.spacing * 2) / 3
@@ -294,10 +299,4 @@ Popout {
         }
     }
 
-    FileDialog {
-        id: fileDialog
-        title: "Choose launcher icon"
-        nameFilters: ["Images (*.svg *.svgz *.png *.webp *.jpg *.jpeg)", "All files (*)"]
-        onAccepted: iconInput.text = root.portableFileSpec(selectedFile)
-    }
 }

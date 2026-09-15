@@ -24,6 +24,8 @@ PopupWindow {
     // global X11 coordinates and are clamped to their containing screen.
     property bool positionAtPoint: false
     property bool positionCentered: false
+    property bool closeOnOutside: true
+    property bool suspendOutsideClose: false
     property real pointX: 0
     property real pointY: 0
     property real centerRectX: 0
@@ -188,7 +190,8 @@ PopupWindow {
 
     Process {
         id: outsideClickWatcher
-        running: root.visible
+        running: root.visible && root.closeOnOutside
+            && !root.suspendOutsideClose
         command: ["xinput", "test-xi2", "--root"]
         stdout: SplitParser {
             onRead: line => {
@@ -203,6 +206,8 @@ PopupWindow {
         command: ["xdotool", "getmouselocation", "--shell"]
         stdout: StdioCollector {
             onStreamFinished: {
+                if (root.suspendOutsideClose || !root.closeOnOutside)
+                    return
                 const xMatch = text.match(/(?:^|\n)X=(-?\d+)/)
                 const yMatch = text.match(/(?:^|\n)Y=(-?\d+)/)
                 if (!root.visible || !xMatch || !yMatch)

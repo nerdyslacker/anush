@@ -196,8 +196,17 @@ Singleton {
     function sendToTag(index) {
         Quickshell.execDetached([msgPath, "move", "workspace", String(index + 1)])
     }
-    function cycleTag(direction) {
-        Quickshell.execDetached([msgPath, "workspace", direction > 0 ? "next" : "prev"])
+    function cycleTag(direction, visibleCount) {
+        const count = Math.max(1, Math.round(Number(visibleCount) || tagCount))
+        let current = 0
+        for (const ws of workspaces) {
+            if (ws.focused) {
+                current = Math.max(0, Number(ws.id) - 1)
+                break
+            }
+        }
+        const step = direction > 0 ? 1 : -1
+        viewTag((current + step + count) % count)
     }
     function setLayout(index) {
         const layout = layouts[index]
