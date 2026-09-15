@@ -56,5 +56,8 @@ Title components/Workspaces/Title.qml
 ScratchpadsPopup components/Workspaces/ScratchpadsPopup.qml
 Scratchpads components/Workspaces/Scratchpads.qml
 WindowOverview components/Workspaces/WindowOverview.qml
+Keybindings components/External/Keybindings.qml
+Notice components/External/Notice.qml
+Reminder components/External/Reminder.qml
 Popout common/Popout.qml
 TweakSlider common/TweakSlider.qml

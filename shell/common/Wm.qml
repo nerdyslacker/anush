@@ -14,6 +14,7 @@ Singleton {
     property var outputs: []
     property var registeredScratchpads: []
     signal overviewCommand(string action)
+    signal uiEvent(var event)
     // Highest workspace currently reported by skarwm. Tags.qml combines this
     // with the user's configured minimum, ensuring an active high tag remains
     // reachable without forcing the configured count back to nine.
@@ -166,7 +167,7 @@ Singleton {
         stdout: SplitParser { onRead: line => root.acceptOutputs(line) }
     }
     Process {
-        command: [root.msgPath, "subscribe", "workspace", "window", "output"]
+        command: [root.msgPath, "subscribe", "workspace", "window", "output", "ui"]
         running: true
         stdout: SplitParser {
             onRead: line => {
@@ -177,6 +178,10 @@ Singleton {
                     const event = JSON.parse(line)
                     if (!event || event.change === undefined) return
                     const change = String(event.change)
+                    if (change.startsWith("ui-")) {
+                        root.uiEvent(event)
+                        return
+                    }
                     if (change.startsWith("overview-")) {
                         root.overviewCommand(change.slice(9))
                         return
@@ -234,6 +239,12 @@ Singleton {
     }
     function toggleScratchpad(register) {
         Quickshell.execDetached([msgPath, "scratchpad", "toggle", String(register)])
+    }
+
+    function addReminder(minutes, message) {
+        Quickshell.execDetached([
+            msgPath, "reminder", "add", String(minutes), String(message)
+        ])
     }
 
     function loadGap() {

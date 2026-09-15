@@ -85,6 +85,13 @@ autostart : "qs --no-duplicate -p ~/.config/anush/shell"
 Future WM integrations belong under `config/<wm>/` and should point to the
 same shell entry point without coupling anush to their session lifecycle.
 
+With a current skarwm build, anush also replaces the WM's native keybinding,
+notice, and reminder windows automatically. The keybinding window searches
+both shortcuts and action descriptions and highlights every matching row.
+Reminder expiry notices remain visible until clicked; ordinary status notices
+still close after 2.5 seconds. If anush is not running, skarwm falls back to its
+built-in windows.
+
 ## Layout
 
 ```text
