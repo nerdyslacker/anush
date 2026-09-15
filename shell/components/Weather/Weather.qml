@@ -4,17 +4,21 @@ import Quickshell.Io
 
 // Weather: condition glyph + temperature from wttr.in (no API key),
 // refreshed every 30 minutes. Click for the 3-day forecast card — same
-// fetch, no extra requests. Hidden until the first successful fetch, so
-// an offline boot just shows no weather.
+// fetch, no extra requests. Fetch failures leave a visible status module so
+// weather settings and manual retry remain reachable.
 //
 // An empty location lets wttr.in locate by IP. Empty units use the locale.
 BarModule {
     id: root
 
-    visible: BarVisibility.enabled("weather") && temp !== ""
+    visible: BarVisibility.enabled("weather")
 
     property string temp: ""
     property int code: 113
+    property bool fetchFailed: false
+    readonly property bool hasWeather: temp !== ""
+    readonly property string requestUrl: "https://wttr.in/"
+        + encodeURIComponent(location) + "?format=j1"
 
     property string unitsOverride: ""
     property string location: ""
@@ -57,9 +61,10 @@ BarModule {
         return "󰖗"  // everything else in WWO's table is some kind of rain
     }
 
-    icon: glyphFor(code)
-    iconColor: Theme.yellow
-    label: temp + "°"
+    icon: hasWeather ? glyphFor(code) : "󰖐"
+    iconColor: fetchFailed && !hasWeather ? Theme.red
+        : hasWeather ? Theme.yellow : Theme.brightBlack
+    label: hasWeather ? temp + "°" : fetch.running ? "…" : "!"
 
     onClicked: mouse => {
         if (mouse.button === Qt.RightButton) {
@@ -67,6 +72,10 @@ BarModule {
             settings.openSettings()
         } else {
             settings.visible = false
+            if (!root.hasWeather && !fetch.running) {
+                fetch.running = false
+                fetch.running = true
+            }
             forecast.visible = !forecast.visible
         }
     }
@@ -74,6 +83,8 @@ BarModule {
     WeatherPopup {
         id: forecast
         anchorItem: root
+        loading: fetch.running && !root.hasWeather
+        unavailable: root.fetchFailed && !root.hasWeather
     }
 
     WeatherSettings {
@@ -84,8 +95,15 @@ BarModule {
     property string _buf: ""
     Process {
         id: fetch
-        command: ["curl", "-sf", "-m", "10",
-            "https://wttr.in/" + encodeURIComponent(root.location) + "?format=j1"]
+        // Verify TLS normally. If wttr.in specifically fails certificate
+        // validation (curl 60), retry the same HTTPS URL without validation;
+        // the response is parsed as data and never executed.
+        command: ["sh", "-c",
+            "curl -sfL -m 10 --proto '=https' \"$1\"; " +
+            "status=$?; if [ \"$status\" -eq 60 ]; then " +
+            "exec curl -skfL -m 10 --proto '=https' \"$1\"; fi; " +
+            "exit \"$status\"",
+            "weather-fetch", root.requestUrl]
         running: true
         stdout: SplitParser {
             onRead: line => root._buf += line
@@ -93,17 +111,22 @@ BarModule {
         onRunningChanged: {
             if (running) {
                 root._buf = ""
+                if (!root.hasWeather)
+                    root.fetchFailed = false
             } else {
                 try {
                     root.parse(JSON.parse(root._buf))
                 } catch (e) {
-                    retry.start() // network hiccup — try again soon
+                    root.fetchFailed = true
+                    retry.restart() // network hiccup — try again soon
                 }
             }
         }
     }
 
     function parse(j) {
+        if (!j?.current_condition?.length)
+            throw new Error("weather response has no current condition")
         lastJson = j
         const f = useF
         const c = j.current_condition[0]
@@ -135,6 +158,7 @@ BarModule {
             })
         }
         forecast.days = days
+        fetchFailed = false
     }
 
     Timer {

@@ -13,6 +13,8 @@ Popout {
     property string wind: ""
     property string place: ""
     property var days: []   // {label, glyph, hi, lo, rain}
+    property bool loading: false
+    property bool unavailable: false
 
     cardWidth: 300
     cardHeight: 168
@@ -23,6 +25,18 @@ Popout {
         function toggle(): void { root.visible = !root.visible }
     }
 
+    Text {
+        anchors.centerIn: parent
+        visible: root.days.length === 0
+        horizontalAlignment: Text.AlignHCenter
+        text: root.loading ? "Loading weather…"
+            : root.unavailable ? "Weather unavailable\nClick the bar widget to retry"
+            : "No forecast data"
+        color: root.unavailable ? Theme.red : Theme.brightBlack
+        font.family: Theme.fontFamily
+        font.pixelSize: Theme.fontSize
+    }
+
     // where this forecast is for — also the tell when a VPN exit node is
     // fooling wttr.in's IP geolocation
     Text {
@@ -30,7 +44,7 @@ Popout {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        visible: root.place !== ""
+        visible: root.days.length > 0 && root.place !== ""
         text: "󰍎 " + root.place
         color: Qt.alpha(Theme.fg, 0.5)
         font.family: Theme.fontFamily
@@ -45,6 +59,7 @@ Popout {
         anchors.right: parent.right
         anchors.top: placeLine.visible ? placeLine.bottom : parent.top
         anchors.topMargin: placeLine.visible ? 4 : 0
+        visible: root.days.length > 0
         text: root.condition
             + (root.feels !== "" ? "  ·  feels " + root.feels + "°" : "")
             + (root.wind !== "" ? "  ·  󰖝 " + root.wind : "")
@@ -56,6 +71,7 @@ Popout {
     }
 
     Row {
+        visible: root.days.length > 0
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: header.bottom
