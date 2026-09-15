@@ -2,22 +2,16 @@ import QtQuick
 import "../.."
 import Quickshell
 
-// Active connection indicator. Left click toggles the network popup;
-// right click opens NetworkManager's full connection editor.
+// Active transport/VPN indicator. Bluetooth has its own neighbouring module.
 BarModule {
     id: root
 
     icon: Sys.netIcon
     iconColor: Sys.vpnOn ? Theme.green : Sys.online ? Theme.cyan : Theme.red
-    label: Sys.bluetoothOn ? "󰂯" : ""
-    labelColor: Sys.bluetoothConnected ? Theme.green : Theme.cyan
-    labelPixelSize: Theme.iconSize
-    compactLabel: label
-    compactLabelPixelSize: Theme.iconSize
 
     onClicked: mouse => {
         if (mouse.button === Qt.RightButton)
-            Quickshell.execDetached(["nm-connection-editor"])
+            NetworkService.openSettings()
         else
             popup.visible = !popup.visible
     }

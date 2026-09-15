@@ -21,6 +21,7 @@ Singleton {
         { key: "volume", label: "Audio", icon: "󰕾", defaultCluster: "right" },
         { key: "micIndicator", label: "Muted mic", icon: "󰍭", defaultCluster: "right" },
         { key: "network", label: "Network", icon: "󰤨", defaultCluster: "right" },
+        { key: "bluetooth", label: "Bluetooth", icon: "󰂯", defaultCluster: "right" },
         { key: "keyboard", label: "Keyboard", icon: "󰌌", defaultCluster: "right" },
         { key: "clipboard", label: "Clipboard", icon: "󰅌", defaultCluster: "right" },
         { key: "tray", label: "System tray", icon: "󰔚", defaultCluster: "right" },
@@ -35,7 +36,7 @@ Singleton {
         left: ["launcher", "tags", "layout"],
         center: ["title", "scratchpads"],
         right: ["media", "weather", "metrics", "battery", "brightness",
-                "volume", "micIndicator", "network", "keyboard", "clipboard",
+                "volume", "micIndicator", "network", "bluetooth", "keyboard", "clipboard",
                 "tray", "notifications", "clock", "capsLock", "screenshot",
                 "commands"]
     })
@@ -53,6 +54,7 @@ Singleton {
         volume: true,
         micIndicator: true,
         network: true,
+        bluetooth: true,
         keyboard: true,
         clipboard: true,
         tray: true,

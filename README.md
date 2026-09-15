@@ -31,7 +31,8 @@ Optional desktop integrations:
 - Clipmenu and Xdotool for clipboard history and pasting;
 - `setxkbmap` and `xkb-switch` for keyboard layouts;
 - renCal for calendar events;
-- NetworkManager tools, BlueZ, `pactl`, and Pavucontrol for network and audio;
+- NetworkManager, its command-line/editor tools, BlueZ, Blueman, `pactl`, and
+  Pavucontrol for network, Bluetooth, and audio controls;
 - brightnessctl, powerprofilesctl, redshift, xset, and xrandr for hardware and
   power controls;
 - curl, xdg-open, flameshot, xinput, notify-send, and xterm for individual
@@ -49,7 +50,7 @@ printf '%s\n' 'repository=https://github.com/lazylinuxos/lazy-repo/releases/late
 ```
 ```sh
 sudo xbps-install -S quickshell picom dunst feh kitty xss-lock \
-  betterlockscreen udiskie lxqt-policykit NetworkManager bluez pavucontrol \
+  betterlockscreen udiskie lxqt-policykit NetworkManager bluez blueman pavucontrol \
   curl flameshot brightnessctl xrandr python3 renCal xterm xinput xdotool \
   clipmenu xkb-switch setxkbmap ImageMagick
 ```

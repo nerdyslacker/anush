@@ -14,12 +14,12 @@ Singleton {
     property bool hasBattery: false
     property real battery: 0
     property bool batteryCharging: false
-    property string netName: ""
-    property string netType: ""
-    property bool vpnOn: false
-    property string vpnName: ""
-    property bool bluetoothOn: false
-    property bool bluetoothConnected: false
+    readonly property string netName: NetworkService.primaryName
+    readonly property string netType: NetworkService.primaryType
+    readonly property bool vpnOn: NetworkService.vpnOn
+    readonly property string vpnName: NetworkService.vpnName
+    readonly property bool bluetoothOn: BluetoothService.enabled
+    readonly property bool bluetoothConnected: BluetoothService.connected
 
     readonly property string netIcon: vpnOn ? "󰦝"
                                     : netType.indexOf("wireless") !== -1 ? "󰤨"
@@ -161,78 +161,4 @@ Singleton {
         dndRefresh.restart()
     }
 
-    Timer {
-        interval: 10000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: netProc.running = true
-    }
-
-    // primary transport + vpn tracked separately: a vpn/wireguard/tun
-    // connection rides ON a transport, it isn't one
-    Process {
-        id: netProc
-        command: ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show", "--active"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                let name = "", type = "", vName = "", vOn = false
-                for (const line of text.trim().split("\n")) {
-                    const i = line.lastIndexOf(":")
-                    if (i <= 0)
-                        continue
-                    const n = line.slice(0, i), t = line.slice(i + 1)
-                    if (t === "loopback")
-                        continue
-                    if (t === "vpn" || t === "wireguard" || t === "tun") {
-                        vOn = true
-                        vName = n
-                    } else if (name === "") {
-                        name = n
-                        type = t
-                    }
-                }
-                root.netName = name
-                root.netType = type
-                root.vpnOn = vOn
-                root.vpnName = vName
-            }
-        }
-    }
-
-    Timer {
-        interval: 5000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: root.restartQuery(bluetoothProc)
-    }
-
-    Process {
-        id: bluetoothProc
-        command: ["sh", "-c",
-            "bluetoothctl show 2>/dev/null; printf '%s\\n' ===; " +
-            "bluetoothctl devices Connected 2>/dev/null"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                let powered = false
-                let connected = false
-                let readingConnections = false
-                for (const line of text.split("\n")) {
-                    const value = line.trim()
-                    if (value === "===") {
-                        readingConnections = true
-                    } else if (!readingConnections
-                            && value.indexOf("Powered:") === 0) {
-                        powered = value.indexOf("yes") !== -1
-                    } else if (readingConnections
-                            && value.indexOf("Device ") === 0) {
-                        connected = true
-                    }
-                }
-                root.bluetoothOn = powered
-                root.bluetoothConnected = powered && connected
-            }
-        }
-    }
 }

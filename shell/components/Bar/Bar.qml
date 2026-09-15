@@ -46,6 +46,7 @@ PanelWindow {
         volume: Qt.resolvedUrl("../Audio/Volume.qml"),
         micIndicator: Qt.resolvedUrl("../Audio/MicMute.qml"),
         network: Qt.resolvedUrl("../Network/Network.qml"),
+        bluetooth: Qt.resolvedUrl("../Network/Bluetooth.qml"),
         keyboard: Qt.resolvedUrl("../Keyboard/KeyboardLayout.qml"),
         clipboard: Qt.resolvedUrl("../Clipboard/Clipboard.qml"),
         tray: Qt.resolvedUrl("../Tray/Tray.qml"),

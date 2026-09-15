@@ -2,6 +2,7 @@ singleton ShellState common/ShellState.qml
 singleton Theme common/Theme.qml
 singleton Wm common/Wm.qml
 singleton Sys common/Sys.qml
+singleton PopupCoordinator common/PopupCoordinator.qml
 singleton KeyboardState components/Keyboard/KeyboardState.qml
 singleton ClipboardState components/Clipboard/ClipboardState.qml
 singleton TagConfig components/Workspaces/TagConfig.qml
@@ -9,6 +10,8 @@ singleton LauncherState components/Launcher/LauncherState.qml
 singleton BarVisibility components/Bar/BarVisibility.qml
 singleton TrayState components/Tray/TrayState.qml
 singleton DisplayConfigurationService components/Displays/DisplayConfigurationService.qml
+singleton NetworkService components/Network/NetworkService.qml
+singleton BluetoothService components/Network/BluetoothService.qml
 Bar components/Bar/Bar.qml
 BarModule components/Bar/BarModule.qml
 BarSettingsPopup components/Bar/BarSettingsPopup.qml
@@ -38,6 +41,8 @@ MetricsPopup components/Metrics/MetricsPopup.qml
 Updates components/Metrics/Updates.qml
 Network components/Network/Network.qml
 NetworkPopup components/Network/NetworkPopup.qml
+Bluetooth components/Network/Bluetooth.qml
+BluetoothPopup components/Network/BluetoothPopup.qml
 Bell components/Notifications/Bell.qml
 NotifyPopup components/Notifications/NotifyPopup.qml
 Clock components/Session/Clock.qml
