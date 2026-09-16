@@ -36,7 +36,7 @@ Optional desktop integrations:
   Pavucontrol for network, Bluetooth, and audio controls;
 - brightnessctl, powerprofilesctl, redshift, xset, and xrandr for hardware and
   power controls;
-- curl, xdg-open, flameshot, xinput, notify-send, and xterm for individual
+- curl, xcolor, xdg-open, flameshot, xinput, notify-send, and xterm for individual
   widget actions;
 - ImageMagick for wallpaper-derived themes;
 - lxqt-policykit-agent, xss-lock, Betterlockscreen, and Udiskie for the supplied
@@ -52,7 +52,7 @@ printf '%s\n' 'repository=https://github.com/lazylinuxos/lazy-repo/releases/late
 ```sh
 sudo xbps-install -S quickshell picom dunst feh kitty xss-lock \
   betterlockscreen udiskie lxqt-policykit NetworkManager bluez blueman pavucontrol \
-  curl flameshot brightnessctl xrandr python3 renCal xterm xinput xdotool \
+  curl flameshot brightnessctl xrandr python3 renCal xterm xinput xdotool xcolor \
   clipmenu xkb-switch setxkbmap ImageMagick
 ```
 

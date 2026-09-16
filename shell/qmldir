@@ -5,6 +5,7 @@ singleton Sys common/Sys.qml
 singleton PopupCoordinator common/PopupCoordinator.qml
 singleton KeyboardState components/Keyboard/KeyboardState.qml
 singleton ClipboardState components/Clipboard/ClipboardState.qml
+singleton ColorPickerState components/ColorPicker/ColorPickerState.qml
 singleton TagConfig components/Workspaces/TagConfig.qml
 singleton LauncherState components/Launcher/LauncherState.qml
 singleton BarVisibility components/Bar/BarVisibility.qml
@@ -29,6 +30,8 @@ BrightnessPopup components/Battery/BrightnessPopup.qml
 DisplayPopup components/Displays/DisplayPopup.qml
 Clipboard components/Clipboard/Clipboard.qml
 ClipboardPopup components/Clipboard/ClipboardPopup.qml
+ColorPicker components/ColorPicker/ColorPicker.qml
+ColorPickerPopup components/ColorPicker/ColorPickerPopup.qml
 CapsLock components/Keyboard/CapsLock.qml
 KeyboardLayout components/Keyboard/KeyboardLayout.qml
 KeyboardLayoutPicker components/Keyboard/KeyboardLayoutPicker.qml

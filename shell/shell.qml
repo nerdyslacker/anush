@@ -3,8 +3,11 @@ import QtQuick
 import Quickshell
 
 ShellRoot {
-    // Keep IPC and autosave alive even when the Notepad bar button is disabled.
-    Component.onCompleted: NotepadState.initialize()
+    // Keep global actions alive even when their bar buttons are disabled.
+    Component.onCompleted: {
+        NotepadState.initialize()
+        ColorPickerState.initialize()
+    }
 
     Keybindings {}
     Notice {}

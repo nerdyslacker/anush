@@ -41,6 +41,7 @@ PanelWindow {
             bluetooth: Qt.resolvedUrl("../Network/Bluetooth.qml"),
             keyboard: Qt.resolvedUrl("../Keyboard/KeyboardLayout.qml"),
             clipboard: Qt.resolvedUrl("../Clipboard/Clipboard.qml"),
+            colorPicker: Qt.resolvedUrl("../ColorPicker/ColorPicker.qml"),
             notepad: Qt.resolvedUrl("../Notepad/Notepad.qml"),
             tray: Qt.resolvedUrl("../Tray/Tray.qml"),
             notifications: Qt.resolvedUrl("../Notifications/Bell.qml"),

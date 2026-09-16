@@ -75,6 +75,10 @@ Singleton {
                 side: "right",
                 extended: false
             },
+            colorPicker: {
+                current: "",
+                history: []
+            },
             theme: {
                 accent: "orange",
                 defaultAccent: "brightYellow",
