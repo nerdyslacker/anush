@@ -111,7 +111,21 @@ Persistent settings live in
 `${XDG_STATE_HOME:-$HOME/.local/state}/anush/shell-state.json`. Set
 `ANUSH_STATE_DIR` to override that directory. The sections are `bar`,
 `weather`, `launcher`, `keyboard`, `tray`, `tags`, `pomodoro`, `theme`,
-`windowManager`, and `desktop`.
+`windowManager`, `windowList`, and `desktop`.
+
+The optional **Window list** Bar widget uses one shared pill containing one
+icon per application. Clicking a group with multiple windows opens a window
+picker; a single-window group focuses immediately. Each Bar shows windows from
+the workspace currently displayed on that Bar's output and, by default, only
+windows on that output. Right-click the pill or any icon to toggle the
+persistent cross-monitor view. That mode removes only the output filter; it
+keeps the owning Bar's workspace filter:
+
+```json
+"windowList": {
+  "showWindowsFromAllMonitors": false
+}
+```
 
 Right-click the launcher button to choose an icon-theme icon or an image file.
 Image paths inside the anush config directory are stored relative to that

@@ -14,13 +14,17 @@ Popout {
     component ToggleSwitch: Rectangle {
         id: control
         property bool checked: false
-        signal toggled()
+        signal toggled
 
         width: 34
         height: 18
         radius: Math.min(height / 2, Theme.radiusSmall)
         color: checked ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
-        Behavior on color { ColorAnimation { duration: 150 } }
+        Behavior on color {
+            ColorAnimation {
+                duration: 150
+            }
+        }
 
         Rectangle {
             x: control.checked ? parent.width - width - 2 : 2
@@ -30,7 +34,10 @@ Popout {
             radius: Math.min(width / 2, Theme.radiusSmall)
             color: control.checked ? Theme.bg : Qt.alpha(Theme.fg, 0.7)
             Behavior on x {
-                NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+                NumberAnimation {
+                    duration: 150
+                    easing.type: Easing.OutCubic
+                }
             }
         }
 
@@ -46,7 +53,7 @@ Popout {
         required property string title
         required property string detail
         property bool checked: false
-        signal toggled()
+        signal toggled
 
         height: 48
         radius: Theme.radiusMedium
@@ -107,8 +114,7 @@ Popout {
         width: parent.width
         height: 36
         radius: Theme.radiusSmall
-        color: dragging
-            ? Qt.alpha(Theme.accent, 0.22) : Qt.alpha(Theme.fg, 0.045)
+        color: dragging ? Qt.alpha(Theme.accent, 0.22) : Qt.alpha(Theme.fg, 0.045)
         border.width: 1
         border.color: dragging ? Theme.accent : Theme.gray5
         z: dragging ? 100 : 1
@@ -120,12 +126,12 @@ Popout {
             acceptedButtons: Qt.LeftButton
             onActiveChanged: {
                 if (active) {
-                    widgetRow.dragging = true
+                    widgetRow.dragging = true;
                 } else if (widgetRow.dragging) {
-                    dragProxy.Drag.drop()
-                    widgetRow.dragging = false
-                    dragProxy.x = 0
-                    dragProxy.y = 0
+                    dragProxy.Drag.drop();
+                    widgetRow.dragging = false;
+                    dragProxy.x = 0;
+                    dragProxy.y = 0;
                 }
             }
         }
@@ -207,8 +213,7 @@ Popout {
             anchors.verticalCenter: parent.verticalCenter
             checked: widgetRow.isEnabled
             visible: !widgetRow.mandatory
-            onToggled: BarVisibility.setEnabled(
-                widgetRow.widgetKey, !widgetRow.isEnabled)
+            onToggled: BarVisibility.setEnabled(widgetRow.widgetKey, !widgetRow.isEnabled)
         }
     }
 
@@ -225,8 +230,7 @@ Popout {
             spacing: 7
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: section.clusterName === "left" ? "󰁍"
-                    : section.clusterName === "center" ? "󰘖" : "󰁔"
+                text: section.clusterName === "left" ? "󰁍" : section.clusterName === "center" ? "󰘖" : "󰁔"
                 color: Theme.accent
                 font.family: Theme.fontFamily
                 font.pixelSize: 15
@@ -246,12 +250,19 @@ Popout {
             width: parent.width
             height: Math.max(64, rows.implicitHeight + 8)
             radius: Theme.radiusMedium
-            color: dropArea.containsDrag
-                ? Qt.alpha(Theme.accent, 0.09) : "transparent"
+            color: dropArea.containsDrag ? Qt.alpha(Theme.accent, 0.09) : "transparent"
             border.width: 1
             border.color: dropArea.containsDrag ? Theme.accent : Theme.gray5
-            Behavior on color { ColorAnimation { duration: 100 } }
-            Behavior on border.color { ColorAnimation { duration: 100 } }
+            Behavior on color {
+                ColorAnimation {
+                    duration: 100
+                }
+            }
+            Behavior on border.color {
+                ColorAnimation {
+                    duration: 100
+                }
+            }
 
             Column {
                 id: rows
@@ -284,14 +295,13 @@ Popout {
                 anchors.fill: parent
                 keys: ["bar-widget"]
                 onDropped: drop => {
-                    const source = drop.source
+                    const source = drop.source;
                     if (!source || source.widgetKey === undefined)
-                        return
-                    const rowPitch = 40
-                    const index = Math.round(Math.max(0, drop.y - 4) / rowPitch)
-                    BarVisibility.moveWidget(source.widgetKey,
-                        section.clusterName, index)
-                    drop.acceptProposedAction()
+                        return;
+                    const rowPitch = 40;
+                    const index = Math.round(Math.max(0, drop.y - 4) / rowPitch);
+                    BarVisibility.moveWidget(source.widgetKey, section.clusterName, index);
+                    drop.acceptProposedAction();
                 }
             }
         }
@@ -330,15 +340,25 @@ Popout {
                 height: parent.height
                 textRole: "label"
                 model: [
-                    { key: "top", label: "Top" },
-                    { key: "bottom", label: "Bottom" },
-                    { key: "left", label: "Left" },
-                    { key: "right", label: "Right" }
+                    {
+                        key: "top",
+                        label: "Top"
+                    },
+                    {
+                        key: "bottom",
+                        label: "Bottom"
+                    },
+                    {
+                        key: "left",
+                        label: "Left"
+                    },
+                    {
+                        key: "right",
+                        label: "Right"
+                    }
                 ]
-                currentIndex: ["top", "bottom", "left", "right"]
-                    .indexOf(BarVisibility.barPosition)
-                onActivated: index => BarVisibility.setBarPosition(
-                    positionSelector.model[index].key)
+                currentIndex: ["top", "bottom", "left", "right"].indexOf(BarVisibility.barPosition)
+                onActivated: index => BarVisibility.setBarPosition(positionSelector.model[index].key)
 
                 delegate: Controls.ItemDelegate {
                     id: positionOption
@@ -351,19 +371,14 @@ Popout {
                     contentItem: Text {
                         leftPadding: 7
                         text: positionOption.modelData.label
-                        color: positionOption.highlighted
-                            || positionOption.index === positionSelector.currentIndex
-                            ? Theme.accent : Theme.fg
+                        color: positionOption.highlighted || positionOption.index === positionSelector.currentIndex ? Theme.accent : Theme.fg
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 1
                         verticalAlignment: Text.AlignVCenter
                     }
                     background: Rectangle {
                         radius: Theme.radiusSmall
-                        color: positionOption.highlighted
-                            ? Theme.gray3
-                            : positionOption.index === positionSelector.currentIndex
-                            ? Qt.alpha(Theme.accent, 0.16) : "transparent"
+                        color: positionOption.highlighted ? Theme.gray3 : positionOption.index === positionSelector.currentIndex ? Qt.alpha(Theme.accent, 0.16) : "transparent"
                     }
                 }
 
@@ -377,8 +392,7 @@ Popout {
                         id: positionList
                         clip: true
                         implicitHeight: contentHeight
-                        model: positionSelector.popup.visible
-                            ? positionSelector.delegateModel : null
+                        model: positionSelector.popup.visible ? positionSelector.delegateModel : null
                         currentIndex: positionSelector.highlightedIndex
                     }
                     background: Rectangle {
@@ -411,12 +425,9 @@ Popout {
 
                 background: Rectangle {
                     radius: Theme.radiusMedium
-                    color: positionSelector.pressed ? Theme.gray4
-                        : positionSelector.hovered ? Theme.gray3
-                        : "transparent"
+                    color: positionSelector.pressed ? Theme.gray4 : positionSelector.hovered ? Theme.gray3 : "transparent"
                     border.width: 1
-                    border.color: positionSelector.popup.visible
-                        ? Theme.accent : Theme.gray5
+                    border.color: positionSelector.popup.visible ? Theme.accent : Theme.gray5
                 }
             }
 
@@ -426,41 +437,34 @@ Popout {
                 title: "Monitors"
                 detail: BarVisibility.showOnAllMonitors ? "All" : "Main only"
                 checked: BarVisibility.showOnAllMonitors
-                onToggled: BarVisibility.setShowOnAllMonitors(
-                    !BarVisibility.showOnAllMonitors)
+                onToggled: BarVisibility.setShowOnAllMonitors(!BarVisibility.showOnAllMonitors)
             }
 
             CompactSetting {
                 width: (barOptions.width - barOptions.spacing * 4) / 5
                 iconText: "󰘖"
                 title: "Fit content"
-                detail: BarVisibility.fitContent ? "Compact"
-                    : BarVisibility.verticalBar ? "Full height" : "Full width"
+                detail: BarVisibility.fitContent ? "Compact" : BarVisibility.verticalBar ? "Full height" : "Full width"
                 checked: BarVisibility.fitContent
-                onToggled: BarVisibility.setFitContent(
-                    !BarVisibility.fitContent)
+                onToggled: BarVisibility.setFitContent(!BarVisibility.fitContent)
             }
 
             CompactSetting {
                 width: (barOptions.width - barOptions.spacing * 4) / 5
                 iconText: "󰖝"
                 title: "Floating"
-                detail: BarVisibility.floating
-                    ? Theme.surfaceGap + " px inset" : "Flush"
+                detail: BarVisibility.floating ? Theme.surfaceGap + " px inset" : "Flush"
                 checked: BarVisibility.floating
-                onToggled: BarVisibility.setFloating(
-                    !BarVisibility.floating)
+                onToggled: BarVisibility.setFloating(!BarVisibility.floating)
             }
 
             CompactSetting {
                 width: (barOptions.width - barOptions.spacing * 4) / 5
                 iconText: "󰧞"
                 title: "Sections"
-                detail: BarVisibility.fitContent ? "Full bar only"
-                    : BarVisibility.separateSections ? "3 pillows" : "Joined"
+                detail: BarVisibility.fitContent ? "Full bar only" : BarVisibility.separateSections ? "3 pillows" : "Joined"
                 checked: BarVisibility.separateSections
-                onToggled: BarVisibility.setSeparateSections(
-                    !BarVisibility.separateSections)
+                onToggled: BarVisibility.setSeparateSections(!BarVisibility.separateSections)
             }
         }
 
@@ -471,8 +475,7 @@ Popout {
             spacing: 14
 
             TweakSlider {
-                width: (appearanceControls.width
-                    - appearanceControls.spacing * 2) / 3
+                width: (appearanceControls.width - appearanceControls.spacing * 2) / 3
                 label: "Height"
                 from: 28
                 to: 80
@@ -483,8 +486,7 @@ Popout {
             }
 
             TweakSlider {
-                width: (appearanceControls.width
-                    - appearanceControls.spacing * 2) / 3
+                width: (appearanceControls.width - appearanceControls.spacing * 2) / 3
                 label: "Item scale"
                 from: 0.7
                 to: 2.0
@@ -496,8 +498,7 @@ Popout {
             }
 
             TweakSlider {
-                width: (appearanceControls.width
-                    - appearanceControls.spacing * 2) / 3
+                width: (appearanceControls.width - appearanceControls.spacing * 2) / 3
                 label: "Background opacity"
                 from: 0
                 to: 100
@@ -515,7 +516,10 @@ Popout {
                 clusterName: "left"
                 heading: BarVisibility.verticalBar ? "Top" : "Left"
             }
-            ClusterSection { clusterName: "center"; heading: "Center" }
+            ClusterSection {
+                clusterName: "center"
+                heading: "Center"
+            }
             ClusterSection {
                 clusterName: "right"
                 heading: BarVisibility.verticalBar ? "Bottom" : "Right"

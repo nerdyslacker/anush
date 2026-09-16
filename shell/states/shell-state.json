@@ -11,6 +11,9 @@
     "floating": false,
     "separateSections": false
   },
+  "windowList": {
+    "showWindowsFromAllMonitors": false
+  },
   "weather": {
     "location": "",
     "units": "c"
