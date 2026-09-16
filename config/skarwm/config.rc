@@ -42,6 +42,7 @@ bind : mod + v : "qs ipc -n -p ${ANUSH_ROOT:-$HOME/.config/anush}/shell call cli
 # Keep the generated Shift variant from arming tab placement for this
 # non-window IPC command.
 bind : mod + Shift + v : "qs ipc -n -p ${ANUSH_ROOT:-$HOME/.config/anush}/shell call clipboard toggle"
+bind : mod + Shift + n : "qs ipc -n -p ${ANUSH_ROOT:-$HOME/.config/anush}/shell call notepad toggle"
 call : Alt + Tab : overview_next
 call : Alt + Shift + Tab : overview_prev
 # Every spawn binding automatically gets an otherwise-unbound Shift variant.

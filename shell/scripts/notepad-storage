@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""List, create, and atomically save Notepad's UTF-8 documents."""
+
+import json
+import os
+from pathlib import Path
+import sys
+import tempfile
+from typing import Optional
+
+
+def describe(path: Path) -> dict[str, object]:
+    return {
+        "name": path.name,
+        "title": path.stem.replace("-", " ").replace("_", " ").title(),
+        "path": str(path),
+        "empty": path.stat().st_size == 0,
+    }
+
+
+def list_notes(directory: Path, extra_file: Optional[Path] = None) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    paths = [
+        path for path in directory.iterdir()
+        if path.is_file() and path.suffix.lower() in {".md", ".txt"}
+    ]
+    if extra_file and extra_file.is_file() and extra_file not in paths:
+        paths.append(extra_file)
+    paths.sort(key=lambda path: path.name.casefold())
+    print(json.dumps([describe(path) for path in paths], ensure_ascii=False))
+
+
+def create_note(directory: Path) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    index = 1
+    while True:
+        path = directory / f"note-{index}.md"
+        try:
+            descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            index += 1
+            continue
+        os.close(descriptor)
+        print(json.dumps(describe(path), ensure_ascii=False))
+        return
+
+
+def save_note(path: Path) -> None:
+    # QML sends one JSON string, preserving embedded newlines and Unicode over
+    # the line-oriented process stdin channel.
+    text = json.loads(sys.stdin.readline())
+    if not isinstance(text, str):
+        raise ValueError("note payload must be a string")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_name = ""
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="",
+            prefix=f".{path.name}.",
+            dir=path.parent,
+            delete=False,
+        ) as temporary:
+            temporary_name = temporary.name
+            temporary.write(text)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary_name, path)
+    finally:
+        if temporary_name:
+            try:
+                os.unlink(temporary_name)
+            except FileNotFoundError:
+                pass
+
+
+def remove_note(path: Path) -> None:
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    path.unlink()
+
+
+def main() -> int:
+    try:
+        if len(sys.argv) in {3, 4} and sys.argv[1] == "list":
+            extra = Path(sys.argv[3]) if len(sys.argv) == 4 else None
+            list_notes(Path(sys.argv[2]), extra)
+        elif len(sys.argv) == 3 and sys.argv[1] == "create":
+            create_note(Path(sys.argv[2]))
+        elif len(sys.argv) == 3 and sys.argv[1] == "save":
+            save_note(Path(sys.argv[2]))
+        elif len(sys.argv) == 3 and sys.argv[1] == "remove":
+            remove_note(Path(sys.argv[2]))
+        else:
+            print("usage: notepad-storage {list|create|save|remove} PATH", file=sys.stderr)
+            return 2
+    except Exception as error:
+        print(f"notepad-storage: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

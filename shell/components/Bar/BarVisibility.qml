@@ -111,6 +111,12 @@ Singleton {
             defaultCluster: "right"
         },
         {
+            key: "notepad",
+            label: "Notepad",
+            icon: "󰎞",
+            defaultCluster: "right"
+        },
+        {
             key: "tray",
             label: "System tray",
             icon: "󰔚",
@@ -152,7 +158,7 @@ Singleton {
     readonly property var defaultClusters: ({
             left: ["launcher", "tags", "layout"],
             center: ["windowList", "title", "scratchpads"],
-            right: ["media", "weather", "metrics", "battery", "brightness", "volume", "micIndicator", "network", "bluetooth", "keyboard", "clipboard", "tray", "notifications", "clock", "capsLock", "screenshot", "commands"]
+            right: ["media", "weather", "metrics", "battery", "brightness", "volume", "micIndicator", "network", "bluetooth", "keyboard", "clipboard", "notepad", "tray", "notifications", "clock", "capsLock", "screenshot", "commands"]
         })
     readonly property var defaults: ({
             launcher: true,
@@ -172,6 +178,7 @@ Singleton {
             bluetooth: true,
             keyboard: true,
             clipboard: true,
+            notepad: true,
             tray: true,
             notifications: true,
             clock: true,

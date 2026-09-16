@@ -41,6 +41,7 @@ PanelWindow {
             bluetooth: Qt.resolvedUrl("../Network/Bluetooth.qml"),
             keyboard: Qt.resolvedUrl("../Keyboard/KeyboardLayout.qml"),
             clipboard: Qt.resolvedUrl("../Clipboard/Clipboard.qml"),
+            notepad: Qt.resolvedUrl("../Notepad/Notepad.qml"),
             tray: Qt.resolvedUrl("../Tray/Tray.qml"),
             notifications: Qt.resolvedUrl("../Notifications/Bell.qml"),
             clock: Qt.resolvedUrl("../Session/Clock.qml"),
@@ -115,6 +116,8 @@ PanelWindow {
             height: widgetSlot.naturalHeight
             onLoaded: {
                 if (widgetSlot.widgetKey === "windowList" && item)
+                    item.barScreen = root.modelData;
+                if (widgetSlot.widgetKey === "notepad" && item)
                     item.barScreen = root.modelData;
                 if (widgetSlot.widgetKey === "commands" && item) {
                     item.barSettingsPopup = persistentBarSettings;

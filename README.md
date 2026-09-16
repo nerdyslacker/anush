@@ -202,6 +202,26 @@ atomically. On first launch, it imports compatible state from the former
 skarwm files when present; afterward `shell-state.json` is the only active
 state source.
 
+The **Notepad** bar widget opens an animated sidebar from the configurable left
+or right screen edge. It supports multiple tabbed UTF-8 Markdown notes under
+`${XDG_DATA_HOME:-$HOME/.local/share}/anush/notepad/`; the `+` tab button creates
+a new file. The header provides compact/extended width and close controls; the
+footer persists whether the drawer opens from the left or right. Writes are
+debounced and atomic, and failures or external changes
+never discard the in-memory text. Set `ANUSH_NOTEPAD_DIR` to choose another
+directory. `ANUSH_NOTES_FILE` remains available for a specific legacy file.
+The sidebar can also be controlled through Quickshell IPC:
+
+```sh
+qs -p ~/.config/anush/shell ipc call notepad toggle
+qs -p ~/.config/anush/shell ipc call notepad newNote
+qs -p ~/.config/anush/shell ipc call notepad save
+```
+
+The supplied skarwm configuration binds `Super+Shift+N` to toggle Notepad.
+The shortcut calls the global Notepad IPC handler directly, so it remains
+available when the Notepad bar widget is hidden.
+
 Application configuration is under `config/`, shell scripts are always
 resolved relative to `shell/`, and QML components are grouped by function
 under `shell/components/`.

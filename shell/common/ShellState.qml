@@ -71,6 +71,10 @@ Singleton {
                 endMs: 0,
                 minutes: 25
             },
+            notepad: {
+                side: "right",
+                extended: false
+            },
             theme: {
                 accent: "orange",
                 defaultAccent: "brightYellow",
