@@ -53,6 +53,25 @@ Singleton {
         error = ""
     }
 
+    function positionOutput(name, x, y) {
+        const next = clone(pendingOutputs)
+        const output = next.find(item => item.name === name)
+        if (!output) return
+        output.x = Math.round(x)
+        output.y = Math.round(y)
+        output.mirrorOf = ""
+
+        const enabled = next.filter(item => item.enabled)
+        const minimumX = Math.min(...enabled.map(item => item.x))
+        const minimumY = Math.min(...enabled.map(item => item.y))
+        for (const item of enabled) {
+            item.x -= minimumX
+            item.y -= minimumY
+        }
+        pendingOutputs = next
+        error = ""
+    }
+
     function setPrimary(name) {
         const next = clone(pendingOutputs)
         for (const item of next) item.primary = item.name === name

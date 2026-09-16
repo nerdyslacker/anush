@@ -8,15 +8,8 @@ Popout {
     id: root
 
     property string selectedName: ""
-    property real dragStartX: 0
-    property real dragStartY: 0
     readonly property var selected: DisplayConfigurationService.output(selectedName)
     readonly property var enabledOutputs: DisplayConfigurationService.pendingOutputs.filter(o => o.enabled)
-    readonly property var arrangementAnchor: selected?.enabled
-        ? enabledOutputs.find(o => o.name !== selectedName && o.primary)
-            ?? enabledOutputs.find(o => o.name !== selectedName)
-            ?? null
-        : null
     readonly property real minimumX: enabledOutputs.length
         ? Math.min(...enabledOutputs.map(o => o.x)) : 0
     readonly property real minimumY: enabledOutputs.length
@@ -91,42 +84,36 @@ Popout {
         let nx = Math.round(x), ny = Math.round(y)
         const width = logicalWidth(output), height = logicalHeight(output)
         const threshold = 32
+        let closestX = threshold + 1, closestY = threshold + 1
+        let snappedX = nx, snappedY = ny
         for (const other of enabledOutputs) {
             if (other.name === output.name) continue
             const ow = logicalWidth(other), oh = logicalHeight(other)
-            const xs = [other.x, other.x + ow, other.x - width, other.x + ow - width]
-            const ys = [other.y, other.y + oh, other.y - height, other.y + oh - height]
-            for (const snap of xs) if (Math.abs(nx - snap) <= threshold) nx = Math.round(snap)
-            for (const snap of ys) if (Math.abs(ny - snap) <= threshold) ny = Math.round(snap)
-        }
-        DisplayConfigurationService.updateOutput(output.name, {
-            x: nx, y: ny, mirrorOf: ""
-        })
-    }
-    function placeSelected(direction) {
-        const output = selected
-        const anchor = arrangementAnchor
-        if (!output || !anchor) return
+            const verticallyOverlaps = ny < other.y + oh && ny + height > other.y
+            const horizontallyOverlaps = nx < other.x + ow && nx + width > other.x
 
-        const width = logicalWidth(output), height = logicalHeight(output)
-        const anchorWidth = logicalWidth(anchor), anchorHeight = logicalHeight(anchor)
-        let x = output.x, y = output.y
-        if (direction === "left") {
-            x = anchor.x - width
-            y = anchor.y + (anchorHeight - height) / 2
-        } else if (direction === "right") {
-            x = anchor.x + anchorWidth
-            y = anchor.y + (anchorHeight - height) / 2
-        } else if (direction === "above") {
-            x = anchor.x + (anchorWidth - width) / 2
-            y = anchor.y - height
-        } else if (direction === "below") {
-            x = anchor.x + (anchorWidth - width) / 2
-            y = anchor.y + anchorHeight
+            if (verticallyOverlaps) {
+                for (const candidate of [other.x - width, other.x + ow]) {
+                    const distance = Math.abs(nx - candidate)
+                    if (distance < closestX) {
+                        closestX = distance
+                        snappedX = Math.round(candidate)
+                    }
+                }
+            }
+            if (horizontallyOverlaps) {
+                for (const candidate of [other.y - height, other.y + oh]) {
+                    const distance = Math.abs(ny - candidate)
+                    if (distance < closestY) {
+                        closestY = distance
+                        snappedY = Math.round(candidate)
+                    }
+                }
+            }
         }
-        DisplayConfigurationService.updateOutput(output.name, {
-            x: Math.round(x), y: Math.round(y), mirrorOf: ""
-        })
+        if (closestX <= threshold) nx = snappedX
+        if (closestY <= threshold) ny = snappedY
+        DisplayConfigurationService.positionOutput(output.name, nx, ny)
     }
 
     Connections {
@@ -211,83 +198,65 @@ Popout {
                 anchors.left: parent.left; anchors.leftMargin: 12
                 anchors.top: parent.top; anchors.topMargin: 10
                 text: root.enabledOutputs.length > 1
-                    ? "Drag displays to arrange them"
+                    ? "Drag each display freely to arrange its position"
                     : "Connect another display to arrange it"
                 color: Theme.brightBlack
                 font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 1
             }
-            Row {
-                anchors.right: parent.right; anchors.rightMargin: 10
-                anchors.top: parent.top; anchors.topMargin: 6
-                spacing: 4
-                visible: root.arrangementAnchor !== null
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "Place relative to " + String(root.arrangementAnchor?.name ?? "")
-                    color: Theme.brightBlack
-                    font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2
-                }
-                Repeater {
-                    model: [
-                        { text: "←", direction: "left" },
-                        { text: "↑", direction: "above" },
-                        { text: "↓", direction: "below" },
-                        { text: "→", direction: "right" }
-                    ]
-                    Rectangle {
-                        required property var modelData
-                        width: 27; height: 27; radius: Theme.radiusSmall
-                        color: placeMouse.containsMouse ? Theme.gray4 : Theme.gray2
-                        border.width: 1; border.color: Theme.gray5
-                        Text {
-                            anchors.centerIn: parent; text: modelData.text
-                            color: Theme.fg; font.pixelSize: 16
-                        }
-                        MouseArea {
-                            id: placeMouse
-                            anchors.fill: parent; hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.placeSelected(modelData.direction)
-                        }
-                    }
-                }
-            }
             Repeater {
                 model: root.enabledOutputs
-                Rectangle {
-                    id: monitor
+                Item {
+                    id: monitorPosition
                     required property var modelData
+                    property real dragStartX: 0
+                    property real dragStartY: 0
                     x: 20 + (modelData.x - root.minimumX) * root.previewScale
                     y: 44 + (modelData.y - root.minimumY) * root.previewScale
                     width: Math.max(70, root.logicalWidth(modelData) * root.previewScale)
                     height: Math.max(44, root.logicalHeight(modelData) * root.previewScale)
-                    radius: Theme.radiusSmall
-                    color: modelData.name === root.selectedName ? Qt.alpha(Theme.accent, 0.25) : Theme.gray3
-                    border.width: modelData.name === root.selectedName ? 2 : 1
-                    border.color: modelData.name === root.selectedName ? Theme.accent : Theme.gray6
-                    z: drag.active ? 10 : 1
-                    transform: Translate {
-                        x: drag.active ? drag.translation.x : 0
-                        y: drag.active ? drag.translation.y : 0
-                    }
-                    Column {
-                        anchors.centerIn: parent
-                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: monitor.modelData.name; color: Theme.fg; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize; font.bold: true }
-                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: monitor.modelData.width + "×" + monitor.modelData.height; color: Theme.brightBlack; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2 }
-                    }
-                    DragHandler {
-                        id: drag; target: null
-                        onActiveChanged: {
-                            if (active) {
-                                root.selectedName = monitor.modelData.name
-                                root.dragStartX = monitor.modelData.x
-                                root.dragStartY = monitor.modelData.y
-                            } else root.moveOutput(monitor.modelData,
-                                root.dragStartX + translation.x / root.previewScale,
-                                root.dragStartY + translation.y / root.previewScale)
+                    z: monitorMouse.drag.active ? 10 : 1
+                    Rectangle {
+                        id: monitor
+                        width: parent.width; height: parent.height
+                        radius: Theme.radiusSmall
+                        color: monitorPosition.modelData.name === root.selectedName
+                            ? Qt.alpha(Theme.accent, 0.25) : Theme.gray3
+                        border.width: monitorPosition.modelData.name === root.selectedName ? 2 : 1
+                        border.color: monitorPosition.modelData.name === root.selectedName
+                            ? Theme.accent : Theme.gray6
+                        Column {
+                            anchors.centerIn: parent
+                            Text { anchors.horizontalCenter: parent.horizontalCenter; text: monitorPosition.modelData.name; color: Theme.fg; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize; font.bold: true }
+                            Text { anchors.horizontalCenter: parent.horizontalCenter; text: monitorPosition.modelData.width + "×" + monitorPosition.modelData.height; color: Theme.brightBlack; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 2 }
+                        }
+                        MouseArea {
+                            id: monitorMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                            drag.target: monitor
+                            drag.axis: Drag.XAndYAxis
+                            drag.threshold: 3
+                            onPressed: {
+                                root.selectedName = monitorPosition.modelData.name
+                                monitorPosition.dragStartX = monitorPosition.modelData.x
+                                monitorPosition.dragStartY = monitorPosition.modelData.y
+                            }
+                            onReleased: {
+                                const nextX = monitorPosition.dragStartX
+                                    + monitor.x / root.previewScale
+                                const nextY = monitorPosition.dragStartY
+                                    + monitor.y / root.previewScale
+                                monitor.x = 0
+                                monitor.y = 0
+                                root.moveOutput(monitorPosition.modelData, nextX, nextY)
+                            }
+                            onCanceled: {
+                                monitor.x = 0
+                                monitor.y = 0
+                            }
                         }
                     }
-                    TapHandler { onTapped: root.selectedName = monitor.modelData.name }
                 }
             }
         }
