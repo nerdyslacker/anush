@@ -6,7 +6,12 @@ import QtQuick.Controls
 Item {
     id: root
 
-    readonly property bool hasTitle: Wm.title !== ""
+    property var barScreen
+    readonly property string outputName: String(barScreen?.name ?? "")
+    readonly property var screenWindow: Wm.windowForOutput(outputName)
+    readonly property string displayTitle: String(screenWindow?.title
+        || screenWindow?.class || screenWindow?.instance || "")
+    readonly property bool hasTitle: displayTitle !== ""
 
     implicitWidth: hasTitle ? (BarVisibility.verticalBar
         ? Theme.moduleHeight : Math.round(220 * Theme.barScale)) : 0
@@ -31,7 +36,7 @@ Item {
                 ? 0 : Math.round(9 * Theme.barScale)
             anchors.rightMargin: BarVisibility.verticalBar
                 ? 0 : Math.round(9 * Theme.barScale)
-            text: BarVisibility.verticalBar ? "󰖯" : Wm.title
+            text: BarVisibility.verticalBar ? "󰖯" : root.displayTitle
             color: Qt.alpha(Theme.fg, 0.75)
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize
@@ -53,7 +58,7 @@ Item {
             parent: titleBox
             visible: titleMouse.containsMouse && root.hasTitle
                 && (BarVisibility.verticalBar || titleText.truncated)
-            text: Wm.title
+            text: root.displayTitle
             delay: 350
             popupType: Popup.Window
             x: BarVisibility.verticalBar

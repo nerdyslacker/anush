@@ -118,6 +118,8 @@ PanelWindow {
             onLoaded: {
                 if (widgetSlot.widgetKey === "windowList" && item)
                     item.barScreen = root.modelData;
+                if (widgetSlot.widgetKey === "title" && item)
+                    item.barScreen = root.modelData;
                 if (widgetSlot.widgetKey === "notepad" && item)
                     item.barScreen = root.modelData;
                 if (widgetSlot.widgetKey === "commands" && item) {

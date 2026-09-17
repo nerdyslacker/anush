@@ -10,6 +10,7 @@ Singleton {
     property var workspaces: []
     property var windows: []
     property var outputs: []
+    property var lastFocusedWindowByOutput: ({})
     property var registeredScratchpads: []
     signal overviewCommand(string action)
     signal uiEvent(var event)
@@ -68,6 +69,34 @@ Singleton {
         return ws !== null && ws.urgent
     }
 
+    function windowForOutput(outputName) {
+        const wantedOutput = String(outputName ?? "")
+        if (wantedOutput === "") return null
+
+        let workspace = -1
+        for (const output of outputs) {
+            if (String(output.name) === wantedOutput) {
+                workspace = Number(output.current_workspace)
+                break
+            }
+        }
+
+        const candidates = windows.filter(win => win && !win.dock
+            && win.scratchpad !== true
+            && String(win.output ?? "") === wantedOutput
+            && (workspace < 0 || Number(win.workspace) === workspace))
+        if (candidates.length === 0) return null
+
+        const focused = candidates.find(win => win.focused === true)
+        if (focused) return focused
+
+        const rememberedId = lastFocusedWindowByOutput[wantedOutput]
+        const remembered = candidates.find(win => String(win.id) === String(rememberedId))
+        if (remembered) return remembered
+
+        return candidates.find(win => win.tab_active === true) ?? candidates[0]
+    }
+
     function refreshWorkspaces() {
         workspaceQuery.running = false
         workspaceQuery.running = true
@@ -105,6 +134,11 @@ Singleton {
             const scratchpads = []
             for (const win of windows) {
                 if (win.focused && !win.dock) { focused = win; break }
+            }
+            if (focused && focused.output !== null && focused.output !== undefined) {
+                const nextFocusedByOutput = Object.assign({}, lastFocusedWindowByOutput)
+                nextFocusedByOutput[String(focused.output)] = focused.id
+                lastFocusedWindowByOutput = nextFocusedByOutput
             }
             for (const win of windows) {
                 const registers = Array.isArray(win.scratchpad_registers)
