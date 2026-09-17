@@ -67,7 +67,10 @@ Rectangle {
             color: root.leadingIconColor
             font.family: root.iconFont
             font.pixelSize: Theme.iconSize
-            Behavior on color { ColorAnimation { duration: 250 } }
+            Behavior on color {
+                enabled: Theme.barStateReady
+                ColorAnimation { duration: 250 }
+            }
         }
 
         Text {
@@ -78,7 +81,10 @@ Rectangle {
             color: root.iconColor
             font.family: root.iconFont
             font.pixelSize: Theme.iconSize
-            Behavior on color { ColorAnimation { duration: 250 } }
+            Behavior on color {
+                enabled: Theme.barStateReady
+                ColorAnimation { duration: 250 }
+            }
         }
 
         Image {
@@ -99,7 +105,10 @@ Rectangle {
             color: root.labelColor
             font.family: Theme.fontFamily
             font.pixelSize: root.labelPixelSize
-            Behavior on color { ColorAnimation { duration: 250 } }
+            Behavior on color {
+                enabled: Theme.barStateReady
+                ColorAnimation { duration: 250 }
+            }
         }
     }
 
@@ -118,7 +127,10 @@ Rectangle {
             color: root.compactIconColor
             font.family: root.iconFont
             font.pixelSize: Theme.iconSize
-            Behavior on color { ColorAnimation { duration: 250 } }
+            Behavior on color {
+                enabled: Theme.barStateReady
+                ColorAnimation { duration: 250 }
+            }
         }
 
         Image {
@@ -140,7 +152,10 @@ Rectangle {
             color: root.labelColor
             font.family: Theme.fontFamily
             font.pixelSize: root.compactLabelPixelSize
-            Behavior on color { ColorAnimation { duration: 250 } }
+            Behavior on color {
+                enabled: Theme.barStateReady
+                ColorAnimation { duration: 250 }
+            }
         }
     }
 

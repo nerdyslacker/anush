@@ -1,0 +1,32 @@
+#!/bin/sh
+
+set -eu
+
+case "${1-}" in
+    ''|*[!0-9]*) exit 2 ;;
+esac
+
+threshold=$1
+if [ "$threshold" -lt 1 ] || [ "$threshold" -gt 100 ]; then
+    exit 2
+fi
+
+threshold_file=
+for battery in /sys/class/power_supply/BAT*; do
+    candidate="$battery/charge_control_end_threshold"
+    if [ -e "$candidate" ]; then
+        threshold_file=$candidate
+        break
+    fi
+done
+
+[ -n "$threshold_file" ] || exit 3
+
+if [ -w "$threshold_file" ]; then
+    printf '%s\n' "$threshold" > "$threshold_file"
+elif command -v pkexec >/dev/null 2>&1; then
+    exec pkexec sh -c 'printf "%s\n" "$1" > "$2"' sh \
+        "$threshold" "$threshold_file"
+else
+    exit 4
+fi

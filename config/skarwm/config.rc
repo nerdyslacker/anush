@@ -27,8 +27,8 @@ corner_radius : 0
 
 # Window border colours as #RRGGBB. The normal colour remains accepted for
 # config compatibility; unfocused windows currently have no border.
-norm_outer_border : #705c6a
-sel_outer_border  : #7973ca
+norm_outer_border : #706b5c
+sel_outer_border  : #8696cb
 
 # True (default): moving the pointer over a window focuses it.
 focus_follows_mouse : true
@@ -50,6 +50,8 @@ call : Alt + Shift + Tab : overview_prev
 # puts its next window in that tab group. An explicit shifted binding overrides
 # this generated behavior.
 
+autostart : "anush-init"
+# Start the Anush desktop environment components.
 # autostart: run once at startup (not re-run on reload).
 autostart : "lxqt-policykit-agent"
 # Restore the last Feh selection; seed it with the bundled wallpaper on the
@@ -159,3 +161,6 @@ rule : title : Network : floating
 rule : title : "Choose launcher icon" : floating
 rule : instance : firefox : workspace 3
 rule : title : "Mozilla Firefox" : floating
+rule : class : lxqt-policykit-agent : floating
+rule : instance : lxqt-policykit-agent : floating
+rule : title : "Authentication Required" : floating

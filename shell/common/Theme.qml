@@ -2,7 +2,6 @@ pragma Singleton
 import QtQuick
 import ".."
 import Quickshell
-import Quickshell.Io
 
 // Canonical Srcery palette from SRCERY.md. Semantic colors used by the
 // modules below are aliases of this palette, so every component stays in
@@ -33,13 +32,12 @@ Singleton {
     readonly property int radiusLarge: Math.round(cornerRadius * 1.5)
     readonly property int surfaceGap: 8
 
-    property int _barStateLoads: 0
-    readonly property bool barStateReady: _barStateLoads >= 2
-    Timer {
-        running: !root.barStateReady
-        interval: 1000
-        onTriggered: root._barStateLoads = 2
-    }
+    // Do not expose the bar until the persisted appearance has been applied.
+    // A timed fallback here used to reveal the default palette when state
+    // migration or disk I/O took longer than one second at login.
+    property bool _appearanceLoaded: false
+    readonly property bool barStateReady:
+        ShellState.ready && _appearanceLoaded
 
     property color black: "#121110"
     property color red: "#EF2F27"
@@ -167,6 +165,10 @@ Singleton {
             root.scriptsDir + "/apply-accent",
             selected.toString(),
             Wm.msgPath
+        ])
+        Quickshell.execDetached([
+            root.scriptsDir + "/apply-icon-theme",
+            selected.toString()
         ])
     }
 
@@ -403,7 +405,11 @@ Singleton {
         wallpaperThemeEnabled = theme.wallpaperEnabled === true
         cornerRadius = Math.max(0, Math.round(Number(theme.cornerRadius) || 0))
         applyActivePalette()
-        _barStateLoads = 2
+        Quickshell.execDetached([
+            root.scriptsDir + "/apply-icon-theme",
+            accent.toString()
+        ])
+        _appearanceLoaded = true
     }
 
     Connections {

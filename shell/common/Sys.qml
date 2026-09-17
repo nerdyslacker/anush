@@ -15,6 +15,9 @@ Singleton {
     property real battery: 0
     property bool batteryCharging: false
     property real batteryChargeLimit: 100
+    property bool batteryChargeLimitSupported: false
+    property bool batteryChargeLimitChanging: false
+    property string batteryChargeLimitError: ""
     property bool keepAwake: false
     readonly property string netName: NetworkService.primaryName
     readonly property string netType: NetworkService.primaryType
@@ -44,9 +47,13 @@ Singleton {
         command: ["sh", "-c",
             "head -1 /proc/stat; grep -E '^(MemTotal|MemAvailable)' /proc/meminfo; df --output=pcent / | tail -1; " +
             "for b in /sys/class/power_supply/BAT*; do " +
-            "[ -r \"$b/capacity\" ] && echo \"BAT $(cat \"$b/capacity\") " +
-            "$(cat \"$b/charge_control_end_threshold\" 2>/dev/null || echo 100) " +
-            "$(cat \"$b/status\")\" && break; done; true"]
+            "[ -r \"$b/capacity\" ] || continue; " +
+            "limit_file=\"$b/charge_control_end_threshold\"; " +
+            "if [ -e \"$limit_file\" ]; then " +
+            "limit=$(cat \"$limit_file\" 2>/dev/null || echo 100); supported=1; " +
+            "else limit=100; supported=0; fi; " +
+            "echo \"BAT $(cat \"$b/capacity\") $limit $supported $(cat \"$b/status\")\"; " +
+            "break; done; true"]
         stdout: StdioCollector {
             onStreamFinished: root.parseStat(text)
         }
@@ -74,7 +81,8 @@ Singleton {
                 foundBattery = true
                 battery = parseInt(parts[1])
                 batteryChargeLimit = parseInt(parts[2]) || 100
-                batteryCharging = parts.slice(3).join(" ") === "Charging"
+                batteryChargeLimitSupported = parts[3] === "1"
+                batteryCharging = parts.slice(4).join(" ") === "Charging"
             } else if (line.indexOf("%") !== -1) {
                 disk = parseInt(line)
             }
@@ -82,6 +90,38 @@ Singleton {
         if (memTotal > 0)
             mem = 100 * (1 - memAvail / memTotal)
         hasBattery = foundBattery
+        if (!foundBattery)
+            batteryChargeLimitSupported = false
+    }
+
+    function refreshStats() {
+        restartQuery(statProc)
+    }
+
+    function setBatteryChargeLimit(value) {
+        const limit = Math.max(1, Math.min(100, Math.round(value)))
+        batteryChargeLimit = limit
+        batteryChargeLimitChanging = true
+        batteryChargeLimitError = ""
+        chargeLimitProc.running = false
+        chargeLimitProc.command = [
+            ShellState.scriptsDir + "/set-charge-threshold", String(limit)
+        ]
+        chargeLimitProc.running = true
+    }
+
+    Process {
+        id: chargeLimitProc
+        onExited: (exitCode, exitStatus) => {
+            root.batteryChargeLimitChanging = false
+            if (exitCode !== 0)
+                root.batteryChargeLimitError = exitCode === 3
+                    ? "Charge thresholds are not supported"
+                    : exitCode === 4
+                    ? "Polkit is required to change the limit"
+                    : "Could not change the charge limit"
+            root.refreshStats()
+        }
     }
 
     property bool capsOn: false

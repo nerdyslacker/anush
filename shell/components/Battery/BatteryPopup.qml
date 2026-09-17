@@ -325,6 +325,32 @@ Popout {
         }
         Rectangle { width: parent.width; height: 1; color: Theme.gray5 }
 
+        Column {
+            visible: Sys.batteryChargeLimitSupported
+            width: parent.width
+            spacing: 2
+
+            TweakSlider {
+                width: parent.width
+                label: Sys.batteryChargeLimitChanging
+                    ? "Charge limit · applying…" : "Charge limit"
+                from: 1
+                to: 100
+                value: root.chargeTarget
+                suffix: "%"
+                applyFn: value => {}
+                persistFn: value => Sys.setBatteryChargeLimit(value)
+            }
+
+            Text {
+                visible: Sys.batteryChargeLimitError !== ""
+                text: Sys.batteryChargeLimitError
+                color: Theme.red
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize - 2
+            }
+        }
+
         SettingButton {
             buttonIcon: root.profileIcons[root.profile] ?? "󰾅"
             title: "Power profile"
