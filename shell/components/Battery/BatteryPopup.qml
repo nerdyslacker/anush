@@ -83,7 +83,7 @@ Popout {
           value: batteryDevice.changeRate > 0
             ? batteryDevice.changeRate.toFixed(1) + " W" : "—" },
         { label: "Health", value: batteryDevice.healthSupported
-            ? Math.round(batteryDevice.healthPercentage * 100) + "%" : "—" },
+            ? Math.round(batteryDevice.healthPercentage) + "%" : "—" },
         { label: "State", value: batteryState },
         { label: "Model", value: batteryDevice.model || batteryDevice.nativePath }
     ] : []
@@ -139,8 +139,8 @@ Popout {
             anchors.verticalCenter: parent.verticalCenter
             text: button.buttonIcon
             color: button.active ? Theme.selfg : Theme.cyan
-            font.family: Theme.fontFamily
-            font.pixelSize: 17
+            font.family: Theme.iconFontFamily
+            font.pixelSize: Theme.iconSize
         }
         Column {
             anchors.left: parent.left

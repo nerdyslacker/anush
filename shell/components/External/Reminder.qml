@@ -124,7 +124,7 @@ Scope {
                                 Text {
                                     anchors.centerIn: parent
                                     text: "󰅖"; color: Theme.brightBlack
-                                    font.family: Theme.fontFamily; font.pixelSize: 15
+                                    font.family: Theme.iconFontFamily; font.pixelSize: Theme.iconSize
                                 }
                                 MouseArea {
                                     id: closeMouse

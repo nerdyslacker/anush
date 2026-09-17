@@ -39,35 +39,66 @@ Popout {
 
     // where this forecast is for — also the tell when a VPN exit node is
     // fooling wttr.in's IP geolocation
-    Text {
+    Row {
         id: placeLine
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
         visible: root.days.length > 0 && root.place !== ""
-        text: "󰍎 " + root.place
-        color: Qt.alpha(Theme.fg, 0.5)
-        font.family: Theme.fontFamily
-        font.pixelSize: 10
-        elide: Text.ElideRight
+        spacing: 5
+        Text {
+            text: "󰍎"
+            color: Qt.alpha(Theme.fg, 0.5)
+            font.family: Theme.iconFontFamily
+            font.pixelSize: Theme.iconSizeSmall
+        }
+        Text {
+            width: parent.width - x
+            text: root.place
+            color: Qt.alpha(Theme.fg, 0.5)
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize - 2
+            elide: Text.ElideRight
+        }
     }
 
     // current condition · feels like · wind
-    Text {
+    Row {
         id: header
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: placeLine.visible ? placeLine.bottom : parent.top
         anchors.topMargin: placeLine.visible ? 4 : 0
         visible: root.days.length > 0
-        text: root.condition
-            + (root.feels !== "" ? "  ·  feels " + root.feels + "°" : "")
-            + (root.wind !== "" ? "  ·  󰖝 " + root.wind : "")
-        color: Theme.fg
-        font.family: Theme.fontFamily
-        font.pixelSize: 12
-        font.bold: true
-        elide: Text.ElideRight
+        spacing: 6
+        Text {
+            width: parent.width - windLine.width - (windLine.visible ? parent.spacing : 0)
+            text: root.condition
+                + (root.feels !== "" ? "  ·  feels " + root.feels + "°" : "")
+            color: Theme.fg
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize
+            font.bold: true
+            elide: Text.ElideRight
+        }
+        Row {
+            id: windLine
+            visible: root.wind !== ""
+            spacing: 4
+            Text {
+                text: "󰖝"
+                color: Theme.fg
+                font.family: Theme.iconFontFamily
+                font.pixelSize: Theme.iconSizeSmall
+            }
+            Text {
+                text: root.wind
+                color: Theme.fg
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize
+                font.bold: true
+            }
+        }
     }
 
     Row {
@@ -98,8 +129,8 @@ Popout {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: day.modelData.glyph
                     color: Theme.yellow
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 22
+                    font.family: Theme.iconFontFamily
+                    font.pixelSize: Theme.iconSizeLarge
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -108,13 +139,22 @@ Popout {
                     font.family: Theme.fontFamily
                     font.pixelSize: 12
                 }
-                Text {
+                Row {
                     anchors.horizontalCenter: parent.horizontalCenter
                     visible: day.modelData.rain >= 30
-                    text: "󰖌 " + day.modelData.rain + "%"
-                    color: Theme.cyan
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 10
+                    spacing: 4
+                    Text {
+                        text: "󰖌"
+                        color: Theme.cyan
+                        font.family: Theme.iconFontFamily
+                        font.pixelSize: Theme.iconSizeSmall
+                    }
+                    Text {
+                        text: day.modelData.rain + "%"
+                        color: Theme.cyan
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize - 2
+                    }
                 }
             }
         }

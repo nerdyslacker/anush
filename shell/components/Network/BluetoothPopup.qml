@@ -112,32 +112,54 @@ Popout {
                 radius: Theme.radiusSmall
                 color: row.device.connected ? Qt.alpha(Theme.accent, 0.22)
                     : deviceMouse.containsMouse ? Theme.gray3 : Theme.gray2
-                Text {
+                Row {
                     anchors.left: parent.left
                     anchors.leftMargin: 10
                     anchors.right: deviceState.left
                     anchors.rightMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "󰂯  " + (row.device.name || row.device.deviceName
-                        || row.device.address)
-                    color: row.device.connected ? Theme.accent : Theme.fg
-                    elide: Text.ElideRight
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 12
-                    font.bold: row.device.connected
+                    spacing: 7
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "󰂯"
+                        color: row.device.connected ? Theme.accent : Theme.fg
+                        font.family: Theme.iconFontFamily
+                        font.pixelSize: Theme.iconSize
+                    }
+                    Text {
+                        width: parent.width - x
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: row.device.name || row.device.deviceName
+                            || row.device.address
+                        color: row.device.connected ? Theme.accent : Theme.fg
+                        elide: Text.ElideRight
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize
+                        font.bold: row.device.connected
+                    }
                 }
-                Text {
+                Row {
                     id: deviceState
                     anchors.right: parent.right
                     anchors.rightMargin: 10
                     anchors.verticalCenter: parent.verticalCenter
-                    text: (row.device.connected ? "connected" : "paired")
-                        + (row.device.batteryAvailable
-                            ? " · " + Math.round(row.device.battery * 100) + "%" : "")
-                        + (row.expanded ? "  󰅀" : "  󰅂")
-                    color: row.device.connected ? Theme.green : Theme.disabled
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 10
+                    spacing: 5
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: (row.device.connected ? "connected" : "paired")
+                            + (row.device.batteryAvailable
+                                ? " · " + Math.round(row.device.battery * 100) + "%" : "")
+                        color: row.device.connected ? Theme.green : Theme.disabled
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize - 2
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: row.expanded ? "󰅀" : "󰅂"
+                        color: row.device.connected ? Theme.green : Theme.disabled
+                        font.family: Theme.iconFontFamily
+                        font.pixelSize: Theme.iconSizeSmall
+                    }
                 }
                 MouseArea {
                     id: deviceMouse
@@ -350,28 +372,51 @@ Popout {
                                 radius: Theme.radiusSmall
                                 color: foundMouse.containsMouse
                                     ? Theme.gray3 : Theme.gray2
-                                Text {
+                                Row {
                                     anchors.left: parent.left
                                     anchors.leftMargin: 10
                                     anchors.right: foundTag.left
                                     anchors.rightMargin: 8
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: "󰂱  " + (foundRow.modelData.name
-                                        || foundRow.modelData.deviceName)
-                                    color: Qt.alpha(Theme.fg, 0.75)
-                                    elide: Text.ElideRight
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: 12
+                                    spacing: 7
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "󰂱"
+                                        color: Qt.alpha(Theme.fg, 0.75)
+                                        font.family: Theme.iconFontFamily
+                                        font.pixelSize: Theme.iconSize
+                                    }
+                                    Text {
+                                        width: parent.width - x
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: foundRow.modelData.name
+                                            || foundRow.modelData.deviceName
+                                        color: Qt.alpha(Theme.fg, 0.75)
+                                        elide: Text.ElideRight
+                                        font.family: Theme.fontFamily
+                                        font.pixelSize: Theme.fontSize
+                                    }
                                 }
-                                Text {
+                                Row {
                                     id: foundTag
                                     anchors.right: parent.right
                                     anchors.rightMargin: 10
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: "new  " + (foundRow.expanded ? "󰅀" : "󰅂")
-                                    color: Theme.disabled
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: 11
+                                    spacing: 5
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "new"
+                                        color: Theme.disabled
+                                        font.family: Theme.fontFamily
+                                        font.pixelSize: Theme.fontSize - 1
+                                    }
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: foundRow.expanded ? "󰅀" : "󰅂"
+                                        color: Theme.disabled
+                                        font.family: Theme.iconFontFamily
+                                        font.pixelSize: Theme.iconSizeSmall
+                                    }
                                 }
                                 MouseArea {
                                     id: foundMouse

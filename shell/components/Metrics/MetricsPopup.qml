@@ -146,8 +146,8 @@ Popout {
             anchors.topMargin: 9
             text: card.cardIcon
             color: card.accentColor
-            font.family: Theme.fontFamily
-            font.pixelSize: 17
+            font.family: Theme.iconFontFamily
+            font.pixelSize: Theme.iconSize
         }
         Text {
             anchors.right: parent.right

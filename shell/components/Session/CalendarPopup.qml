@@ -146,8 +146,8 @@ Popout {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "󰅁"
                 color: Theme.accent
-                font.family: Theme.fontFamily
-                font.pixelSize: 18
+                font.family: Theme.iconFontFamily
+                font.pixelSize: Theme.iconSize
                 MouseArea {
                     anchors.fill: parent
                     anchors.margins: -6
@@ -174,8 +174,8 @@ Popout {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "󰅂"
                 color: Theme.accent
-                font.family: Theme.fontFamily
-                font.pixelSize: 18
+                font.family: Theme.iconFontFamily
+                font.pixelSize: Theme.iconSize
                 MouseArea {
                     anchors.fill: parent
                     anchors.margins: -6

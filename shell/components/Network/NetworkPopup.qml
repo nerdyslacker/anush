@@ -180,14 +180,25 @@ Popout {
                 color: modelData.connected ? Qt.alpha(Theme.green, 0.12) : Theme.gray2
                 border.width: 1
                 border.color: Theme.gray5
-                Text {
+                Row {
                     anchors.left: parent.left
                     anchors.leftMargin: 10
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "󰈀  " + wiredRow.modelData.name
-                    color: Theme.fg
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 12
+                    spacing: 7
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "󰈀"
+                        color: Theme.fg
+                        font.family: Theme.iconFontFamily
+                        font.pixelSize: Theme.iconSize
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: wiredRow.modelData.name
+                        color: Theme.fg
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize
+                    }
                 }
                 Text {
                     anchors.right: parent.right
@@ -294,34 +305,74 @@ Popout {
                                     ? Qt.alpha(Theme.accent, 0.22)
                                     : networkMouse.containsMouse ? Theme.gray3 : Theme.gray2
 
-                                Text {
+                                Row {
                                     anchors.left: parent.left
                                     anchors.leftMargin: 10
                                     anchors.right: networkTag.left
                                     anchors.rightMargin: 8
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: root.signalGlyph(networkRow.modelData.signalStrength)
-                                        + "  " + networkRow.modelData.name
-                                        + (networkRow.modelData.connected ? "  󰄬" : "")
-                                    color: networkRow.modelData.connected
-                                        ? Theme.accent : Theme.fg
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: 12
-                                    font.bold: networkRow.modelData.connected
-                                    elide: Text.ElideRight
+                                    spacing: 7
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: root.signalGlyph(networkRow.modelData.signalStrength)
+                                        color: networkRow.modelData.connected
+                                            ? Theme.accent : Theme.fg
+                                        font.family: Theme.iconFontFamily
+                                        font.pixelSize: Theme.iconSize
+                                    }
+                                    Text {
+                                        width: parent.width - x
+                                            - (connectedIcon.visible
+                                                ? connectedIcon.width + parent.spacing : 0)
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: networkRow.modelData.name
+                                        color: networkRow.modelData.connected
+                                            ? Theme.accent : Theme.fg
+                                        font.family: Theme.fontFamily
+                                        font.pixelSize: Theme.fontSize
+                                        font.bold: networkRow.modelData.connected
+                                        elide: Text.ElideRight
+                                    }
+                                    Text {
+                                        id: connectedIcon
+                                        visible: networkRow.modelData.connected
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "󰄬"
+                                        color: Theme.accent
+                                        font.family: Theme.iconFontFamily
+                                        font.pixelSize: Theme.iconSizeSmall
+                                    }
                                 }
-                                Text {
+                                Row {
                                     id: networkTag
                                     anchors.right: parent.right
                                     anchors.rightMargin: 10
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: (networkRow.modelData.known ? "saved  " : "")
-                                        + (networkRow.modelData.security
-                                            !== QsNetwork.WifiSecurityType.Open ? "󰌾  " : "")
-                                        + (networkRow.expanded ? "󰅀" : "󰅂")
-                                    color: Theme.disabled
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: 11
+                                    spacing: 5
+                                    Text {
+                                        visible: networkRow.modelData.known
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "saved"
+                                        color: Theme.disabled
+                                        font.family: Theme.fontFamily
+                                        font.pixelSize: Theme.fontSize - 2
+                                    }
+                                    Text {
+                                        visible: networkRow.modelData.security
+                                            !== QsNetwork.WifiSecurityType.Open
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "󰌾"
+                                        color: Theme.disabled
+                                        font.family: Theme.iconFontFamily
+                                        font.pixelSize: Theme.iconSizeSmall
+                                    }
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: networkRow.expanded ? "󰅀" : "󰅂"
+                                        color: Theme.disabled
+                                        font.family: Theme.iconFontFamily
+                                        font.pixelSize: Theme.iconSizeSmall
+                                    }
                                 }
                                 MouseArea {
                                     id: networkMouse
@@ -488,18 +539,30 @@ Popout {
                         color: modelData.active ? Qt.alpha(Theme.green, 0.13) : Theme.gray2
                         border.width: 1
                         border.color: Theme.gray5
-                        Text {
+                        Row {
                             anchors.left: parent.left
                             anchors.leftMargin: 10
                             anchors.right: vpnToggle.visible
                                 ? vpnToggle.left : vpnExternal.left
                             anchors.rightMargin: 8
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "󰦝  " + vpnRow.modelData.name
-                            color: vpnRow.modelData.active ? Theme.green : Theme.fg
-                            elide: Text.ElideRight
-                            font.family: Theme.fontFamily
-                            font.pixelSize: 11
+                            spacing: 7
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "󰦝"
+                                color: vpnRow.modelData.active ? Theme.green : Theme.fg
+                                font.family: Theme.iconFontFamily
+                                font.pixelSize: Theme.iconSize
+                            }
+                            Text {
+                                width: parent.width - x
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: vpnRow.modelData.name
+                                color: vpnRow.modelData.active ? Theme.green : Theme.fg
+                                elide: Text.ElideRight
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSize - 1
+                            }
                         }
                         Text {
                             id: vpnExternal

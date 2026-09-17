@@ -32,10 +32,11 @@ Popout {
     component ActionButton: Rectangle {
         id: button
         required property string buttonText
+        property string buttonIcon: ""
         property bool primary: false
         signal activated()
 
-        implicitWidth: label.implicitWidth + 28
+        implicitWidth: buttonRow.implicitWidth + 28
         height: 34
         radius: Theme.radiusSmall
         color: primary ? Theme.accent
@@ -45,14 +46,27 @@ Popout {
 
         Behavior on color { ColorAnimation { duration: 120 } }
 
-        Text {
-            id: label
+        Row {
+            id: buttonRow
             anchors.centerIn: parent
-            text: button.buttonText
-            color: button.primary ? Theme.accentForeground : Theme.foreground
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize
-            font.bold: true
+            spacing: button.buttonIcon !== "" ? 7 : 0
+            Text {
+                visible: button.buttonIcon !== ""
+                anchors.verticalCenter: parent.verticalCenter
+                text: button.buttonIcon
+                color: button.primary ? Theme.accentForeground : Theme.foreground
+                font.family: Theme.iconFontFamily
+                font.pixelSize: Theme.iconSize
+            }
+            Text {
+                id: label
+                anchors.verticalCenter: parent.verticalCenter
+                text: button.buttonText
+                color: button.primary ? Theme.accentForeground : Theme.foreground
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize
+                font.bold: true
+            }
         }
 
         MouseArea {
@@ -148,8 +162,9 @@ Popout {
 
         ActionButton {
             width: parent.width
+            buttonIcon: ColorPickerState.picking ? "" : ""
             buttonText: ColorPickerState.picking
-                ? "Click a pixel on screen…" : "  Pick from screen"
+                ? "Click a pixel on screen…" : "Pick from screen"
             primary: true
             enabled: ColorPickerState.available && !ColorPickerState.picking
             opacity: enabled ? 1 : 0.55

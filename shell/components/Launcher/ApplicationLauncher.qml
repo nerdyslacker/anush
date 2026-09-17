@@ -142,8 +142,8 @@ Popout {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "󰍉"
                     color: Theme.accent
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 17
+                    font.family: Theme.iconFontFamily
+                    font.pixelSize: Theme.iconSize
                 }
 
                 TextInput {

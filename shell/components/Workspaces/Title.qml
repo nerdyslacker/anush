@@ -38,8 +38,10 @@ Item {
                 ? 0 : Math.round(9 * Theme.barScale)
             text: BarVisibility.verticalBar ? "󰖯" : root.displayTitle
             color: Qt.alpha(Theme.fg, 0.75)
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize
+            font.family: BarVisibility.verticalBar
+                ? Theme.iconFontFamily : Theme.fontFamily
+            font.pixelSize: BarVisibility.verticalBar
+                ? Theme.iconSize : Theme.fontSize
             elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter

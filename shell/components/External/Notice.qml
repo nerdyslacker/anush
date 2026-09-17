@@ -74,7 +74,7 @@ Scope {
                         anchors.verticalCenter: parent.verticalCenter
                         text: root.persistent ? "󰀦" : "󰋼"
                         color: root.persistent ? Theme.brightOrange : Theme.accent
-                        font.family: Theme.fontFamily; font.pixelSize: 16
+                        font.family: Theme.iconFontFamily; font.pixelSize: Theme.iconSize
                     }
                     Text {
                         id: label

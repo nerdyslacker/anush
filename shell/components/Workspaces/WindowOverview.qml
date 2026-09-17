@@ -328,8 +328,8 @@ Popout {
                             Text {
                                 text: "󰖯"
                                 color: windowCard.selected ? Theme.accent : Theme.cyan
-                                font.family: Theme.fontFamily
-                                font.pixelSize: 20
+                                font.family: Theme.iconFontFamily
+                                font.pixelSize: Theme.iconSizeLarge
                             }
                             Text {
                                 width: parent.width - 30

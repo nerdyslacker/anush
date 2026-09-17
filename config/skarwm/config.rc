@@ -28,7 +28,7 @@ corner_radius : 0
 # Window border colours as #RRGGBB. The normal colour remains accepted for
 # config compatibility; unfocused windows currently have no border.
 norm_outer_border : #706b5c
-sel_outer_border  : #8696cb
+sel_outer_border  : #7973ca
 
 # True (default): moving the pointer over a window focuses it.
 focus_follows_mouse : true

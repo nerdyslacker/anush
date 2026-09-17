@@ -28,8 +28,8 @@ Popout {
             Text {
                 text: "󰆍"
                 color: Theme.accent
-                font.family: Theme.fontFamily
-                font.pixelSize: 18
+                font.family: Theme.iconFontFamily
+                font.pixelSize: Theme.iconSize
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter

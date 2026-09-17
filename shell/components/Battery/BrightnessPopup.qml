@@ -243,8 +243,8 @@ Popout {
             Text {
                 text: "󰃠"
                 color: Theme.yellow
-                font.family: Theme.fontFamily
-                font.pixelSize: 18
+                font.family: Theme.iconFontFamily
+                font.pixelSize: Theme.iconSize
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
@@ -364,8 +364,8 @@ Popout {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "󱩌"
                 color: root.nightLight ? Theme.brightOrange : Theme.cyan
-                font.family: Theme.fontFamily
-                font.pixelSize: 17
+                font.family: Theme.iconFontFamily
+                font.pixelSize: Theme.iconSize
             }
             Column {
                 anchors.left: nightIcon.right

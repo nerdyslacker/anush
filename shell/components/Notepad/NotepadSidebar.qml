@@ -149,7 +149,7 @@ PanelWindow {
             text: button.glyph
             color: Theme.foreground
             font.family: Theme.iconFontFamily
-            font.pixelSize: 16
+            font.pixelSize: Theme.iconSize
         }
         MouseArea {
             id: buttonMouse

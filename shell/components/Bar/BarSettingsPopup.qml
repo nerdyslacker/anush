@@ -68,8 +68,8 @@ Popout {
             anchors.verticalCenter: parent.verticalCenter
             text: setting.iconText
             color: Theme.accent
-            font.family: Theme.fontFamily
-            font.pixelSize: 15
+            font.family: Theme.iconFontFamily
+            font.pixelSize: Theme.iconSize
         }
 
         Column {
@@ -178,8 +178,8 @@ Popout {
             anchors.verticalCenter: parent.verticalCenter
             text: "󰇙"
             color: widgetRow.dragging ? Theme.accent : Theme.gray6
-            font.family: Theme.fontFamily
-            font.pixelSize: 13
+            font.family: Theme.iconFontFamily
+            font.pixelSize: Theme.iconSizeSmall
         }
 
         Text {
@@ -189,8 +189,8 @@ Popout {
             anchors.verticalCenter: parent.verticalCenter
             text: widgetRow.info ? widgetRow.info.icon : ""
             color: widgetRow.isEnabled ? Theme.cyan : Theme.brightBlack
-            font.family: Theme.fontFamily
-            font.pixelSize: 15
+            font.family: Theme.iconFontFamily
+            font.pixelSize: Theme.iconSize
         }
 
         Text {
@@ -232,8 +232,8 @@ Popout {
                 anchors.verticalCenter: parent.verticalCenter
                 text: section.clusterName === "left" ? "󰁍" : section.clusterName === "center" ? "󰘖" : "󰁔"
                 color: Theme.accent
-                font.family: Theme.fontFamily
-                font.pixelSize: 15
+                font.family: Theme.iconFontFamily
+                font.pixelSize: Theme.iconSize
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
@@ -419,8 +419,8 @@ Popout {
                     y: (positionSelector.height - height) / 2
                     text: positionSelector.popup.visible ? "󰅀" : "󰅂"
                     color: Theme.brightBlack
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 13
+                    font.family: Theme.iconFontFamily
+                    font.pixelSize: Theme.iconSizeSmall
                 }
 
                 background: Rectangle {

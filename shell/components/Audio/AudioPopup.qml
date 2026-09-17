@@ -152,7 +152,7 @@ Popout {
                     text: root.selectedOutput?.audio?.muted ? "󰝟" : "󰕾"
                     color: root.selectedOutput?.audio?.muted
                         ? Theme.brightBlack : Theme.green
-                    font.family: Theme.fontFamily
+                    font.family: Theme.iconFontFamily
                     font.pixelSize: Theme.iconSize
                     MouseArea {
                         anchors.fill: parent
@@ -214,7 +214,7 @@ Popout {
                     text: root.selectedInput?.audio?.muted ? "󰍭" : "󰍬"
                     color: root.selectedInput?.audio?.muted
                         ? Theme.brightRed : Theme.cyan
-                    font.family: Theme.fontFamily
+                    font.family: Theme.iconFontFamily
                     font.pixelSize: Theme.iconSize
                     MouseArea {
                         anchors.fill: parent
@@ -299,7 +299,7 @@ Popout {
                                 text: streamRow.streamAudio?.muted ? "󰝟" : "󰕾"
                                 color: streamRow.streamAudio?.muted
                                     ? Theme.brightBlack : Theme.green
-                                font.family: Theme.fontFamily
+                                font.family: Theme.iconFontFamily
                                 font.pixelSize: Theme.iconSize
 
                                 MouseArea {

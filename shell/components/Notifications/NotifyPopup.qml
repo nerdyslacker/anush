@@ -207,8 +207,8 @@ Popout {
                                     visible: cardMa.containsMouse
                                     text: "󰅖"
                                     color: disMa.containsMouse ? Theme.red : Qt.alpha(Theme.fg, 0.5)
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: 11
+                                    font.family: Theme.iconFontFamily
+                                    font.pixelSize: Theme.iconSizeSmall
                                     MouseArea {
                                         id: disMa
                                         anchors.fill: parent

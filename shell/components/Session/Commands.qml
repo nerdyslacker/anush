@@ -212,8 +212,8 @@ BarModule {
                 anchors.verticalCenter: parent.verticalCenter
                 text: button.modelData.icon
                 color: button.accentColor
-                font.family: Theme.fontFamily
-                font.pixelSize: 16
+                font.family: Theme.iconFontFamily
+                font.pixelSize: Theme.iconSize
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
@@ -271,8 +271,8 @@ BarModule {
                 anchors.verticalCenter: parent.verticalCenter
                 text: command.modelData.icon
                 color: Theme.cyan
-                font.family: Theme.fontFamily
-                font.pixelSize: 15
+                font.family: Theme.iconFontFamily
+                font.pixelSize: Theme.iconSize
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
@@ -366,8 +366,8 @@ BarModule {
                     text: powerConfirmation.rebooting ? "󰜉" : "󰐥"
                     color: powerConfirmation.rebooting
                         ? Theme.brightOrange : Theme.red
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 22
+                    font.family: Theme.iconFontFamily
+                    font.pixelSize: Theme.iconSizeLarge
                 }
 
                 Text {

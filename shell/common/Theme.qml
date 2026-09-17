@@ -126,6 +126,8 @@ Singleton {
     readonly property int fontSize: Math.round(12 * barScale)
     readonly property int moduleHeight: Math.round(28 * barScale)
     readonly property int iconSize: Math.round(moduleHeight * 0.61)
+    readonly property int iconSizeSmall: Math.max(10, Math.round(13 * barScale))
+    readonly property int iconSizeLarge: Math.max(iconSize, Math.round(22 * barScale))
     readonly property int effectiveBarHeight: Math.max(barHeight, moduleHeight)
 
     function accentColor(name) {

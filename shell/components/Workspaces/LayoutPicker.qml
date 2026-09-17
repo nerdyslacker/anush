@@ -101,8 +101,8 @@ Popout {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: layoutTile.modelData.glyph
                             color: layoutTile.current ? Theme.selfg : Theme.cyan
-                            font.family: Theme.fontFamily
-                            font.pixelSize: 18
+                            font.family: Theme.iconFontFamily
+                            font.pixelSize: Theme.iconSize
                         }
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter

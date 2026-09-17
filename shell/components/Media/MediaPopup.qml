@@ -21,7 +21,7 @@ Popout {
         color: allowed
             ? (tbMa.containsMouse ? Theme.accent : Qt.alpha(Theme.fg, 0.85))
             : Qt.alpha(Theme.fg, 0.25)
-        font.family: Theme.fontFamily
+        font.family: Theme.iconFontFamily
         Behavior on color { ColorAnimation { duration: 120 } }
         MouseArea {
             id: tbMa
@@ -62,8 +62,8 @@ Popout {
                     visible: art.status !== Image.Ready
                     text: "󰝚"
                     color: Qt.alpha(Theme.fg, 0.3)
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 30
+                    font.family: Theme.iconFontFamily
+                    font.pixelSize: Math.round(30 * Theme.barScale)
                 }
             }
 
@@ -168,19 +168,19 @@ Popout {
 
             TransportButton {
                 text: "󰒮"
-                font.pixelSize: 18
+                font.pixelSize: Theme.iconSize
                 allowed: root.player?.canGoPrevious ?? false
                 onTapped: root.player.previous()
             }
             TransportButton {
                 text: root.media.playing ? "󰏤" : "󰐊"
-                font.pixelSize: 24
+                font.pixelSize: Theme.iconSizeLarge
                 allowed: root.player?.canTogglePlaying ?? false
                 onTapped: root.player.togglePlaying()
             }
             TransportButton {
                 text: "󰒭"
-                font.pixelSize: 18
+                font.pixelSize: Theme.iconSize
                 allowed: root.player?.canGoNext ?? false
                 onTapped: root.player.next()
             }
@@ -204,15 +204,26 @@ Popout {
 
                 Behavior on color { ColorAnimation { duration: 120 } }
 
-                Text {
+                Row {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     anchors.leftMargin: 8
-                    text: (pRow.modelData.playbackState === MprisPlaybackState.Playing
-                           ? "󰐊 " : "󰏤 ") + pRow.modelData.identity
-                    color: pRow.current ? Theme.selfg : Qt.alpha(Theme.fg, 0.8)
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 11
+                    spacing: 6
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: pRow.modelData.playbackState === MprisPlaybackState.Playing
+                            ? "󰐊" : "󰏤"
+                        color: pRow.current ? Theme.selfg : Qt.alpha(Theme.fg, 0.8)
+                        font.family: Theme.iconFontFamily
+                        font.pixelSize: Theme.iconSizeSmall
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: pRow.modelData.identity
+                        color: pRow.current ? Theme.selfg : Qt.alpha(Theme.fg, 0.8)
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize - 1
+                    }
                 }
                 MouseArea {
                     id: pMa

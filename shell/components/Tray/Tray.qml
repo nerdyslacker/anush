@@ -101,8 +101,8 @@ Rectangle {
                     : BarVisibility.barPosition === "left" ? "󰅂"
                     : BarVisibility.barPosition === "right" ? "󰅁" : "󰅀"
                 color: Theme.brightBlack
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
+                font.family: Theme.iconFontFamily
+                font.pixelSize: Theme.iconSizeSmall
             }
 
             onClicked: overflowPopup.visible = !overflowPopup.visible

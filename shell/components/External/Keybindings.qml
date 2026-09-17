@@ -129,7 +129,7 @@ Scope {
                                 Text {
                                     anchors.centerIn: parent
                                     text: "󰅖"; color: Theme.brightBlack
-                                    font.family: Theme.fontFamily; font.pixelSize: 15
+                                    font.family: Theme.iconFontFamily; font.pixelSize: Theme.iconSize
                                 }
                                 MouseArea {
                                     id: closeMouse
@@ -154,7 +154,7 @@ Scope {
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: "󰍉"; color: Theme.accent
-                                    font.family: Theme.fontFamily; font.pixelSize: 16
+                                    font.family: Theme.iconFontFamily; font.pixelSize: Theme.iconSize
                                 }
                                 TextInput {
                                     id: searchInput

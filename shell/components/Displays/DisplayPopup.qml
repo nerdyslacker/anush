@@ -139,7 +139,7 @@ Popout {
         indicator: Text {
             x: combo.width - width - 9; y: (combo.height - height) / 2
             text: "󰅂"; color: Theme.brightBlack
-            font.family: Theme.fontFamily; font.pixelSize: 12
+            font.family: Theme.iconFontFamily; font.pixelSize: Theme.iconSizeSmall
         }
         background: Rectangle {
             radius: Theme.radiusMedium; color: Theme.gray2
@@ -185,7 +185,7 @@ Popout {
                 id: closeSettings
                 width: 28; height: 28; radius: Theme.radiusSmall
                 color: closeSettingsMouse.containsMouse ? Theme.gray4 : Theme.gray2
-                Text { anchors.centerIn: parent; text: "󰅖"; color: Theme.brightBlack; font.family: Theme.fontFamily; font.pixelSize: 15 }
+                Text { anchors.centerIn: parent; text: "󰅖"; color: Theme.brightBlack; font.family: Theme.iconFontFamily; font.pixelSize: Theme.iconSize }
                 MouseArea { id: closeSettingsMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.visible = false }
             }
         }

@@ -51,8 +51,8 @@ Column {
             anchors.verticalCenter: parent.verticalCenter
             text: root.expanded ? "󰅀" : "󰅂"
             color: Theme.accent
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.iconSize
+            font.family: Theme.iconFontFamily
+            font.pixelSize: Theme.iconSizeSmall
         }
 
         MouseArea {
