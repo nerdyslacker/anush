@@ -158,10 +158,11 @@ keeps the owning Bar's workspace filter:
 }
 ```
 
-Right-click the launcher button to choose an icon-theme icon or an image file.
-Image paths inside the anush config directory are stored relative to that
-directory for portability. An unavailable or deleted custom icon falls back to
-the built-in anush glyph; **Reset** clears the saved customization.
+Right-click the launcher button to choose an icon-theme icon, a searchable
+distribution logo from `assets/distro-logos.json`, or an image file. Image
+paths inside the anush config directory are stored relative to that directory
+for portability. An unavailable or deleted custom icon falls back to the
+built-in anush glyph; **Reset** clears the saved customization.
 
 Rounded corners are controlled by the canonical `theme.cornerRadius` value.
 It is watched at runtime along with the rest of the state, so editing the state
@@ -179,22 +180,25 @@ Committing the corner-radius slider also updates `corner_radius` in
 Set `ANUSH_CONFIG_DIR` when anush's writable configuration lives somewhere
 other than its installed `config/` directory.
 
-The layout/appearance popup switches between the built-in Srcery `dark` and
-`light` modes below the accent colors. The selection is stored as `theme.mode`
-and updates the running shell immediately:
+The layout/appearance popup includes selectable palette cards for Srcery,
+Catppuccin, Gruvbox, and Everforest in dark and light variants, plus the
+Windows 95-inspired Classic palette. The selection and its corresponding mode
+are stored as `theme.preset` and `theme.mode` and update the running shell
+immediately:
 
 ```json
 "theme": {
+  "preset": "everforest-light",
   "mode": "light"
 }
 ```
 
 `Theme.qml` exposes mode-independent roles including `background`, `surface`,
 `surfaceVariant`, `foreground`, `foregroundMuted`, `accent`,
-`accentForeground`, `outline`, `hover`, `pressed`, `error`, `warning`,
-`success`, `shadow`, and `overlay`. Built-in and wallpaper-derived palettes
-both populate this API, allowing future palette generators to remain separate
-from component styling.
+`accentForeground`, `activeBackground`, `activeBorder`, `outline`, `hover`,
+`pressed`, `error`, `warning`, `success`, `shadow`, and `overlay`. Built-in and
+wallpaper-derived palettes both populate this API, allowing future palette
+generators to remain separate from component styling.
 
 In light mode, wallpaper-derived palettes lift the wallpaper's dominant
 background hue into a light surface and enforce readable contrast for text and

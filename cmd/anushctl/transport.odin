@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
+import "core:time"
 
 shell_root :: proc() -> string {
     env_buf: [4096]u8
@@ -252,11 +253,8 @@ ipc_call :: proc(target, function: string, call_args: []string) -> int {
 }
 
 restart_shell :: proc() -> int {
-    root := shell_root()
-    if root == "" {
-        fmt.eprintln("anushctl: cannot resolve the Anush shell directory")
-        return EXIT_RUNTIME
-    }
+    root, ready := prepare_shell_root()
+    if !ready { return EXIT_RUNTIME }
     defer delete(root)
     shell_dir, _ := filepath.join([]string{root, "shell"})
     defer delete(shell_dir)
@@ -272,6 +270,14 @@ restart_shell :: proc() -> int {
         return EXIT_NOT_RUNNING
     }
 
+    // The kill command acknowledges the request before the old instance has
+    // necessarily removed its IPC registration. Launching immediately with
+    // --no-duplicate can therefore succeed without creating a replacement.
+    if !wait_for_shell(shell_dir, false, 30) {
+        fmt.eprintln("anushctl: timed out waiting for Anush to stop")
+        return EXIT_RUNTIME
+    }
+
     code, out, err_out, launched := run_process(
         []string{"qs", "-d", "--no-duplicate", "-p", shell_dir})
     defer delete(out)
@@ -281,8 +287,29 @@ restart_shell :: proc() -> int {
         fmt.eprintln("anushctl: failed to relaunch Anush")
         return EXIT_RUNTIME
     }
+    if !wait_for_shell(shell_dir, true, 50) {
+        fmt.eprintln("anushctl: Anush was launched but did not become ready")
+        return EXIT_RUNTIME
+    }
     fmt.println("Anush restarted.")
     return EXIT_OK
+}
+
+shell_is_ready :: proc(shell_dir: string) -> bool {
+    code, out, err_out, started := run_process([]string{
+        "qs", "-p", shell_dir, "ipc", "-n", "call", "anush", "ping",
+    })
+    defer delete(out)
+    defer delete(err_out)
+    return started && code == 0
+}
+
+wait_for_shell :: proc(shell_dir: string, expected: bool, attempts: int) -> bool {
+    for _ in 0..<attempts {
+        if shell_is_ready(shell_dir) == expected { return true }
+        time.sleep(100 * time.Millisecond)
+    }
+    return false
 }
 
 launch_shell :: proc() -> int {

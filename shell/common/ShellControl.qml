@@ -22,6 +22,7 @@ Singleton {
                 protocol: root.protocolVersion,
                 ready: ShellState.ready,
                 themeMode: String(ShellState.state?.theme?.mode ?? "dark"),
+                themePreset: String(ShellState.state?.theme?.preset ?? "srcery-dark"),
                 notepadOpen: NotepadState.opened
             })
         }
@@ -34,7 +35,7 @@ Singleton {
         function themeMode(mode: string): bool {
             if (mode !== "light" && mode !== "dark")
                 return false
-            ShellState.updateSection("theme", { mode: mode })
+            Theme.persistThemeMode(mode)
             return true
         }
     }

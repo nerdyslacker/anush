@@ -16,7 +16,7 @@ Singleton {
 
     function resolveIcon(value) {
         const spec = String(value ?? "").trim()
-        if (spec === "")
+        if (spec === "" || spec.startsWith("glyph:"))
             return ""
         if (spec.startsWith("file://"))
             return spec
@@ -29,6 +29,11 @@ Singleton {
             return "file://" + Theme.configDir + "/" + relative
         }
         return Quickshell.iconPath(spec, "")
+    }
+
+    function displayGlyph(value) {
+        const spec = String(value ?? "").trim()
+        return spec.startsWith("glyph:") ? spec.slice(6) : defaultGlyph
     }
 
     function setIcon(value) {

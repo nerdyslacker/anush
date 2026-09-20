@@ -43,6 +43,7 @@
   "theme": {
     "accent": "orange",
     "defaultAccent": "brightYellow",
+    "preset": "srcery-dark",
     "wallpaperEnabled": false,
     "palette": null,
     "cornerRadius": 0,

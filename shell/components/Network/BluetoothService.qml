@@ -35,6 +35,62 @@ Singleton {
     property var _steps: []
     property var _actionErrors: []
 
+    // BlueZ exposes a freedesktop icon name for most devices. Some devices
+    // omit it or only publish a generic value, so recognizable product names
+    // provide a conservative fallback before returning the Bluetooth glyph.
+    function deviceGlyph(device, fallback) {
+        if (!device)
+            return fallback || "󰂯"
+        const icon = String(device.icon ?? "").toLowerCase()
+        const name = String(device.name || device.deviceName || "").toLowerCase()
+        const identity = icon + " " + name
+
+        if (identity.indexOf("headphone") >= 0
+                || identity.indexOf("headset") >= 0
+                || identity.indexOf("earbud") >= 0
+                || identity.indexOf("airpod") >= 0
+                || identity.indexOf("audio-head") >= 0)
+            return "󰋋"
+        if (identity.indexOf("input-mouse") >= 0
+                || identity.indexOf(" mouse") >= 0)
+            return "󰍽"
+        if (identity.indexOf("keyboard") >= 0)
+            return "󰌌"
+        if (identity.indexOf("gamepad") >= 0
+                || identity.indexOf("gaming") >= 0
+                || identity.indexOf("controller") >= 0
+                || identity.indexOf("joystick") >= 0)
+            return "󰊴"
+        if (identity.indexOf("phone") >= 0
+                || identity.indexOf("smartphone") >= 0)
+            return "󰏲"
+        if (identity.indexOf("tablet") >= 0)
+            return "󰓶"
+        if (identity.indexOf("laptop") >= 0
+                || identity.indexOf("notebook") >= 0)
+            return "󰌢"
+        if (identity.indexOf("computer") >= 0
+                || identity.indexOf("desktop") >= 0)
+            return "󰍹"
+        if (identity.indexOf("television") >= 0
+                || identity.indexOf("display") >= 0
+                || identity.indexOf(" tv") >= 0)
+            return "󰔂"
+        if (identity.indexOf("printer") >= 0)
+            return "󰐪"
+        if (identity.indexOf("camera") >= 0)
+            return "󰄀"
+        if (identity.indexOf("watch") >= 0
+                || identity.indexOf("wearable") >= 0
+                || identity.indexOf("fitness") >= 0)
+            return "󰖉"
+        if (identity.indexOf("speaker") >= 0
+                || identity.indexOf("audio-card") >= 0
+                || identity.indexOf("audio-speaker") >= 0)
+            return "󰓃"
+        return fallback || "󰂯"
+    }
+
     function togglePower() {
         if (!adapter) {
             error = "No Bluetooth adapter available"

@@ -45,8 +45,9 @@ anushctl theme mode dark
 ```
 
 `sidebar toggle` is an alias for the current Notepad sidebar. `reload` uses
-Quickshell's native hard reload and keeps the process instance. `restart` is
-the explicit stop-and-launch operation. `lock` invokes Betterlockscreen and
+Quickshell's native hard reload and keeps the process instance. `restart` waits
+for the old instance to stop, launches its replacement, and verifies that its
+IPC endpoint is ready. `lock` invokes Betterlockscreen and
 returns its exit status. The `daemon` and `restore` commands provide stable
 Skarwm autostart entry points for Anush-owned clipboard and wallpaper behavior.
 

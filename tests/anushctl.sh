@@ -20,6 +20,9 @@ if [ "${FAKE_QS_EXIT:-0}" -ne 0 ]; then
     exit "$FAKE_QS_EXIT"
 fi
 case "$*" in
+    *' kill -n') : >"$FAKE_QS_STATE" ;;
+    *'-d --no-duplicate -p '*) rm -f "$FAKE_QS_STATE" ;;
+    *'call anush ping') [ ! -e "$FAKE_QS_STATE" ] ;;
     *'call anush status') printf '%s\n' '{"name":"anush","protocol":1}' ;;
 esac
 EOF
@@ -42,6 +45,7 @@ chmod +x "$tmp/bin/betterlockscreen" "$tmp/bin/feh" \
 export PATH="$tmp/bin:$PATH"
 export ANUSH_ROOT="$tmp/root"
 export FAKE_QS_LOG="$tmp/qs.log"
+export FAKE_QS_STATE="$tmp/qs.stopped"
 export FAKE_HELPER_LOG="$tmp/helper.log"
 export HOME="$tmp/home"
 export XDG_CONFIG_HOME="$tmp/config"
@@ -66,10 +70,11 @@ assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" \
 $binary reload
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call anush reload'
 $binary restart >/dev/null
-assert_contains "$(tail -n 2 "$FAKE_QS_LOG" | head -n 1)" \
+assert_contains "$(cat "$FAKE_QS_LOG")" \
     "-p $ANUSH_ROOT/shell kill -n"
-assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" \
+assert_contains "$(cat "$FAKE_QS_LOG")" \
     "-d --no-duplicate -p $ANUSH_ROOT/shell"
+assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call anush ping'
 
 $binary launcher toggle
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call launcher toggleCentered'
