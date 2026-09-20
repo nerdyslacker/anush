@@ -67,7 +67,7 @@ BarModule {
     function restartDesktop() {
         menu.visible = false
         const script =
-            "wm=$1; shell_path=$2; notification_id=991049; " +
+            "wm=$1; notification_id=991049; " +
             "if ! \"$wm\" reload >/dev/null 2>&1; then " +
             "notify-send -a skarwm -r $notification_id -u critical " +
             "-i dialog-error 'Desktop reload failed' " +
@@ -76,9 +76,8 @@ BarModule {
             "notify-send -a skarwm -r $notification_id -t 2000 " +
             "-i system-run 'Reloading desktop' " +
             "'skarwm reloaded; restarting Quickshell…'; " +
-            "sleep 0.25; qs kill -n -p \"$shell_path\" >/dev/null 2>&1 || true; " +
-            "sleep 0.4; " +
-            "if qs --no-duplicate -d -p \"$shell_path\" >/dev/null 2>&1; then " +
+            "sleep 0.25; " +
+            "if anushctl restart >/dev/null 2>&1; then " +
             "sleep 0.8; notify-send -a skarwm -r $notification_id -t 2500 " +
             "-i dialog-information 'Desktop reloaded' " +
             "'skarwm and Quickshell restarted successfully.'; " +
@@ -86,8 +85,7 @@ BarModule {
             "-i dialog-error 'Quickshell restart failed' " +
             "'skarwm reloaded, but Quickshell could not be started.'; fi"
         Quickshell.execDetached([
-            "sh", "-c", script, "skarwm-reload", Wm.msgPath,
-            Theme.shellDir
+            "sh", "-c", script, "skarwm-reload", Wm.msgPath
         ])
     }
 
@@ -529,7 +527,7 @@ BarModule {
                 Repeater {
                     model: [
                         { icon: "󰌾", label: "Lock", color: Theme.cyan,
-                          run: () => root.run(["betterlockscreen", "-l"]) },
+                          run: () => root.run(["anushctl", "lock"]) },
                         { icon: "󰤄", label: "Suspend", color: Theme.magenta,
                           run: () => root.run(["loginctl", "suspend"]) },
                         { icon: "󰍃", label: "Logout", color: Theme.yellow,

@@ -61,28 +61,58 @@ Package availability depends on the enabled Void repositories; the Nerd Font may
 
 ## Install and launch
 
-Install into `${XDG_CONFIG_HOME:-$HOME/.config}/anush`:
+Install the program and data under the configured system prefix:
 
 ```sh
 make install
 ```
 
+On the first `anushctl start`, the CLI detects the installed data and seeds
+`${XDG_CONFIG_HOME:-$HOME/.config}/anush` itself. No separate initialization
+script is required. Later starts refresh managed shell code and assets while
+leaving the user-owned `config/` directory unchanged.
+
 Launch it directly with:
 
 ```sh
-qs --no-duplicate -p ~/.config/anush/shell
+anushctl start
 ```
+
+The install also provides the Odin-based `anushctl` management utility. It
+uses Anush's typed Quickshell IPC endpoints for runtime control:
+
+```sh
+anushctl status
+anushctl reload
+anushctl lock
+anushctl launcher toggle
+anushctl notes toggle
+anushctl popup network
+anushctl wallpaper set ~/Pictures/wallpaper.jpg
+anushctl theme mode dark
+```
+
+It can add or remove idempotent shell startup and keybinding blocks without
+overwriting the rest of an existing compositor configuration:
+
+```sh
+anushctl install skarwm
+```
+
+See [`docs/anushctl.md`](docs/anushctl.md) for the full command tree, exit
+codes, config paths, and protocol notes.
 
 There is deliberately no anush session executable or display-manager entry.
 The active WM decides how to start the shell. For skarwm, copy the supplied
 configuration or add the autostart command yourself:
 
 ```sh
-cp ~/.config/anush/config/skarwm/config.rc ~/.config/skarwm/config.rc
+cp "${XDG_CONFIG_HOME:-$HOME/.config}/anush/config/skarwm/config.rc" \
+   "${XDG_CONFIG_HOME:-$HOME/.config}/skarwm/config.rc"
 ```
 
 ```text
-autostart : "qs --no-duplicate -p ~/.config/anush/shell"
+autostart : "anushctl start"
 ```
 
 Future WM integrations belong under `config/<wm>/` and should point to the
@@ -211,12 +241,12 @@ footer persists whether the drawer opens from the left or right. Writes are
 debounced and atomic, and failures or external changes
 never discard the in-memory text. Set `ANUSH_NOTEPAD_DIR` to choose another
 directory. `ANUSH_NOTES_FILE` remains available for a specific legacy file.
-The sidebar can also be controlled through Quickshell IPC:
+The sidebar can also be controlled through `anushctl`:
 
 ```sh
-qs -p ~/.config/anush/shell ipc call notepad toggle
-qs -p ~/.config/anush/shell ipc call notepad newNote
-qs -p ~/.config/anush/shell ipc call notepad save
+anushctl notes toggle
+anushctl notes new
+anushctl notes save
 ```
 
 The supplied skarwm configuration binds `Super+Shift+N` to toggle Notepad.
