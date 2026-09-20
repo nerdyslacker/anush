@@ -196,6 +196,16 @@ PanelWindow {
             height: 34
 
             Text {
+                id: titleIcon
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                text: "󰠮"
+                color: Theme.accent
+                font.family: Theme.iconFontFamily
+                font.pixelSize: Theme.iconSize
+            }
+
+            Text {
                 anchors.left: titleIcon.right
                 anchors.leftMargin: 9
                 anchors.verticalCenter: parent.verticalCenter

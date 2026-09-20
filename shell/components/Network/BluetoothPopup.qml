@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import "../.."
-import Quickshell.Io
 import Quickshell.Bluetooth as QsBluetooth
 
 Popout {
@@ -29,11 +28,14 @@ Popout {
         }
     }
 
-    IpcHandler {
-        target: "bluetooth"
-        function toggle(): void { root.visible = !root.visible }
-        function open(): void { root.visible = true }
-        function close(): void { root.visible = false }
+    Connections {
+        target: ShellActions
+        function onBluetoothRequested(action) {
+            if (!ShellActions.ownsFocusedOutput(root.anchorItem)) return
+            if (action === "toggle") root.visible = !root.visible
+            else if (action === "open") root.visible = true
+            else if (action === "close") root.visible = false
+        }
     }
 
     component SmallButton: Rectangle {

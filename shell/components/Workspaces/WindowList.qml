@@ -92,6 +92,16 @@ Rectangle {
                 anchors.centerIn: parent
                 implicitSize: Theme.iconSize
                 source: iconButton.modelData.iconSource
+                visible: source.toString() !== ""
+            }
+
+            Text {
+                anchors.centerIn: parent
+                visible: iconButton.modelData.iconSource === ""
+                text: "󰏖"
+                color: iconButton.modelData.active ? Theme.accent : Theme.fg
+                font.family: Theme.iconFontFamily
+                font.pixelSize: Theme.iconSize
             }
 
             Rectangle {

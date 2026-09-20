@@ -31,6 +31,18 @@ Popout {
                 anchors.verticalCenter: parent.verticalCenter
                 implicitSize: 20
                 source: root.group ? root.group.iconSource : ""
+                visible: source.toString() !== ""
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 20
+                visible: !root.group || root.group.iconSource === ""
+                horizontalAlignment: Text.AlignHCenter
+                text: "󰏖"
+                color: Theme.accent
+                font.family: Theme.iconFontFamily
+                font.pixelSize: Theme.iconSize
             }
 
             Text {
@@ -77,11 +89,28 @@ Popout {
                     anchors.verticalCenter: parent.verticalCenter
                     implicitSize: Theme.iconSize
                     source: windowRow.modelData.iconSource
+                    visible: source.toString() !== ""
+                    opacity: windowRow.modelData.minimized ? 0.55 : 1
+                }
+
+                Text {
+                    id: rowFallbackIcon
+                    anchors.left: parent.left
+                    anchors.leftMargin: 8
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Theme.iconSize
+                    visible: windowRow.modelData.iconSource === ""
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "󰏖"
+                    color: windowRow.modelData.active ? Theme.accent : Theme.fg
+                    font.family: Theme.iconFontFamily
+                    font.pixelSize: Theme.iconSize
                     opacity: windowRow.modelData.minimized ? 0.55 : 1
                 }
 
                 Column {
-                    anchors.left: rowIcon.right
+                    anchors.left: windowRow.modelData.iconSource === ""
+                        ? rowFallbackIcon.right : rowIcon.right
                     anchors.leftMargin: 9
                     anchors.right: parent.right
                     anchors.rightMargin: 8

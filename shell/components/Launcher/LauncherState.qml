@@ -28,7 +28,9 @@ Singleton {
             const relative = spec.replace(/^\.\//, "")
             return "file://" + Theme.configDir + "/" + relative
         }
-        return Quickshell.iconPath(spec, "")
+        // Ask the provider to check first. Missing names then resolve to an
+        // empty URL instead of producing an image-provider warning.
+        return Quickshell.iconPath(spec, true)
     }
 
     function displayGlyph(value) {

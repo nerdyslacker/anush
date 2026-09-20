@@ -1,7 +1,6 @@
 import QtQuick
 import "../.."
 
-import Quickshell.Io
 // Three-day forecast under the weather indicator — the calendar idiom:
 // click the number, get the picture. Data comes from the same wttr.in
 // fetch the bar module already makes; no extra requests.
@@ -20,9 +19,13 @@ Popout {
     cardHeight: 168
 
     // Scriptable with: qs -p <quickshell-dir> ipc call weather toggle
-    IpcHandler {
-        target: "weather"
-        function toggle(): void { root.visible = !root.visible }
+    Connections {
+        target: ShellActions
+        function onWeatherRequested(action) {
+            if (action === "toggle"
+                    && ShellActions.ownsFocusedOutput(root.anchorItem))
+                root.visible = !root.visible
+        }
     }
 
     Text {

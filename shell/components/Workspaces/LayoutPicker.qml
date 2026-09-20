@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import "../.."
-import Quickshell.Io
 
 // Layout and appearance controls adapted to skarwm. Layout selection applies
 // to the focused window/column; desktop gap and all visual choices persist.
@@ -18,9 +17,13 @@ Popout {
     cardWidth: 360
     cardHeight: content.implicitHeight + 2 * cardPadding
 
-    IpcHandler {
-        target: "layouts"
-        function toggle(): void { root.visible = !root.visible }
+    Connections {
+        target: ShellActions
+        function onLayoutsRequested(action) {
+            if (action === "toggle"
+                    && ShellActions.ownsFocusedOutput(root.anchorItem))
+                root.visible = !root.visible
+        }
     }
 
     component SectionLabel: Text {
