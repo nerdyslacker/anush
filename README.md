@@ -35,6 +35,7 @@ Optional desktop integrations:
 - renCal for calendar events;
 - NetworkManager, its command-line/editor tools, BlueZ, Blueman, `pactl`, and
   Pavucontrol for network, Bluetooth, and audio controls;
+- Easy Effects for optional audio-effect bypass and preset controls;
 - brightnessctl, powerprofilesctl, redshift, xset, and xrandr for hardware and
   power controls;
 - curl, xcolor, xdg-open, flameshot, xinput, notify-send, and xterm for individual
@@ -163,6 +164,12 @@ distribution logo from `assets/distro-logos.json`, or an image file. Image
 paths inside the anush config directory are stored relative to that directory
 for portability. An unavailable or deleted custom icon falls back to the
 built-in anush glyph; **Reset** clears the saved customization.
+
+The audio widget opens the native mixer with a left click, toggles output mute
+with a middle click, and opens Easy Effects controls with a right click. When
+Easy Effects is installed, that popup controls global bypass, selects input and
+output presets, refreshes their state, or opens the full application. The
+normal mixer remains available when Easy Effects is absent.
 
 Rounded corners are controlled by the canonical `theme.cornerRadius` value.
 It is watched at runtime along with the rest of the state, so editing the state

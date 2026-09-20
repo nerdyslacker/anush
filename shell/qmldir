@@ -15,6 +15,7 @@ singleton TrayState components/Tray/TrayState.qml
 singleton DisplayConfigurationService components/Displays/DisplayConfigurationService.qml
 singleton NetworkService components/Network/NetworkService.qml
 singleton BluetoothService components/Network/BluetoothService.qml
+singleton EasyEffectsService components/Audio/EasyEffectsService.qml
 singleton NotepadState components/Notepad/NotepadState.qml
 Bar components/Bar/Bar.qml
 BarModule components/Bar/BarModule.qml
@@ -22,6 +23,7 @@ BarSettingsPopup components/Bar/BarSettingsPopup.qml
 Volume components/Audio/Volume.qml
 MicMute components/Audio/MicMute.qml
 AudioPopup components/Audio/AudioPopup.qml
+EasyEffectsPopup components/Audio/EasyEffectsPopup.qml
 AudioSlider components/Audio/AudioSlider.qml
 AudioDeviceSelector components/Audio/AudioDeviceSelector.qml
 Battery components/Battery/Battery.qml
