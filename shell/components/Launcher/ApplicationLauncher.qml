@@ -213,6 +213,8 @@ Popout {
                 id: appRow
                 required property var modelData
                 required property int index
+                readonly property string iconSource: String(modelData.icon ?? "") !== ""
+                    ? Quickshell.iconPath(String(modelData.icon), true) : ""
 
                 width: appList.width
                 height: 52
@@ -232,8 +234,20 @@ Popout {
                     IconImage {
                         anchors.verticalCenter: parent.verticalCenter
                         implicitSize: 32
-                        source: Quickshell.iconPath(appRow.modelData.icon,
-                            "application-x-executable")
+                        source: appRow.iconSource
+                        visible: source.toString() !== ""
+                    }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 32
+                        visible: appRow.iconSource === ""
+                        horizontalAlignment: Text.AlignHCenter
+                        text: "󰏖"
+                        color: appRow.index === appList.currentIndex
+                            ? Theme.selfg : Theme.accent
+                        font.family: Theme.iconFontFamily
+                        font.pixelSize: Theme.iconSize
                     }
 
                     Column {

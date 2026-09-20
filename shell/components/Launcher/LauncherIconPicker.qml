@@ -10,12 +10,12 @@ Popout {
     id: root
 
     readonly property var presets: [
-        { name: "start-here", label: "Start" },
-        { name: "view-app-grid-symbolic", label: "Grid" },
-        { name: "applications-system", label: "Apps" },
-        { name: "system-search", label: "Search" },
-        { name: "distributor-logo", label: "Distro" },
-        { name: "application-x-executable", label: "Generic" }
+        { spec: "glyph:󰀻", glyph: "󰀻", label: "Start" },
+        { spec: "glyph:󰕰", glyph: "󰕰", label: "Grid" },
+        { spec: "glyph:󰀻", glyph: "󰀻", label: "Apps" },
+        { spec: "glyph:󰍉", glyph: "󰍉", label: "Search" },
+        { spec: "glyph:󰌽", glyph: "󰌽", label: "Distro" },
+        { spec: "glyph:󰏖", glyph: "󰏖", label: "Generic" }
     ]
     readonly property string resolvedDraft: LauncherState.resolveIcon(iconInput.text)
     readonly property bool glyphDraft: iconInput.text.trim().startsWith("glyph:")
@@ -195,7 +195,7 @@ Popout {
         }
 
         Text {
-            text: "Icon theme"
+            text: "Built-in"
             color: Theme.brightBlack
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 1
@@ -213,31 +213,31 @@ Popout {
                 Rectangle {
                     id: preset
                     required property var modelData
-                    readonly property string sourcePath:
-                        LauncherState.resolveIcon(modelData.name)
                     width: (presetGrid.width - presetGrid.spacing * 2) / 3
                     height: 45
                     radius: Theme.radiusSmall
-                    color: iconInput.text === modelData.name
+                    color: iconInput.text === modelData.spec
                         ? Theme.activeBackground
                         : presetMouse.containsMouse ? Theme.gray3 : Theme.gray2
                     border.width: 1
-                    border.color: iconInput.text === modelData.name
+                    border.color: iconInput.text === modelData.spec
                         ? Theme.activeBorder : Theme.gray5
 
                     Row {
                         anchors.centerIn: parent
                         spacing: 7
-                        Image {
-                            width: 20
-                            height: 20
-                            source: preset.sourcePath
-                            fillMode: Image.PreserveAspectFit
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: preset.modelData.glyph
+                            color: iconInput.text === preset.modelData.spec
+                                ? Theme.selfg : Theme.accent
+                            font.family: Theme.iconFontFamily
+                            font.pixelSize: Theme.iconSize
                         }
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             text: preset.modelData.label
-                            color: iconInput.text === preset.modelData.name
+                            color: iconInput.text === preset.modelData.spec
                                 ? Theme.selfg : Theme.fg
                             font.family: Theme.fontFamily
                             font.pixelSize: Math.max(9, Theme.fontSize - 1)
@@ -248,7 +248,7 @@ Popout {
                         id: presetMouse
                         anchors.fill: parent
                         hoverEnabled: true
-                        onClicked: iconInput.text = preset.modelData.name
+                        onClicked: iconInput.text = preset.modelData.spec
                     }
                 }
             }

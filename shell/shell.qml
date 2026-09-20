@@ -6,6 +6,7 @@ ShellRoot {
     // Keep global actions alive even when their bar buttons are disabled.
     Component.onCompleted: {
         ShellControl.protocolVersion
+        ShellActions.protocolVersion
         NotepadState.initialize()
         ColorPickerState.initialize()
     }

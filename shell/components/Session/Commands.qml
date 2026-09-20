@@ -421,9 +421,13 @@ BarModule {
         cardWidth: 330
         cardHeight: content.implicitHeight + 2 * cardPadding
 
-        IpcHandler {
-            target: "commands"
-            function toggle(): void { menu.visible = !menu.visible }
+        Connections {
+            target: ShellActions
+            function onCommandsRequested(action) {
+                if (action === "toggle"
+                        && ShellActions.ownsFocusedOutput(root))
+                    menu.visible = !menu.visible
+            }
         }
 
         Column {

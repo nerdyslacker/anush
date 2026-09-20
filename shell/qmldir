@@ -4,6 +4,7 @@ singleton Wm common/Wm.qml
 singleton Sys common/Sys.qml
 singleton PopupCoordinator common/PopupCoordinator.qml
 singleton ShellControl common/ShellControl.qml
+singleton ShellActions common/ShellActions.qml
 singleton KeyboardState components/Keyboard/KeyboardState.qml
 singleton ClipboardState components/Clipboard/ClipboardState.qml
 singleton ColorPickerState components/ColorPicker/ColorPickerState.qml

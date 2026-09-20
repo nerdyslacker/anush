@@ -9,7 +9,6 @@ import Quickshell
 Singleton {
     id: root
 
-    readonly property string fallbackIcon: Quickshell.iconPath("application-x-executable", "")
     property var entries: []
     property var iconCache: ({})
     property bool showWindowsFromAllMonitors: false
@@ -40,7 +39,8 @@ Singleton {
         const info = {
             desktopFileId: desktop ? String(desktop.id ?? "") : "",
             appName: desktop ? String(desktop.name ?? "") : "",
-            iconSource: desktop && String(desktop.icon ?? "") !== "" ? Quickshell.iconPath(String(desktop.icon), "application-x-executable") : fallbackIcon
+            iconSource: desktop && String(desktop.icon ?? "") !== ""
+                ? Quickshell.iconPath(String(desktop.icon), true) : ""
         };
         const next = ({});
         for (const cachedKey in iconCache)

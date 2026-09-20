@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import "../.."
 import QtQuick.Controls as Controls
-import Quickshell.Io
 import Quickshell.Networking as QsNetwork
 
 // Dedicated NetworkManager quick controls. Device and access-point state is
@@ -35,11 +34,14 @@ Popout {
         }
     }
 
-    IpcHandler {
-        target: "network"
-        function toggle(): void { root.visible = !root.visible }
-        function open(): void { root.visible = true }
-        function close(): void { root.visible = false }
+    Connections {
+        target: ShellActions
+        function onNetworkRequested(action) {
+            if (!ShellActions.ownsFocusedOutput(root.anchorItem)) return
+            if (action === "toggle") root.visible = !root.visible
+            else if (action === "open") root.visible = true
+            else if (action === "close") root.visible = false
+        }
     }
 
     component SmallButton: Rectangle {

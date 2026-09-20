@@ -50,11 +50,14 @@ Popout {
         visible = false
     }
 
-    IpcHandler {
-        target: "wallpapers"
-        function toggle(): void { root.toggle() }
-        function random(): void { root.applyRandom() }
-        function set(path: string): void { root.apply(path) }
+    Connections {
+        target: ShellActions
+        function onWallpaperRequested(action, path) {
+            if (!ShellActions.ownsFocusedOutput(root.anchorItem)) return
+            if (action === "toggle") root.toggle()
+            else if (action === "random") root.applyRandom()
+            else if (action === "set") root.apply(path)
+        }
     }
 
     Process {
