@@ -16,6 +16,7 @@ singleton DisplayConfigurationService components/Displays/DisplayConfigurationSe
 singleton NetworkService components/Network/NetworkService.qml
 singleton BluetoothService components/Network/BluetoothService.qml
 singleton EasyEffectsService components/Audio/EasyEffectsService.qml
+singleton TmuxService components/Tmux/TmuxService.qml
 singleton NotepadState components/Notepad/NotepadState.qml
 Bar components/Bar/Bar.qml
 BarModule components/Bar/BarModule.qml
@@ -24,6 +25,8 @@ Volume components/Audio/Volume.qml
 MicMute components/Audio/MicMute.qml
 AudioPopup components/Audio/AudioPopup.qml
 EasyEffectsPopup components/Audio/EasyEffectsPopup.qml
+Tmux components/Tmux/Tmux.qml
+TmuxPopup components/Tmux/TmuxPopup.qml
 AudioSlider components/Audio/AudioSlider.qml
 AudioDeviceSelector components/Audio/AudioDeviceSelector.qml
 Battery components/Battery/Battery.qml

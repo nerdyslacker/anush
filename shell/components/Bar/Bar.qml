@@ -36,6 +36,7 @@ PanelWindow {
             battery: Qt.resolvedUrl("../Battery/Battery.qml"),
             brightness: Qt.resolvedUrl("../Battery/Brightness.qml"),
             volume: Qt.resolvedUrl("../Audio/Volume.qml"),
+            tmux: Qt.resolvedUrl("../Tmux/Tmux.qml"),
             micIndicator: Qt.resolvedUrl("../Audio/MicMute.qml"),
             network: Qt.resolvedUrl("../Network/Network.qml"),
             bluetooth: Qt.resolvedUrl("../Network/Bluetooth.qml"),

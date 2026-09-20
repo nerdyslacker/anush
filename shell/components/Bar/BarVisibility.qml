@@ -81,6 +81,12 @@ Singleton {
             defaultCluster: "right"
         },
         {
+            key: "tmux",
+            label: "tmux sessions",
+            icon: "",
+            defaultCluster: "right"
+        },
+        {
             key: "micIndicator",
             label: "Muted mic",
             icon: "󰍭",
@@ -164,7 +170,7 @@ Singleton {
     readonly property var defaultClusters: ({
             left: ["launcher", "tags", "layout"],
             center: ["windowList", "title", "scratchpads"],
-            right: ["media", "weather", "metrics", "battery", "brightness", "volume", "micIndicator", "network", "bluetooth", "keyboard", "clipboard", "colorPicker", "notepad", "tray", "notifications", "clock", "capsLock", "screenshot", "commands"]
+            right: ["media", "weather", "metrics", "battery", "brightness", "volume", "tmux", "micIndicator", "network", "bluetooth", "keyboard", "clipboard", "colorPicker", "notepad", "tray", "notifications", "clock", "capsLock", "screenshot", "commands"]
         })
     readonly property var defaults: ({
             launcher: true,
@@ -179,6 +185,7 @@ Singleton {
             battery: true,
             brightness: true,
             volume: true,
+            tmux: true,
             micIndicator: true,
             network: true,
             bluetooth: true,

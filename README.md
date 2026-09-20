@@ -36,6 +36,7 @@ Optional desktop integrations:
 - NetworkManager, its command-line/editor tools, BlueZ, Blueman, `pactl`, and
   Pavucontrol for network, Bluetooth, and audio controls;
 - Easy Effects for optional audio-effect bypass and preset controls;
+- tmux for the optional bar session manager;
 - brightnessctl, powerprofilesctl, redshift, xset, and xrandr for hardware and
   power controls;
 - curl, xcolor, xdg-open, flameshot, xinput, notify-send, and xterm for individual
@@ -170,6 +171,11 @@ with a middle click, and opens Easy Effects controls with a right click. When
 Easy Effects is installed, that popup controls global bypass, selects input and
 output presets, refreshes their state, or opens the full application. The
 normal mixer remains available when Easy Effects is absent.
+
+The optional tmux bar widget shows the number of running sessions. Its popup
+can create and attach sessions in `$TERMINAL`, Kitty, Foot, Alacritty, WezTerm,
+or XTerm; it also renames sessions and uses a two-click confirmation before
+killing one. Middle-clicking the widget refreshes its session count.
 
 Rounded corners are controlled by the canonical `theme.cornerRadius` value.
 It is watched at runtime along with the rest of the state, so editing the state
