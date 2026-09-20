@@ -35,6 +35,8 @@ Optional desktop integrations:
 - renCal for calendar events;
 - NetworkManager, its command-line/editor tools, BlueZ, Blueman, `pactl`, and
   Pavucontrol for network, Bluetooth, and audio controls;
+- Easy Effects for optional audio-effect bypass and preset controls;
+- tmux for the optional bar session manager;
 - brightnessctl, powerprofilesctl, redshift, xset, and xrandr for hardware and
   power controls;
 - curl, xcolor, xdg-open, flameshot, xinput, notify-send, and xterm for individual
@@ -61,28 +63,58 @@ Package availability depends on the enabled Void repositories; the Nerd Font may
 
 ## Install and launch
 
-Install into `${XDG_CONFIG_HOME:-$HOME/.config}/anush`:
+Install the program and data under the configured system prefix:
 
 ```sh
 make install
 ```
 
+On the first `anushctl start`, the CLI detects the installed data and seeds
+`${XDG_CONFIG_HOME:-$HOME/.config}/anush` itself. No separate initialization
+script is required. Later starts refresh managed shell code and assets while
+leaving the user-owned `config/` directory unchanged.
+
 Launch it directly with:
 
 ```sh
-qs --no-duplicate -p ~/.config/anush/shell
+anushctl start
 ```
+
+The install also provides the Odin-based `anushctl` management utility. It
+uses Anush's typed Quickshell IPC endpoints for runtime control:
+
+```sh
+anushctl status
+anushctl reload
+anushctl lock
+anushctl launcher toggle
+anushctl notes toggle
+anushctl popup network
+anushctl wallpaper set ~/Pictures/wallpaper.jpg
+anushctl theme mode dark
+```
+
+It can add or remove idempotent shell startup and keybinding blocks without
+overwriting the rest of an existing compositor configuration:
+
+```sh
+anushctl install skarwm
+```
+
+See [`docs/anushctl.md`](docs/anushctl.md) for the full command tree, exit
+codes, config paths, and protocol notes.
 
 There is deliberately no anush session executable or display-manager entry.
 The active WM decides how to start the shell. For skarwm, copy the supplied
 configuration or add the autostart command yourself:
 
 ```sh
-cp ~/.config/anush/config/skarwm/config.rc ~/.config/skarwm/config.rc
+cp "${XDG_CONFIG_HOME:-$HOME/.config}/anush/config/skarwm/config.rc" \
+   "${XDG_CONFIG_HOME:-$HOME/.config}/skarwm/config.rc"
 ```
 
 ```text
-autostart : "qs --no-duplicate -p ~/.config/anush/shell"
+autostart : "anushctl start"
 ```
 
 Future WM integrations belong under `config/<wm>/` and should point to the
@@ -128,10 +160,22 @@ keeps the owning Bar's workspace filter:
 }
 ```
 
-Right-click the launcher button to choose an icon-theme icon or an image file.
-Image paths inside the anush config directory are stored relative to that
-directory for portability. An unavailable or deleted custom icon falls back to
-the built-in anush glyph; **Reset** clears the saved customization.
+Right-click the launcher button to choose an icon-theme icon, a searchable
+distribution logo from `assets/distro-logos.json`, or an image file. Image
+paths inside the anush config directory are stored relative to that directory
+for portability. An unavailable or deleted custom icon falls back to the
+built-in anush glyph; **Reset** clears the saved customization.
+
+The audio widget opens the native mixer with a left click, toggles output mute
+with a middle click, and opens Easy Effects controls with a right click. When
+Easy Effects is installed, that popup controls global bypass, selects input and
+output presets, refreshes their state, or opens the full application. The
+normal mixer remains available when Easy Effects is absent.
+
+The optional tmux bar widget shows the number of running sessions. Its popup
+can create and attach sessions in `$TERMINAL`, Kitty, Foot, Alacritty, WezTerm,
+or XTerm; it also renames sessions and uses a two-click confirmation before
+killing one. Middle-clicking the widget refreshes its session count.
 
 Rounded corners are controlled by the canonical `theme.cornerRadius` value.
 It is watched at runtime along with the rest of the state, so editing the state
@@ -149,22 +193,25 @@ Committing the corner-radius slider also updates `corner_radius` in
 Set `ANUSH_CONFIG_DIR` when anush's writable configuration lives somewhere
 other than its installed `config/` directory.
 
-The layout/appearance popup switches between the built-in Srcery `dark` and
-`light` modes below the accent colors. The selection is stored as `theme.mode`
-and updates the running shell immediately:
+The layout/appearance popup includes selectable palette cards for Srcery,
+Catppuccin, Gruvbox, and Everforest in dark and light variants, plus the
+Windows 95-inspired Classic palette. The selection and its corresponding mode
+are stored as `theme.preset` and `theme.mode` and update the running shell
+immediately:
 
 ```json
 "theme": {
+  "preset": "everforest-light",
   "mode": "light"
 }
 ```
 
 `Theme.qml` exposes mode-independent roles including `background`, `surface`,
 `surfaceVariant`, `foreground`, `foregroundMuted`, `accent`,
-`accentForeground`, `outline`, `hover`, `pressed`, `error`, `warning`,
-`success`, `shadow`, and `overlay`. Built-in and wallpaper-derived palettes
-both populate this API, allowing future palette generators to remain separate
-from component styling.
+`accentForeground`, `activeBackground`, `activeBorder`, `outline`, `hover`,
+`pressed`, `error`, `warning`, `success`, `shadow`, and `overlay`. Built-in and
+wallpaper-derived palettes both populate this API, allowing future palette
+generators to remain separate from component styling.
 
 In light mode, wallpaper-derived palettes lift the wallpaper's dominant
 background hue into a light surface and enforce readable contrast for text and
@@ -211,12 +258,12 @@ footer persists whether the drawer opens from the left or right. Writes are
 debounced and atomic, and failures or external changes
 never discard the in-memory text. Set `ANUSH_NOTEPAD_DIR` to choose another
 directory. `ANUSH_NOTES_FILE` remains available for a specific legacy file.
-The sidebar can also be controlled through Quickshell IPC:
+The sidebar can also be controlled through `anushctl`:
 
 ```sh
-qs -p ~/.config/anush/shell ipc call notepad toggle
-qs -p ~/.config/anush/shell ipc call notepad newNote
-qs -p ~/.config/anush/shell ipc call notepad save
+anushctl notes toggle
+anushctl notes new
+anushctl notes save
 ```
 
 The supplied skarwm configuration binds `Super+Shift+N` to toggle Notepad.

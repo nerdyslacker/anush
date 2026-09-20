@@ -3,6 +3,7 @@ singleton Theme common/Theme.qml
 singleton Wm common/Wm.qml
 singleton Sys common/Sys.qml
 singleton PopupCoordinator common/PopupCoordinator.qml
+singleton ShellControl common/ShellControl.qml
 singleton KeyboardState components/Keyboard/KeyboardState.qml
 singleton ClipboardState components/Clipboard/ClipboardState.qml
 singleton ColorPickerState components/ColorPicker/ColorPickerState.qml
@@ -14,6 +15,8 @@ singleton TrayState components/Tray/TrayState.qml
 singleton DisplayConfigurationService components/Displays/DisplayConfigurationService.qml
 singleton NetworkService components/Network/NetworkService.qml
 singleton BluetoothService components/Network/BluetoothService.qml
+singleton EasyEffectsService components/Audio/EasyEffectsService.qml
+singleton TmuxService components/Tmux/TmuxService.qml
 singleton NotepadState components/Notepad/NotepadState.qml
 Bar components/Bar/Bar.qml
 BarModule components/Bar/BarModule.qml
@@ -21,6 +24,9 @@ BarSettingsPopup components/Bar/BarSettingsPopup.qml
 Volume components/Audio/Volume.qml
 MicMute components/Audio/MicMute.qml
 AudioPopup components/Audio/AudioPopup.qml
+EasyEffectsPopup components/Audio/EasyEffectsPopup.qml
+Tmux components/Tmux/Tmux.qml
+TmuxPopup components/Tmux/TmuxPopup.qml
 AudioSlider components/Audio/AudioSlider.qml
 AudioDeviceSelector components/Audio/AudioDeviceSelector.qml
 Battery components/Battery/Battery.qml

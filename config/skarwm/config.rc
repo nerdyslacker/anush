@@ -37,12 +37,19 @@ focus_follows_mouse : true
 
 # bind: run a shell command. Combo = modifier tokens + one key.
 bind : mod + Return : "kitty"
-bind : mod + a : "qs ipc -n -p ${ANUSH_ROOT:-$HOME/.config/anush}/shell call launcher toggleCentered"
-bind : mod + v : "qs ipc -n -p ${ANUSH_ROOT:-$HOME/.config/anush}/shell call clipboard toggle"
+# >>> Anush shell (managed by anushctl) >>>
+bind : mod + a : "anushctl launcher toggle"
+bind : mod + v : "anushctl clipboard toggle"
 # Keep the generated Shift variant from arming tab placement for this
 # non-window IPC command.
-bind : mod + Shift + v : "qs ipc -n -p ${ANUSH_ROOT:-$HOME/.config/anush}/shell call clipboard toggle"
-bind : mod + Shift + n : "qs ipc -n -p ${ANUSH_ROOT:-$HOME/.config/anush}/shell call notepad toggle"
+bind : mod + Shift + v : "anushctl clipboard toggle"
+bind : mod + Shift + n : "anushctl notes toggle"
+autostart : "anushctl start"
+autostart : "anushctl wallpaper restore"
+autostart : "anushctl clipboard daemon"
+autostart : "xss-lock -- anushctl lock"
+# <<< Anush shell (managed by anushctl) <<<
+
 call : Alt + Tab : overview_next
 call : Alt + Shift + Tab : overview_prev
 # Every spawn binding automatically gets an otherwise-unbound Shift variant.
@@ -50,18 +57,11 @@ call : Alt + Shift + Tab : overview_prev
 # puts its next window in that tab group. An explicit shifted binding overrides
 # this generated behavior.
 
-autostart : "anush-init"
 # Start the Anush desktop environment components.
 # autostart: run once at startup (not re-run on reload).
 autostart : "lxqt-policykit-agent"
-# Restore the last Feh selection; seed it with the bundled wallpaper on the
-# first session, when Feh has not created ~/.fehbg yet.
-autostart : "if [ -f ~/.fehbg ]; then sh ~/.fehbg; else feh --bg-fill ${ANUSH_CONFIG_DIR:-$HOME/.config/anush/config}/wallpaper/hadrut_srcery.jpeg; fi"
-autostart : "dunst -config ${ANUSH_CONFIG_DIR:-$HOME/.config/anush/config}/dunst/dunstrc"
-autostart : "picom --config ${ANUSH_CONFIG_DIR:-$HOME/.config/anush/config}/picom/picom.conf ${ANUSH_PICOM_ARGS:---no-use-damage} -b"
-autostart : "${ANUSH_ROOT:-$HOME/.config/anush}/shell/scripts/clipboard-history daemon"
-autostart : "qs --no-duplicate -p ${ANUSH_ROOT:-$HOME/.config/anush}/shell"
-autostart : "xss-lock -- betterlockscreen -l"
+autostart : "dunst -config ${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/anush/config}/dunst/dunstrc"
+autostart : "picom --config ${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/anush/config}/picom/picom.conf ${ANUSH_PICOM_ARGS:---no-use-damage} -b"
 autostart : "udiskie --smart-tray"
 
 # ---- key actions (call) ---------------------------------------------------------

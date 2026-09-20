@@ -2,8 +2,8 @@ import QtQuick
 import "../.."
 import Quickshell.Services.Pipewire
 
-// Default sink volume. Scroll to adjust, left click for the mixer popup, and
-// right click to mute.
+// Default sink volume. Scroll to adjust, left click opens the mixer, middle
+// click toggles mute, and right click opens Easy Effects controls.
 BarModule {
     id: root
 
@@ -34,10 +34,15 @@ BarModule {
     label: flash ? (muted ? "--" : volume + "%") : ""
 
     onClicked: mouse => {
-        if (mouse.button === Qt.RightButton && audio)
+        if (mouse.button === Qt.MiddleButton && audio) {
             audio.muted = !audio.muted
-        else if (mouse.button === Qt.LeftButton)
+        } else if (mouse.button === Qt.LeftButton) {
+            effectsPopup.visible = false
             popup.visible = !popup.visible
+        } else if (mouse.button === Qt.RightButton) {
+            popup.visible = false
+            effectsPopup.visible = !effectsPopup.visible
+        }
     }
     onScrolled: dir => {
         if (audio) {
@@ -48,6 +53,11 @@ BarModule {
 
     AudioPopup {
         id: popup
+        anchorItem: root
+    }
+
+    EasyEffectsPopup {
+        id: effectsPopup
         anchorItem: root
     }
 }

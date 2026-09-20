@@ -3,9 +3,8 @@ import QtQuick
 import ".."
 import Quickshell
 
-// Canonical Srcery palette from SRCERY.md. Semantic colors used by the
-// modules below are aliases of this palette, so every component stays in
-// the same theme without depending on another desktop configuration.
+// Built-in palettes populate one semantic color API, so every component
+// stays in the same theme without depending on another desktop configuration.
 Singleton {
     id: root
 
@@ -22,6 +21,7 @@ Singleton {
     property real barBackgroundOpacity: 1.0
     property bool wallpaperThemeEnabled: false
     property string defaultAccentName: "brightYellow"
+    property string presetId: "srcery-dark"
     property string mode: "dark"
     readonly property bool light: mode === "light"
     // A single persisted appearance value feeds every non-circular surface.
@@ -106,14 +106,48 @@ Singleton {
         "brightBlue", "brightMagenta", "brightCyan"
     ]
     property string accentName: "orange"
-    readonly property color accent: accentColor(accentName)
-    readonly property color selbg: accent
-    readonly property color accentForeground: light ? "#FCE8C3" : hardBlack
+    // Classic deliberately separates its selected fill from its hard active
+    // border, matching the raised controls of classic desktop interfaces.
+    readonly property color accent: !wallpaperThemeEnabled && presetId === "classic"
+        ? "#546364" : accentColor(accentName)
+    readonly property color activeBackground: !wallpaperThemeEnabled
+            && presetId === "classic"
+        ? "#546364" : accent
+    readonly property color activeBorder: !wallpaperThemeEnabled
+            && presetId === "classic"
+        ? "#152526" : accent
+    readonly property color selbg: activeBackground
+    readonly property color accentForeground: !wallpaperThemeEnabled
+            && presetId === "classic"
+        ? "#DFDCDB" : light ? "#FCE8C3" : hardBlack
     readonly property color selfg: accentForeground
+
+    readonly property var themePresets: [
+        { id: "srcery-dark", name: "Srcery Dark", mode: "dark",
+            colors: ["#121110", "#262522", "#FF5F00"] },
+        { id: "srcery-light", name: "Srcery Light", mode: "light",
+            colors: ["#FCE8C3", "#EED7AE", "#B23F00"] },
+        { id: "catppuccin-dark", name: "Catppuccin Mocha", mode: "dark",
+            colors: ["#1E1E2E", "#313244", "#CBA6F7"] },
+        { id: "catppuccin-light", name: "Catppuccin Latte", mode: "light",
+            colors: ["#EFF1F5", "#CCD0DA", "#8839EF"] },
+        { id: "gruvbox-dark", name: "Gruvbox Dark", mode: "dark",
+            colors: ["#282828", "#3C3836", "#D79921"] },
+        { id: "gruvbox-light", name: "Gruvbox Light", mode: "light",
+            colors: ["#FBF1C7", "#EBDBB2", "#B57614"] },
+        { id: "everforest-dark", name: "Everforest Dark", mode: "dark",
+            colors: ["#2D353B", "#3D484D", "#A7C080"] },
+        { id: "everforest-light", name: "Everforest Light", mode: "light",
+            colors: ["#FDF6E3", "#EFEBD4", "#8DA101"] },
+        { id: "classic", name: "Classic", mode: "light",
+            colors: ["#C9C8C6", "#DFDCDB", "#546364"] }
+    ]
 
     // Bar controls stay visually identical to their appearance on a fully
     // opaque bar even when the panel background itself is translucent.
     function barSurface(opacity) {
+        if (!wallpaperThemeEnabled && presetId === "classic")
+            return opacity >= 0.1 ? root.surfaceVariant : root.surface
         return Qt.tint(root.background, Qt.alpha(root.foreground, opacity))
     }
 
@@ -162,7 +196,8 @@ Singleton {
     }
 
     function applyExternalAccent(name) {
-        const selected = accentColor(name)
+        const selected = !wallpaperThemeEnabled && presetId === "classic"
+            ? accent : accentColor(name)
         Quickshell.execDetached([
             root.scriptsDir + "/apply-accent",
             selected.toString(),
@@ -201,9 +236,14 @@ Singleton {
 
     function persistThemeMode(value) {
         const next = value === "light" ? "light" : "dark"
+        const family = String(presetId).split("-")[0]
+        const paired = family === "classic" ? "srcery-" + next
+            : family + "-" + next
+        if (presetForId(paired))
+            presetId = paired
         mode = next
         applyActivePalette()
-        ShellState.updateSection("theme", { mode: next })
+        ShellState.updateSection("theme", { mode: next, preset: presetId })
 
         const palette = ShellState.state.theme.palette
         if (wallpaperThemeEnabled && palette?.image) {
@@ -212,13 +252,38 @@ Singleton {
                 String(palette.image), next,
                 "--wm-msg", Wm.msgPath
             ])
-        } else if (!wallpaperThemeEnabled) {
+        } else if (!wallpaperThemeEnabled && presetId.startsWith("srcery-")) {
             Quickshell.execDetached([
                 root.scriptsDir + "/generate-wallpaper-theme",
                 "--default", next, accent.toString(),
                 "--wm-msg", Wm.msgPath
             ])
+        } else if (!wallpaperThemeEnabled)
+            applyExternalAccent(accentName)
+    }
+
+    function presetForId(id) {
+        for (let i = 0; i < themePresets.length; ++i) {
+            if (themePresets[i].id === id)
+                return themePresets[i]
         }
+        return null
+    }
+
+    function setThemePreset(id) {
+        const preset = presetForId(String(id))
+        if (!preset)
+            return
+        presetId = preset.id
+        mode = preset.mode
+        wallpaperThemeEnabled = false
+        applyPresetPalette()
+        ShellState.updateSection("theme", {
+            preset: presetId,
+            mode: mode,
+            wallpaperEnabled: false
+        })
+        applyExternalAccent(accentName)
     }
 
     function persistWallpaperThemeEnabled(enabled, wallpaperPath) {
@@ -240,14 +305,119 @@ Singleton {
                 loadState()
             }
         } else {
-            applySrceryPalette()
+            applyPresetPalette()
             accentName = defaultAccentName
             ShellState.updateSection("theme", { accent: accentName })
-            Quickshell.execDetached([
-                root.scriptsDir + "/generate-wallpaper-theme",
-                "--default", mode, accent.toString(),
-                "--wm-msg", Wm.msgPath
-            ])
+            if (presetId.startsWith("srcery-")) {
+                Quickshell.execDetached([
+                    root.scriptsDir + "/generate-wallpaper-theme",
+                    "--default", mode, accent.toString(),
+                    "--wm-msg", Wm.msgPath
+                ])
+            } else {
+                applyExternalAccent(accentName)
+            }
+        }
+    }
+
+    function applySemanticPalette(p) {
+        black = p.background
+        gray1 = p.surfaceSubtle
+        gray2 = p.surface
+        gray3 = p.surfaceVariant
+        gray4 = p.pressed
+        gray5 = p.outline
+        gray6 = p.disabled
+        brightWhite = p.foreground
+        white = p.foregroundMuted
+        brightBlack = p.foregroundMuted
+        red = p.red
+        green = p.green
+        yellow = p.yellow
+        blue = p.blue
+        magenta = p.magenta
+        cyan = p.cyan
+        orange = p.primary
+        brightOrange = p.primary
+        teal = p.teal
+        brightRed = Qt.lighter(red, 1.12)
+        brightGreen = Qt.lighter(green, 1.12)
+        brightYellow = Qt.lighter(yellow, 1.12)
+        brightBlue = Qt.lighter(blue, 1.12)
+        brightMagenta = Qt.lighter(magenta, 1.12)
+        brightCyan = Qt.lighter(cyan, 1.12)
+        hardBlack = p.shadow
+        darkRed = Qt.darker(red, 1.8)
+        darkGreen = Qt.darker(green, 1.8)
+        dimGreen = Qt.darker(green, 1.45)
+        darkBlue = Qt.darker(blue, 1.8)
+    }
+
+    function applyPresetPalette() {
+        if (presetId.startsWith("srcery-")) {
+            applySrceryPalette()
+            return
+        }
+        switch (presetId) {
+        case "catppuccin-dark":
+            applySemanticPalette({ background: "#1E1E2E", surfaceSubtle: "#181825",
+                surface: "#313244", surfaceVariant: "#45475A", pressed: "#585B70",
+                outline: "#6C7086", disabled: "#7F849C", foreground: "#CDD6F4",
+                foregroundMuted: "#A6ADC8", red: "#F38BA8", green: "#A6E3A1",
+                yellow: "#F9E2AF", blue: "#89B4FA", magenta: "#CBA6F7",
+                cyan: "#89DCEB", primary: "#FAB387", teal: "#94E2D5", shadow: "#11111B" })
+            break
+        case "catppuccin-light":
+            applySemanticPalette({ background: "#EFF1F5", surfaceSubtle: "#E6E9EF",
+                surface: "#DCE0E8", surfaceVariant: "#CCD0DA", pressed: "#BCC0CC",
+                outline: "#9CA0B0", disabled: "#ACB0BE", foreground: "#4C4F69",
+                foregroundMuted: "#6C6F85", red: "#D20F39", green: "#40A02B",
+                yellow: "#DF8E1D", blue: "#1E66F5", magenta: "#8839EF",
+                cyan: "#04A5E5", primary: "#FE640B", teal: "#179299", shadow: "#7C7F93" })
+            break
+        case "gruvbox-dark":
+            applySemanticPalette({ background: "#282828", surfaceSubtle: "#1D2021",
+                surface: "#3C3836", surfaceVariant: "#504945", pressed: "#665C54",
+                outline: "#7C6F64", disabled: "#928374", foreground: "#EBDBB2",
+                foregroundMuted: "#A89984", red: "#CC241D", green: "#98971A",
+                yellow: "#D79921", blue: "#458588", magenta: "#B16286",
+                cyan: "#689D6A", primary: "#D65D0E", teal: "#8EC07C", shadow: "#1D2021" })
+            break
+        case "gruvbox-light":
+            applySemanticPalette({ background: "#FBF1C7", surfaceSubtle: "#F9F5D7",
+                surface: "#EBDBB2", surfaceVariant: "#D5C4A1", pressed: "#BDAE93",
+                outline: "#A89984", disabled: "#928374", foreground: "#3C3836",
+                foregroundMuted: "#665C54", red: "#9D0006", green: "#79740E",
+                yellow: "#B57614", blue: "#076678", magenta: "#8F3F71",
+                cyan: "#427B58", primary: "#AF3A03", teal: "#427B58", shadow: "#7C6F64" })
+            break
+        case "everforest-dark":
+            applySemanticPalette({ background: "#2D353B", surfaceSubtle: "#232A2E",
+                surface: "#343F44", surfaceVariant: "#3D484D", pressed: "#475258",
+                outline: "#56635F", disabled: "#7A8478", foreground: "#D3C6AA",
+                foregroundMuted: "#9DA9A0", red: "#E67E80", green: "#A7C080",
+                yellow: "#DBBC7F", blue: "#7FBBB3", magenta: "#D699B6",
+                cyan: "#83C092", primary: "#E69875", teal: "#83C092", shadow: "#1E2326" })
+            break
+        case "everforest-light":
+            applySemanticPalette({ background: "#FDF6E3", surfaceSubtle: "#F4F0D9",
+                surface: "#EFEBD4", surfaceVariant: "#E6E2CC", pressed: "#D8D3BA",
+                outline: "#B9C0AB", disabled: "#939F91", foreground: "#5C6A72",
+                foregroundMuted: "#829181", red: "#F85552", green: "#8DA101",
+                yellow: "#DFA000", blue: "#3A94C5", magenta: "#DF69BA",
+                cyan: "#35A77C", primary: "#F57D26", teal: "#35A77C", shadow: "#A6B0A0" })
+            break
+        case "classic":
+            applySemanticPalette({ background: "#C9C8C6", surfaceSubtle: "#D2D0CE",
+                surface: "#DFDCDB", surfaceVariant: "#E8E5E4", pressed: "#B8B5B2",
+                outline: "#7A7774", disabled: "#A4A09D", foreground: "#152526",
+                foregroundMuted: "#546364", red: "#8B1E1E", green: "#27613B",
+                yellow: "#8A6500", blue: "#000080", magenta: "#800080",
+                cyan: "#007C7C", primary: "#152526", teal: "#008080", shadow: "#6B6967" })
+            break
+        default:
+            presetId = mode === "light" ? "srcery-light" : "srcery-dark"
+            applySrceryPalette()
         }
     }
 
@@ -389,7 +559,7 @@ Singleton {
                 && String(palette.mode ?? "dark") === mode)
             applyWallpaperPalette(palette)
         else
-            applySrceryPalette()
+            applyPresetPalette()
     }
 
     function loadState() {
@@ -404,6 +574,10 @@ Singleton {
         accentName = accentNames.indexOf(theme.accent) >= 0
             ? theme.accent : "orange"
         mode = theme.mode === "light" ? "light" : "dark"
+        const savedPreset = String(theme.preset ?? "")
+        presetId = presetForId(savedPreset) ? savedPreset
+            : mode === "light" ? "srcery-light" : "srcery-dark"
+        mode = presetForId(presetId).mode
         wallpaperThemeEnabled = theme.wallpaperEnabled === true
         cornerRadius = Math.max(0, Math.round(Number(theme.cornerRadius) || 0))
         applyActivePalette()

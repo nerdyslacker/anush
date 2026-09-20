@@ -7,7 +7,7 @@ BarModule {
     id: root
     property bool restoreIconEditor: false
 
-    icon: LauncherState.defaultGlyph
+    icon: LauncherState.displayGlyph(LauncherState.icon)
     iconSource: LauncherState.resolveIcon(LauncherState.icon)
     iconColor: Theme.accent
     onClicked: mouse => {

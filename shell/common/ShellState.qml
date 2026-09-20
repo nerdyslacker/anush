@@ -82,6 +82,7 @@ Singleton {
             theme: {
                 accent: "orange",
                 defaultAccent: "brightYellow",
+                preset: "srcery-dark",
                 wallpaperEnabled: false,
                 palette: null,
                 cornerRadius: 0,
@@ -110,6 +111,11 @@ Singleton {
                     next[section][key] = value[key];
             }
         }
+        // State files from before named presets only recorded light/dark.
+        // Preserve that choice instead of silently reverting light users.
+        if (saved.theme && saved.theme.preset === undefined)
+            next.theme.preset = saved.theme.mode === "light"
+                ? "srcery-light" : "srcery-dark";
         return next;
     }
 

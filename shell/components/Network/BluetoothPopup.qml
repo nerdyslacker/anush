@@ -121,7 +121,7 @@ Popout {
                     spacing: 7
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "󰂯"
+                        text: BluetoothService.deviceGlyph(row.device, "󰂯")
                         color: row.device.connected ? Theme.accent : Theme.fg
                         font.family: Theme.iconFontFamily
                         font.pixelSize: Theme.iconSize
@@ -381,7 +381,8 @@ Popout {
                                     spacing: 7
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
-                                        text: "󰂱"
+                                        text: BluetoothService.deviceGlyph(
+                                            foundRow.modelData, "󰂱")
                                         color: Qt.alpha(Theme.fg, 0.75)
                                         font.family: Theme.iconFontFamily
                                         font.pixelSize: Theme.iconSize

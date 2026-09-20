@@ -39,7 +39,8 @@ Popout {
         width: 34
         height: 18
         radius: Math.min(height / 2, Theme.radiusSmall)
-        color: checked ? Theme.accent : Qt.alpha(Theme.foreground, 0.15)
+        color: checked ? Theme.activeBackground
+            : Qt.alpha(Theme.foreground, 0.15)
         Behavior on color { ColorAnimation { duration: 150 } }
 
         Rectangle {
@@ -144,6 +145,75 @@ Popout {
             suffix: " px"
             applyFn: value => Theme.cornerRadius = Math.max(0, Math.round(value))
             persistFn: value => Theme.persistCornerRadius(value)
+        }
+
+        SectionLabel { text: "Theme preset" }
+
+        Grid {
+            id: themeGrid
+            width: parent.width
+            columns: 3
+            spacing: 5
+
+            Repeater {
+                model: Theme.themePresets
+
+                Rectangle {
+                    id: themeTile
+                    required property var modelData
+                    readonly property bool current:
+                        Theme.presetId === modelData.id
+
+                    width: (themeGrid.width - themeGrid.spacing * 2) / 3
+                    height: 52
+                    radius: Theme.radiusSmall
+                    color: current ? Theme.activeBackground
+                        : themeMouse.containsMouse ? Theme.gray3 : Theme.gray2
+                    border.width: current ? 2 : 1
+                    border.color: current ? Theme.activeBorder : Theme.gray5
+
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 5
+
+                        Row {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            spacing: 3
+                            Repeater {
+                                model: themeTile.modelData.colors
+                                Rectangle {
+                                    required property string modelData
+                                    width: 20
+                                    height: 12
+                                    radius: Math.min(3, Theme.radiusSmall)
+                                    color: modelData
+                                    border.width: 1
+                                    border.color: Qt.alpha(Theme.fg, 0.35)
+                                }
+                            }
+                        }
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: themeTile.width - 8
+                            horizontalAlignment: Text.AlignHCenter
+                            elide: Text.ElideRight
+                            text: themeTile.modelData.name
+                            color: themeTile.current ? Theme.selfg : Theme.fg
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 9
+                            font.bold: themeTile.current
+                        }
+                    }
+
+                    MouseArea {
+                        id: themeMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: Theme.setThemePreset(themeTile.modelData.id)
+                    }
+                }
+            }
         }
 
         SectionLabel { text: "Accent color" }
