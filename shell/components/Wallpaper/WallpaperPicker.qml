@@ -14,10 +14,15 @@ Popout {
     cardWidth: 176 * 3 + 2 * cardPadding
     readonly property real titleHeight: 20
     readonly property real directoryOptionHeight: 38
-    readonly property real galleryHeight: 103 * 4
-    readonly property real themeOptionHeight: 30
-    cardHeight: titleHeight + 7 + directoryOptionHeight + 9 + galleryHeight
-        + 8 + themeOptionHeight + 2 * cardPadding
+    readonly property real themeOptionHeight: 88
+    readonly property real fixedContentHeight: titleHeight + 7
+        + directoryOptionHeight + 9 + 8 + themeOptionHeight + 2 * cardPadding
+    readonly property real popupScreenHeight: screenHeightForAnchor()
+    // Preserve the controls at the bottom on short laptop panels. The gallery
+    // gives up rows first and remains navigable through its scrollbar.
+    readonly property real galleryHeight: Math.max(103, Math.min(103 * 4,
+        popupScreenHeight - fixedContentHeight - 2 * screenMargin))
+    cardHeight: fixedContentHeight + galleryHeight
 
     property var wallpapers: []
     property var _found: []
@@ -34,6 +39,22 @@ Popout {
     signal directoryBrowseRequested()
 
     closeOnOutside: !browsing
+
+    function screenHeightForAnchor() {
+        if (Quickshell.screens.length === 0)
+            return 720
+        if (!anchorItem)
+            return Quickshell.screens[0].height
+        const center = anchorItem.mapToGlobal(
+            anchorItem.width / 2, anchorItem.height / 2)
+        for (const screen of Quickshell.screens) {
+            if (center.x >= screen.x && center.x < screen.x + screen.width
+                    && center.y >= screen.y
+                    && center.y < screen.y + screen.height)
+                return screen.height
+        }
+        return Quickshell.screens[0].height
+    }
 
     function directoryUrl() {
         return "file://" + wallpaperDirectory
@@ -97,6 +118,14 @@ Popout {
             if (action === "toggle") root.toggle()
             else if (action === "random") root.applyRandom()
             else if (action === "set") root.apply(path)
+        }
+    }
+
+    Connections {
+        target: Theme
+        function onWallpaperPresetStatusChanged() {
+            if (Theme.wallpaperPresetStatus.startsWith("Saved"))
+                presetName.text = ""
         }
     }
 
@@ -169,6 +198,7 @@ Popout {
         color: buttonMouse.containsMouse ? Theme.gray3 : Theme.gray2
         border.width: 1
         border.color: Theme.gray5
+        opacity: enabled ? 1 : 0.45
 
         Text {
             id: label
@@ -183,6 +213,7 @@ Popout {
             id: buttonMouse
             anchors.fill: parent
             hoverEnabled: true
+            enabled: button.enabled
             onClicked: button.activated()
         }
     }
@@ -343,29 +374,109 @@ Popout {
         font.pixelSize: Theme.fontSize
     }
 
-    Row {
+    Column {
         id: themeOption
         anchors.left: parent.left
+        anchors.right: parent.right
         anchors.top: grid.bottom
         anchors.topMargin: 8
         height: root.themeOptionHeight
-        spacing: 9
+        spacing: 6
 
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: "Generate theme based on wallpaper"
-            color: Theme.wallpaperThemeEnabled
-                ? Theme.accent : Theme.brightBlack
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize - 1
-            font.bold: Theme.wallpaperThemeEnabled
+        Row {
+            width: parent.width
+            height: 24
+            spacing: 9
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Generate theme based on wallpaper"
+                color: Theme.wallpaperThemeEnabled
+                    ? Theme.accent : Theme.brightBlack
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize - 1
+                font.bold: Theme.wallpaperThemeEnabled
+            }
+
+            SettingSwitch {
+                anchors.verticalCenter: parent.verticalCenter
+                checked: Theme.wallpaperThemeEnabled
+                onToggled: Theme.persistWallpaperThemeEnabled(
+                    !Theme.wallpaperThemeEnabled, root.selectedPath)
+            }
         }
 
-        SettingSwitch {
-            anchors.verticalCenter: parent.verticalCenter
-            checked: Theme.wallpaperThemeEnabled
-            onToggled: Theme.persistWallpaperThemeEnabled(
-                !Theme.wallpaperThemeEnabled, root.selectedPath)
+        Row {
+            width: parent.width
+            height: 32
+            spacing: 7
+
+            Rectangle {
+                width: parent.width - savePresetButton.width - parent.spacing
+                height: parent.height
+                radius: Theme.radiusSmall
+                color: Theme.gray2
+                border.width: 1
+                border.color: Theme.themePresetNameExists(presetName.text)
+                    ? Theme.error : presetName.activeFocus
+                    ? Theme.accent : Theme.gray5
+
+                TextInput {
+                    id: presetName
+                    anchors.fill: parent
+                    anchors.leftMargin: 9
+                    anchors.rightMargin: 9
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: Theme.fg
+                    selectionColor: Theme.selbg
+                    selectedTextColor: Theme.selfg
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize - 1
+                    maximumLength: 64
+                    clip: true
+                    onAccepted: if (savePresetButton.enabled)
+                        Theme.saveWallpaperPreset(text)
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: presetName.text.length === 0
+                        text: Theme.wallpaperPresetStatus !== ""
+                            ? Theme.wallpaperPresetStatus
+                            : "Preset name"
+                        color: Theme.foregroundMuted
+                        font: presetName.font
+                        elide: Text.ElideRight
+                        width: parent.width
+                    }
+                }
+            }
+
+            DirectoryButton {
+                id: savePresetButton
+                height: parent.height
+                buttonText: Theme.wallpaperPresetSaving ? "Saving…" : "Save preset"
+                enabled: !Theme.wallpaperPresetSaving
+                    && Theme.wallpaperThemeEnabled
+                    && !!ShellState.state.theme.palette?.semantic
+                    && presetName.text.trim() !== ""
+                    && !Theme.themePresetNameExists(presetName.text)
+                onActivated: Theme.saveWallpaperPreset(presetName.text)
+            }
+        }
+
+        Text {
+            width: parent.width
+            height: 14
+            visible: Theme.themePresetNameExists(presetName.text)
+                || Theme.wallpaperPresetStatus !== ""
+            text: Theme.themePresetNameExists(presetName.text)
+                ? "A theme preset with this name already exists."
+                : Theme.wallpaperPresetStatus
+            color: Theme.themePresetNameExists(presetName.text)
+                ? Theme.error : Theme.foregroundMuted
+            font.family: Theme.fontFamily
+            font.pixelSize: Math.max(8, Theme.fontSize - 2)
+            elide: Text.ElideRight
         }
     }
 }

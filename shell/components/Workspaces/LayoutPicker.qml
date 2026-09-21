@@ -453,6 +453,31 @@ Popout {
             }
         }
 
+        SectionLabel { text: "Icon theme" }
+
+        ThemeSelector {
+            selectedValue: AppearanceService.iconTheme
+            model: AppearanceService.iconThemes
+            onSelected: value => AppearanceService.setIconTheme(value)
+        }
+
+        Text {
+            width: parent.width
+            text: "Folder colors follow the accent when the selected theme supports it."
+            color: Theme.foregroundMuted
+            font.family: Theme.fontFamily
+            font.pixelSize: Math.max(8, Theme.fontSize - 2)
+            wrapMode: Text.WordWrap
+        }
+
+        SectionLabel { text: "Cursor theme" }
+
+        ThemeSelector {
+            selectedValue: AppearanceService.cursorTheme
+            model: AppearanceService.cursorThemes
+            onSelected: value => AppearanceService.setCursorTheme(value)
+        }
+
         SectionLabel {
             text: "Application themes"
         }
@@ -489,32 +514,6 @@ Popout {
             font.family: Theme.fontFamily
             font.pixelSize: Math.max(8, Theme.fontSize - 2)
             wrapMode: Text.WordWrap
-        }
-
-        SectionLabel { text: "Icon theme" }
-
-        ThemeSelector {
-            selectedValue: AppearanceService.iconTheme
-            model: AppearanceService.iconThemes
-            onSelected: value => AppearanceService.setIconTheme(
-                value, Theme.accent.toString())
-        }
-
-        Text {
-            width: parent.width
-            text: "Folder colors follow the accent when the selected theme supports it."
-            color: Theme.foregroundMuted
-            font.family: Theme.fontFamily
-            font.pixelSize: Math.max(8, Theme.fontSize - 2)
-            wrapMode: Text.WordWrap
-        }
-
-        SectionLabel { text: "Cursor theme" }
-
-        ThemeSelector {
-            selectedValue: AppearanceService.cursorTheme
-            model: AppearanceService.cursorThemes
-            onSelected: value => AppearanceService.setCursorTheme(value)
-        }
+        }        
     }
 }

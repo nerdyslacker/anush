@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+"""Save the active wallpaper palette as a reusable Anush theme preset."""
+
+import json
+import os
+from pathlib import Path
+import re
+import sys
+import unicodedata
+
+
+HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def blend(first, second, amount):
+    left = tuple(int(first[index:index + 2], 16) for index in (1, 3, 5))
+    right = tuple(int(second[index:index + 2], 16) for index in (1, 3, 5))
+    channels = (round(a * (1 - amount) + b * amount)
+                for a, b in zip(left, right))
+    return "#" + "".join(f"{channel:02x}" for channel in channels)
+
+
+def slugify(value):
+    ascii_name = unicodedata.normalize("NFKD", value).encode(
+        "ascii", "ignore").decode("ascii").lower()
+    return re.sub(r"[^a-z0-9]+", "-", ascii_name).strip("-")
+
+
+def valid_palette(palette):
+    semantic = palette.get("semantic") if isinstance(palette, dict) else None
+    ansi = palette.get("ansi") if isinstance(palette, dict) else None
+    required = {"background", "background-alt", "foreground", "border",
+                "primary", "secondary", "alert", "disabled"}
+    return (isinstance(semantic, dict) and required.issubset(semantic)
+            and all(HEX.fullmatch(semantic[key]) for key in required)
+            and isinstance(ansi, list) and len(ansi) >= 16
+            and all(isinstance(color, str) and HEX.fullmatch(color)
+                    for color in ansi[:16]))
+
+
+def main():
+    if len(sys.argv) != 4:
+        raise SystemExit(
+            "usage: save-wallpaper-preset STATE_FILE PRESET_DIR NAME")
+    state_path, preset_directory, requested_name = map(str, sys.argv[1:])
+    name = " ".join(requested_name.split())
+    if not name:
+        raise SystemExit("Preset name cannot be empty")
+    if len(name) > 64:
+        raise SystemExit("Preset name must be 64 characters or fewer")
+    slug = slugify(name)
+    if not slug:
+        raise SystemExit("Preset name must contain a letter or number")
+
+    state = json.loads(Path(state_path).read_text())
+    theme = state.get("theme", {})
+    if theme.get("wallpaperEnabled") is not True:
+        raise SystemExit("Enable wallpaper theme generation before saving")
+    palette = theme.get("palette")
+    if not valid_palette(palette):
+        raise SystemExit("No valid wallpaper-generated palette is active")
+
+    semantic = palette["semantic"]
+    ansi = palette["ansi"]
+    mode = "light" if palette.get("mode") == "light" else "dark"
+    background = semantic["background"]
+    surface = semantic["background-alt"]
+    foreground = semantic["foreground"]
+    border = semantic["border"]
+    colors = {
+        "background": background,
+        "surfaceSubtle": blend(background, foreground, 0.025),
+        "surface": surface,
+        "surfaceVariant": blend(surface, foreground, 0.05 if mode == "light" else 0.07),
+        "pressed": blend(surface, foreground, 0.13) if mode == "light" else border,
+        "outline": border if mode == "light" else blend(border, foreground, 0.10),
+        "disabled": semantic["disabled"],
+        "foreground": foreground,
+        "foregroundMuted": ansi[8],
+        "red": semantic["alert"],
+        "orange": semantic["primary"],
+        "yellow": ansi[3],
+        "green": ansi[2],
+        "cyan": ansi[6],
+        "blue": ansi[4],
+        "magenta": ansi[5],
+        "teal": ansi[6],
+        "shadow": background if mode == "dark" else semantic["disabled"],
+        "white": ansi[7],
+        "brightRed": ansi[9],
+        "brightOrange": semantic["primary"],
+        "brightGreen": ansi[10],
+        "brightYellow": ansi[11],
+        "brightBlue": semantic["secondary"],
+        "brightMagenta": ansi[13],
+        "brightCyan": ansi[14],
+    }
+    preset = {
+        "id": f"wallpaper-{slug}",
+        "name": name,
+        "mode": mode,
+        "order": 800,
+        "accentOverride": semantic["primary"],
+        "activeBorder": semantic["primary"],
+        "accentForeground": background,
+        "preview": [background, surface, semantic["primary"]],
+        "colors": colors,
+        "wallpaper": str(palette.get("image", "")),
+        "generator": str(palette.get("generator", "anush")),
+    }
+
+    directory = Path(preset_directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    destination = directory / f"user-{slug}.json"
+    for existing_path in directory.glob("*.json"):
+        try:
+            existing = json.loads(existing_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        existing_name = existing.get("name") if isinstance(existing, dict) else None
+        if isinstance(existing_name, str) and existing_name.strip().casefold() == name.casefold():
+            raise SystemExit(f'A theme preset named "{name}" already exists')
+    if destination.exists():
+        raise SystemExit(
+            f'A theme preset using the identifier "{slug}" already exists')
+    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+    temporary.write_text(json.dumps(preset, indent=2) + "\n")
+    os.replace(temporary, destination)
+    print(json.dumps({"id": preset["id"], "name": name,
+                      "path": str(destination)}))
+
+
+if __name__ == "__main__":
+    main()

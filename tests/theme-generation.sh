@@ -21,7 +21,7 @@ cp "$repo/config/matugen/config.toml" "$ANUSH_CONFIG_DIR/matugen/config.toml"
 cp "$repo/config/skarwm/config.rc" "$ANUSH_CONFIG_DIR/skarwm/config.rc"
 cp "$repo/config/skarwm/config.rc" "$XDG_CONFIG_HOME/skarwm/config.rc"
 touch "$tmp/wallpaper.png"
-printf '%s\n' '{"theme":{"palette":null}}' \
+printf '%s\n' '{"theme":{"palette":null,"wallpaperEnabled":true}}' \
     >"$ANUSH_STATE_DIR/shell-state.json"
 printf '%s\n' '/* keep user CSS */' >"$XDG_CONFIG_HOME/gtk-3.0/gtk.css"
 
@@ -32,7 +32,7 @@ if [ "${MATUGEN_FAIL:-0}" -eq 1 ]; then
     exit 1
 fi
 cat <<'JSON'
-{"colors":{"dark":{"background":"#101114","on_background":"#e4e2e7","surface":"#101114","on_surface":"#e4e2e7","surface_variant":"#303036","surface_container":"#1c1b20","on_surface_variant":"#c8c5ce","primary":"#b8c4ff","on_primary":"#15255c","primary_fixed":"#dce1ff","secondary":"#c3c5dd","tertiary":"#e5bad7","error":"#ffb4ab","error_container":"#93000a","outline":"#92909a","outline_variant":"#47464f"}}}
+{"colors":{"background":{"dark":{"color":"#101114"}},"on_background":{"dark":{"color":"#e4e2e7"}},"surface":{"dark":{"color":"#101114"}},"on_surface":{"dark":{"color":"#e4e2e7"}},"surface_variant":{"dark":{"color":"#303036"}},"surface_container":{"dark":{"color":"#1c1b20"}},"on_surface_variant":{"dark":{"color":"#c8c5ce"}},"primary":{"dark":{"color":"#b8c4ff"}},"on_primary":{"dark":{"color":"#15255c"}},"primary_fixed":{"dark":{"color":"#dce1ff"}},"secondary":{"dark":{"color":"#c3c5dd"}},"tertiary":{"dark":{"color":"#e5bad7"}},"error":{"dark":{"color":"#ffb4ab"}},"error_container":{"dark":{"color":"#93000a"}},"outline":{"dark":{"color":"#92909a"}},"outline_variant":{"dark":{"color":"#47464f"}}}}
 JSON
 EOF
 
@@ -49,16 +49,41 @@ python3 - "$ANUSH_STATE_DIR/shell-state.json" <<'PY'
 import json, sys
 palette = json.load(open(sys.argv[1]))["theme"]["palette"]
 assert palette["generator"] == "matugen"
-assert palette["semantic"]["primary"] == "#b8c4ff"
+assert palette["shellGenerator"] == "anush"
+assert palette["semantic"]["primary"] == "#507395"
+assert palette["material"]["primary"] == "#b8c4ff"
 assert palette["material"]["surface_container"] == "#1c1b20"
 PY
-grep -q '^selection_background #b8c4ff$' \
+grep -q '^selection_background #507395$' \
     "$ANUSH_CONFIG_DIR/kitty/current-theme.conf"
-grep -q '^url_color #b8c4ff$' "$ANUSH_CONFIG_DIR/kitty/current-theme.conf"
-grep -q '^color4 #b8c4ff$' "$ANUSH_CONFIG_DIR/kitty/current-theme.conf"
-grep -q '^color12 #b8c4ff$' "$ANUSH_CONFIG_DIR/kitty/current-theme.conf"
-grep -q '^sel_outer_border  : #b8c4ff$' \
+grep -q '^url_color #507395$' "$ANUSH_CONFIG_DIR/kitty/current-theme.conf"
+grep -q '^color4 #507395$' "$ANUSH_CONFIG_DIR/kitty/current-theme.conf"
+grep -q '^color12 #507395$' "$ANUSH_CONFIG_DIR/kitty/current-theme.conf"
+grep -q '^sel_outer_border  : #507395$' \
     "$XDG_CONFIG_HOME/skarwm/config.rc"
+
+"$repo/shell/scripts/save-wallpaper-preset" \
+    "$ANUSH_STATE_DIR/shell-state.json" \
+    "$ANUSH_CONFIG_DIR/themes/presets" "Snake Night"
+python3 - "$ANUSH_CONFIG_DIR/themes/presets/user-snake-night.json" <<'PY'
+import json, sys
+preset = json.load(open(sys.argv[1]))
+assert preset["id"] == "wallpaper-snake-night"
+assert preset["name"] == "Snake Night"
+assert preset["generator"] == "matugen"
+assert preset["accentOverride"] == "#507395"
+assert preset["colors"]["background"] == "#263340"
+PY
+"$repo/shell/scripts/load-theme-presets" \
+    "$ANUSH_CONFIG_DIR/themes/presets" | grep -q 'wallpaper-snake-night'
+if "$repo/shell/scripts/save-wallpaper-preset" \
+        "$ANUSH_STATE_DIR/shell-state.json" \
+        "$ANUSH_CONFIG_DIR/themes/presets" "snake night" \
+        >"$tmp/duplicate.out" 2>"$tmp/duplicate.err"; then
+    printf '%s\n' 'duplicate preset name was unexpectedly accepted' >&2
+    exit 1
+fi
+grep -qi 'already exists' "$tmp/duplicate.err"
 
 ANUSH_ACCENT_NO_RELOAD=1 "$repo/shell/scripts/apply-accent" '#6574a8'
 grep -q '^selection_background #6574a8$' \

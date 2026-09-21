@@ -70,4 +70,22 @@ grep -q '^gtk-icon-theme-name=Fairy$' \
     "$XDG_CONFIG_HOME/gtk-3.0/settings.ini"
 ! grep -q '^papirus-folders ' "$ICON_HELPER_LOG"
 
+# A writable user Papirus installation remains accent-aware even when the
+# optional papirus-folders command is unavailable.
+rm "$tmp/bin/papirus-folders"
+places="$XDG_DATA_DIRS/icons/Papirus/48x48/places"
+mkdir -p "$places"
+for color in red green; do
+    touch "$places/folder-$color-documents.svg"
+    touch "$places/user-$color-home.svg"
+done
+"$helper" --set Papirus '#ff0000'
+[ "$(readlink "$places/folder-documents.svg")" = \
+    "folder-red-documents.svg" ]
+[ "$(readlink "$places/user-home.svg")" = "user-red-home.svg" ]
+"$helper" --accent Papirus '#00ff00'
+[ "$(readlink "$places/folder-documents.svg")" = \
+    "folder-green-documents.svg" ]
+[ "$(readlink "$places/user-home.svg")" = "user-green-home.svg" ]
+
 printf '%s\n' 'icon theme tests passed'

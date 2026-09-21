@@ -134,14 +134,97 @@ def nearest_papirus_colour(accent: str) -> str:
         for channel in range(3)))
 
 
+def available_papirus_colours(path: Path) -> set[str]:
+    places = path / "48x48/places"
+    colours = set()
+    for icon in places.glob("folder-*-documents.svg"):
+        match = re.fullmatch(r"folder-(.+)-documents\.svg", icon.name)
+        if match and not icon.is_symlink():
+            colours.add(match.group(1))
+    return colours
+
+
+def nearest_papirus_colour_for_theme(path: Path, accent: str) -> str | None:
+    available = available_papirus_colours(path)
+    known = {name: value for name, value in PAPIRUS_FOLDER_COLOURS.items()
+             if name in available}
+    if not known:
+        return None
+    match = re.fullmatch(r"#?(?:[0-9a-fA-F]{2})?([0-9a-fA-F]{6})", accent)
+    if not match:
+        return "blue" if "blue" in known else next(iter(sorted(known)))
+    value = match.group(1)
+    target = tuple(int(value[index:index + 2], 16) for index in (0, 2, 4))
+    return min(known, key=lambda name: sum(
+        (target[channel] - int(known[name][
+            1 + channel * 2:3 + channel * 2], 16)) ** 2
+        for channel in range(3)))
+
+
+def recolour_papirus_without_helper(path: Path, colour: str) -> bool:
+    """Apply Papirus's own symlink algorithm to a writable user theme."""
+    changed = False
+    for size in ("22x22", "24x24", "32x32", "48x48", "64x64"):
+        places = path / size / "places"
+        if not places.is_dir() or not os.access(places.resolve(), os.W_OK):
+            continue
+        for prefix in (f"folder-{colour}", f"user-{colour}"):
+            sources = list(places.glob(prefix + "-*.svg"))
+            direct = places / (prefix + ".svg")
+            if direct.is_file():
+                sources.append(direct)
+            for source in sources:
+                if source.is_symlink() or not source.is_file():
+                    continue
+                destination = source.with_name(
+                    source.name.replace(f"-{colour}", "", 1))
+                if destination == source:
+                    continue
+                temporary = destination.with_name(
+                    f".{destination.name}.anush-{os.getpid()}")
+                try:
+                    temporary.unlink(missing_ok=True)
+                    temporary.symlink_to(source.name)
+                    os.replace(temporary, destination)
+                    changed = True
+                except OSError:
+                    temporary.unlink(missing_ok=True)
+    if changed and shutil.which("gtk-update-icon-cache"):
+        siblings = [path]
+        try:
+            siblings.extend(candidate for candidate in path.parent.iterdir()
+                            if candidate != path
+                            and candidate.name.casefold().startswith("papirus")
+                            and (candidate / "index.theme").is_file())
+        except OSError:
+            pass
+        for theme_path in siblings:
+            run("gtk-update-icon-cache", "-f", "-t", str(theme_path))
+    if changed and shutil.which("dbus-send"):
+        run("dbus-send", "--session", "--type=signal", "/KGlobalSettings",
+            "org.kde.KGlobalSettings.notifyChange", "int32:4", "int32:0")
+    if changed:
+        run("pkill", "-HUP", "-x", "xsettingsd")
+    return changed
+
+
 def recolour_folders(theme: str, accent: str) -> None:
     # Folder recolouring is an explicit capability of Papirus itself. A theme
     # merely inheriting Papirus is not treated as Papirus: doing so previously
     # replaced unrelated themes with Anush-Papirus on every accent change.
-    helper = shutil.which("papirus-folders")
-    if not helper or not theme.casefold().startswith("papirus"):
+    if not theme.casefold().startswith("papirus"):
         return
-    run(helper, "-C", nearest_papirus_colour(accent), "--theme", theme)
+    helper = shutil.which("papirus-folders")
+    if helper:
+        run(helper, "-C", nearest_papirus_colour(accent), "--theme", theme)
+        return
+    path = theme_path(theme)
+    if not path:
+        return
+    colour = nearest_papirus_colour_for_theme(path, accent)
+    if not colour:
+        return
+    recolour_papirus_without_helper(path, colour)
 
 
 def set_ini_value(path: Path, section: str, key: str, value: str) -> None:

@@ -121,7 +121,8 @@ def palette_from_matugen(image, mode):
     config = Path(os.environ.get(
         "ANUSH_CONFIG_DIR", root / "config")) / "matugen/config.toml"
     command = [executable, "image", image, "--json", "hex", "-m", mode,
-               "-t", "scheme-tonal-spot", "-c", str(config)]
+               "-t", "scheme-fidelity", "--prefer", "saturation",
+               "--dry-run", "-c", str(config)]
     try:
         process = subprocess.run(command, check=False, capture_output=True,
                                  text=True, timeout=45)
@@ -352,12 +353,14 @@ def atomic_write(path, text):
 
 def apply_files(image, semantic, ansi, config_dir, state_file, mode,
                 preserve_primary=False, generator="anush", material=None,
-                mode_ready=False):
+                mode_ready=False, shell_generator=None):
     if not mode_ready:
         semantic, ansi = palette_for_mode(
             semantic, ansi, mode, preserve_primary)
     data = {"image": image, "semantic": semantic, "ansi": ansi, "mode": mode,
             "generator": generator}
+    if shell_generator:
+        data["shellGenerator"] = shell_generator
     if material:
         data["material"] = material
     atomic_write(config_dir / "rofi/colors.rasi", f"""/* Generated from wallpaper: {Path(image).name} */
@@ -499,9 +502,22 @@ def main():
         image = str(Path(arguments[0]).resolve())
         generated = palette_from_matugen(image, mode)
         if generated:
-            semantic, ansi, material = generated
+            matugen_semantic, matugen_ansi, material = generated
+            try:
+                # The existing extractor follows the wallpaper's complete
+                # palette more closely than a one-seed Material scheme. Keep
+                # it for the shell while retaining Matugen roles for GTK/Qt.
+                semantic, ansi = palette_from(image)
+                mode_ready = False
+                shell_generator = "anush"
+            except (OSError, subprocess.SubprocessError, RuntimeError):
+                semantic, ansi = matugen_semantic, matugen_ansi
+                mode_ready = True
+                shell_generator = "matugen"
             apply_files(image, semantic, ansi, config_dir, state_file, mode,
-                        generator="matugen", material=material, mode_ready=True)
+                        generator="matugen", material=material,
+                        mode_ready=mode_ready,
+                        shell_generator=shell_generator)
             reload_components(wm_message)
             return
         semantic, ansi = palette_from(image)

@@ -27,11 +27,14 @@ Singleton {
     property var themePresets: []
     property bool presetsReady: false
     property string applicationThemeStatus: ""
+    property string wallpaperPresetStatus: ""
+    property bool wallpaperPaletteRefreshAttempted: false
     readonly property var activePreset: presetForId(presetId)
     readonly property bool matugenThemeGenerated:
         wallpaperThemeEnabled
         && ShellState.state.theme.palette?.generator === "matugen"
     readonly property bool applicationThemeApplying: applicationThemeProcess.running
+    readonly property bool wallpaperPresetSaving: wallpaperPresetProcess.running
     readonly property bool light: mode === "light"
     // A single persisted appearance value feeds every non-circular surface.
     // Keep the tiers integral so borders and clipping stay pixel-aligned.
@@ -246,6 +249,31 @@ Singleton {
         applicationThemeProcess.running = true
     }
 
+    function saveWallpaperPreset(name) {
+        const title = String(name ?? "").trim()
+        const palette = ShellState.state.theme.palette
+        if (title === "" || themePresetNameExists(title)
+                || !wallpaperThemeEnabled || !palette?.semantic)
+            return
+        wallpaperPresetProcess.running = false
+        wallpaperPresetProcess.command = [
+            root.scriptsDir + "/save-wallpaper-preset",
+            ShellState.filePath,
+            root.configDir + "/themes/presets",
+            title
+        ]
+        wallpaperPresetStatus = "Saving preset…"
+        wallpaperPresetProcess.running = true
+    }
+
+    function themePresetNameExists(name) {
+        const wanted = String(name ?? "").trim().toLocaleLowerCase()
+        if (wanted === "")
+            return false
+        return themePresets.some(preset =>
+            String(preset?.name ?? "").trim().toLocaleLowerCase() === wanted)
+    }
+
     function persistThemeMode(value) {
         const next = value === "light" ? "light" : "dark"
         const paired = presetForId(String(activePreset?.pair ?? ""))
@@ -303,6 +331,9 @@ Singleton {
             ShellState.updateSection("theme", { defaultAccent: accentName })
         }
         wallpaperThemeEnabled = enabled
+        // Enabling below starts generation explicitly; mark that attempt so
+        // the state-change handler does not launch a duplicate process.
+        wallpaperPaletteRefreshAttempted = enabled
         ShellState.updateSection("theme", { wallpaperEnabled: enabled })
         if (enabled) {
             const image = String(wallpaperPath ?? "")
@@ -482,6 +513,17 @@ Singleton {
         wallpaperThemeEnabled = theme.wallpaperEnabled === true
         cornerRadius = Math.max(0, Math.round(Number(theme.cornerRadius) || 0))
         applyActivePalette()
+        const palette = theme.palette
+        if (wallpaperThemeEnabled && palette?.image
+                && palette?.generator !== "matugen"
+                && !wallpaperPaletteRefreshAttempted) {
+            wallpaperPaletteRefreshAttempted = true
+            Quickshell.execDetached([
+                root.scriptsDir + "/generate-wallpaper-theme",
+                String(palette.image), mode,
+                "--wm-msg", Wm.msgPath
+            ])
+        }
         AppearanceService.ensureThemes(accent.toString())
     }
 
@@ -515,6 +557,28 @@ Singleton {
                 const detail = applicationThemeError.text.trim()
                 root.applicationThemeStatus = detail !== ""
                     ? detail : "Application theme applied"
+            }
+        }
+    }
+
+    Process {
+        id: wallpaperPresetProcess
+        stdout: StdioCollector { id: wallpaperPresetOutput }
+        stderr: StdioCollector { id: wallpaperPresetError }
+        onExited: exitCode => {
+            if (exitCode === 0) {
+                try {
+                    const result = JSON.parse(wallpaperPresetOutput.text)
+                    root.wallpaperPresetStatus = "Saved “" + result.name + "”"
+                } catch (error) {
+                    root.wallpaperPresetStatus = "Wallpaper preset saved"
+                }
+                presetLoader.running = false
+                presetLoader.running = true
+            } else {
+                const detail = wallpaperPresetError.text.trim()
+                root.wallpaperPresetStatus = detail !== ""
+                    ? detail : "Could not save wallpaper preset"
             }
         }
     }

@@ -14,6 +14,7 @@ Singleton {
     property var cursorThemes: []
     property string iconTheme: ""
     property string cursorTheme: ""
+    property string currentAccent: ""
     property var _iconsFound: []
     property var _cursorsFound: []
     property bool _ensured: false
@@ -37,23 +38,24 @@ Singleton {
 
     function ensureThemes(accent) {
         loadState()
+        currentAccent = String(accent ?? "")
         if (_ensured) return
         _ensured = true
         if (iconTheme !== "")
             Quickshell.execDetached([ShellState.scriptsDir + "/apply-icon-theme",
-                "--set", iconTheme, String(accent)])
+                "--set", iconTheme, currentAccent])
         if (cursorTheme !== "")
             Quickshell.execDetached([ShellState.scriptsDir + "/apply-cursor-theme",
                 "--set", cursorTheme])
     }
 
-    function setIconTheme(name, accent) {
+    function setIconTheme(name) {
         const selected = String(name ?? "")
         if (selected === "") return
         iconTheme = selected
         ShellState.updateSection("theme", { iconTheme: selected })
         Quickshell.execDetached([ShellState.scriptsDir + "/apply-icon-theme",
-            "--set", selected, String(accent)])
+            "--set", selected, currentAccent])
     }
 
     function setCursorTheme(name) {
@@ -66,9 +68,10 @@ Singleton {
     }
 
     function applyAccent(accent) {
+        currentAccent = String(accent ?? "")
         if (iconTheme !== "")
             Quickshell.execDetached([ShellState.scriptsDir + "/apply-icon-theme",
-                "--accent", iconTheme, String(accent)])
+                "--accent", iconTheme, currentAccent])
     }
 
     Process {

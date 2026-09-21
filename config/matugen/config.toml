@@ -3,4 +3,12 @@
 # effects on the user's desktop configuration.
 
 [config.wallpaper]
+# Matugen currently requires a command even when wallpaper setting is disabled.
+# Generation also uses --dry-run, so this command is never executed.
+command = "true"
+arguments = []
 set = false
+
+# Keep an explicit empty table for Matugen 4.x, which requires the templates
+# field even when Anush consumes JSON directly and has no Matugen templates.
+[templates]

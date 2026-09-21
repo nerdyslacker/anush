@@ -29,7 +29,9 @@ Required:
 Optional desktop integrations:
 
 - Any freedesktop icon and XCursor themes; Papirus additionally supports
-  matching folder colors to the selected Anush accent;
+  matching folder colors to the selected Anush accent. The official
+  `papirus-folders` helper is preferred, with a built-in fallback for writable
+  user-installed Papirus themes;
 - Picom, Dunst, Feh, and Kitty for the supplied desktop configuration;
 - Clipmenu and Xdotool for clipboard history and pasting;
 - `setxkbmap` and `xkb-switch` for keyboard layouts;
@@ -230,15 +232,18 @@ background hue into a light surface and enforce readable contrast for text and
 accent roles. Bundled presets use the exact named colors from their upstream
 palette documents rather than generated lightening or darkening.
 
-Wallpaper themes prefer Matugen's tonal-spot Material palette when `matugen`
-is available. The existing Anush/ImageMagick generator is used automatically
-if Matugen is missing, exits unsuccessfully, or returns incomplete data. When
+Wallpaper themes combine the wallpaper-faithful Anush/ImageMagick palette for
+the shell with Matugen's fidelity Material roles for application integration.
+The Anush generator is also used automatically if Matugen is missing, exits
+unsuccessfully, or returns incomplete data. When
 the active wallpaper palette came from Matugen, the layout popup exposes
 explicit **Apply GTK Themes** and **Apply Qt Themes** actions. Applying the GTK
 theme expects `adw-gtk-theme` (the installed theme is normally named
 `adw-gtk3`) and updates application CSS in a managed block without discarding
 existing user CSS. Qt5ct, Qt6ct, and KDE-compatible color-scheme files are
-generated from the same palette.
+generated from the same palette. The wallpaper picker can save the current
+generated palette under a custom name; saved palettes immediately appear as
+cards in the layout popup's theme preset section.
 
 Bars can optionally shrink along their long axis to their natural widget size
 while the native panel window remains centered on each screen. This keeps the
