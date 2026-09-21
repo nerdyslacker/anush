@@ -94,9 +94,13 @@ Singleton {
     function openTerminal(arguments) {
         const script =
             "unset TMUX; " +
+            "config=${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/anush/config}; " +
             "if [ -n \"${TERMINAL:-}\" ] && command -v \"$TERMINAL\" >/dev/null 2>&1; then " +
-            "exec \"$TERMINAL\" -e \"$@\"; " +
-            "elif command -v kitty >/dev/null 2>&1; then exec kitty -- \"$@\"; " +
+            "if [ \"${TERMINAL##*/}\" = kitty ]; then " +
+            "exec \"$TERMINAL\" --config \"$config/kitty/kitty.conf\" -- \"$@\"; " +
+            "else exec \"$TERMINAL\" -e \"$@\"; fi; " +
+            "elif command -v kitty >/dev/null 2>&1; then " +
+            "exec kitty --config \"$config/kitty/kitty.conf\" -- \"$@\"; " +
             "elif command -v foot >/dev/null 2>&1; then exec foot -- \"$@\"; " +
             "elif command -v alacritty >/dev/null 2>&1; then exec alacritty -e \"$@\"; " +
             "elif command -v wezterm >/dev/null 2>&1; then exec wezterm start -- \"$@\"; " +

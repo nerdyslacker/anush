@@ -75,6 +75,105 @@ def wallpaper_light_background(color):
     return hex_color(hue * 360, lifted_saturation, 0.90)
 
 
+def valid_hex(value):
+    return isinstance(value, str) and bool(
+        re.fullmatch(r"#[0-9a-fA-F]{6}", value))
+
+
+def matugen_colors(payload, mode):
+    """Normalize both scheme-first and role-first Matugen JSON layouts."""
+    colors = payload.get("colors", {}) if isinstance(payload, dict) else {}
+    if not isinstance(colors, dict):
+        return None
+    scheme = colors.get(mode)
+    if isinstance(scheme, dict):
+        normalized = {key: value.lower() for key, value in scheme.items()
+                      if valid_hex(value)}
+    else:
+        normalized = {}
+        for role, variants in colors.items():
+            if not isinstance(variants, dict):
+                continue
+            value = variants.get(mode)
+            if isinstance(value, dict):
+                value = value.get("hex") or value.get("color")
+            if valid_hex(value):
+                normalized[role] = value.lower()
+    required = {"background", "on_background", "surface", "on_surface",
+                "primary", "on_primary", "secondary", "tertiary", "error",
+                "outline", "outline_variant"}
+    return normalized if required.issubset(normalized) else None
+
+
+def shifted_color(color, degrees, lightness_shift=0):
+    red, green, blue = (int(color[index:index + 2], 16) / 255
+                        for index in (1, 3, 5))
+    hue, lightness, saturation = colorsys.rgb_to_hls(red, green, blue)
+    return hex_color(hue * 360 + degrees, max(0.32, saturation),
+                     clamp(lightness + lightness_shift, 0.35, 0.82))
+
+
+def palette_from_matugen(image, mode):
+    executable = shutil.which("matugen")
+    if not executable:
+        return None
+    root = Path(__file__).resolve().parent.parent.parent
+    config = Path(os.environ.get(
+        "ANUSH_CONFIG_DIR", root / "config")) / "matugen/config.toml"
+    command = [executable, "image", image, "--json", "hex", "-m", mode,
+               "-t", "scheme-tonal-spot", "-c", str(config)]
+    try:
+        process = subprocess.run(command, check=False, capture_output=True,
+                                 text=True, timeout=45)
+        if process.returncode != 0:
+            detail = process.stderr.strip().splitlines()
+            message = detail[-1] if detail else f"exit {process.returncode}"
+            print(f"generate-wallpaper-theme: Matugen failed ({message}); "
+                  "using built-in generator", file=sys.stderr)
+            return None
+        output = process.stdout.strip()
+        start, end = output.find("{"), output.rfind("}")
+        if start < 0 or end < start:
+            raise ValueError("no JSON object in output")
+        material = matugen_colors(json.loads(output[start:end + 1]), mode)
+        if not material:
+            raise ValueError("palette is missing required Material roles")
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError,
+            ValueError) as error:
+        print(f"generate-wallpaper-theme: cannot use Matugen ({error}); "
+              "using built-in generator", file=sys.stderr)
+        return None
+
+    surface_alt = material.get("surface_container",
+                               material.get("surface_variant", material["surface"]))
+    foreground_muted = material.get("on_surface_variant", material["on_surface"])
+    semantic = {
+        "background": material["background"],
+        "background-alt": surface_alt,
+        "foreground": material["on_background"],
+        "border": material["outline"],
+        "primary": material["primary"],
+        "secondary": material["secondary"],
+        "alert": material["error"],
+        "disabled": material["outline_variant"],
+    }
+    primary = material["primary"]
+    green = shifted_color(primary, 105)
+    yellow = shifted_color(primary, 55)
+    magenta = shifted_color(primary, -65)
+    cyan = shifted_color(primary, 165)
+    ansi = [
+        surface_alt, material["error"], green, yellow, primary, magenta, cyan,
+        foreground_muted, material["outline"],
+        material.get("error_container", material["error"]),
+        shifted_color(green, 0, 0.08), shifted_color(yellow, 0, 0.08),
+        material.get("primary_fixed", shifted_color(primary, 0, 0.08)),
+        shifted_color(magenta, 0, 0.08), shifted_color(cyan, 0, 0.08),
+        material["on_surface"],
+    ]
+    return semantic, ansi, material
+
+
 def palette_for_mode(semantic, ansi, mode, preserve_primary=False):
     if mode != "light":
         return semantic, ansi
@@ -252,12 +351,15 @@ def atomic_write(path, text):
 
 
 def apply_files(image, semantic, ansi, config_dir, state_file, mode,
-                preserve_primary=False):
-    output_semantic, output_ansi = palette_for_mode(
-        semantic, ansi, mode, preserve_primary)
-    semantic = output_semantic
-    ansi = output_ansi
-    data = {"image": image, "semantic": semantic, "ansi": ansi, "mode": mode}
+                preserve_primary=False, generator="anush", material=None,
+                mode_ready=False):
+    if not mode_ready:
+        semantic, ansi = palette_for_mode(
+            semantic, ansi, mode, preserve_primary)
+    data = {"image": image, "semantic": semantic, "ansi": ansi, "mode": mode,
+            "generator": generator}
+    if material:
+        data["material"] = material
     atomic_write(config_dir / "rofi/colors.rasi", f"""/* Generated from wallpaper: {Path(image).name} */
 
 * {{
@@ -278,11 +380,11 @@ def apply_files(image, semantic, ansi, config_dir, state_file, mode,
 ## name: Wallpaper — {Path(image).name}
 foreground {semantic['foreground']}
 background {semantic['background']}
-selection_foreground {semantic['foreground']}
-selection_background {semantic['background-alt']}
+selection_foreground {semantic['background']}
+selection_background {semantic['primary']}
 cursor {semantic['foreground']}
 cursor_text_color {semantic['background']}
-url_color {semantic['secondary']}
+url_color {semantic['primary']}
 active_border_color {semantic['primary']}
 inactive_border_color {semantic['disabled']}
 bell_border_color {semantic['alert']}
@@ -297,7 +399,8 @@ mark2_foreground {semantic['background']}
 mark2_background {semantic['alert']}
 mark3_foreground {semantic['background']}
 mark3_background {semantic['secondary']}
-""" + "".join(f"color{index} {color}\n" for index, color in enumerate(ansi))
+""" + "".join(f"color{index} {semantic['primary'] if index in (4, 12) else color}\n"
+                for index, color in enumerate(ansi))
     atomic_write(config_dir / "kitty/current-theme.conf", kitty)
 
     dunst_path = config_dir / "dunst/dunstrc"
@@ -317,8 +420,17 @@ mark3_background {semantic['secondary']}
                            rf'\g<1>{color}\2', dunst, flags=re.MULTILINE)
         atomic_write(dunst_path, dunst)
 
-    config_path = config_dir / "skarwm/config.rc"
-    if config_path.is_file() and os.access(config_path, os.W_OK):
+    config_paths = [config_dir / "skarwm/config.rc"]
+    if os.environ.get("SKARWM_CONFIG"):
+        config_paths.append(Path(os.environ["SKARWM_CONFIG"]))
+    elif os.environ.get("XDG_CONFIG_HOME"):
+        config_paths.append(
+            Path(os.environ["XDG_CONFIG_HOME"]) / "skarwm/config.rc")
+    elif os.environ.get("HOME"):
+        config_paths.append(Path(os.environ["HOME"]) / ".config/skarwm/config.rc")
+    for config_path in dict.fromkeys(config_paths):
+        if not config_path.is_file() or not os.access(config_path, os.W_OK):
+            continue
         config = config_path.read_text()
         config = re.sub(r'(?m)^(\s*norm_outer_border\s*:\s*)#[0-9a-fA-F]{6}',
                         rf'\g<1>{semantic["disabled"]}', config)
@@ -385,6 +497,13 @@ def main():
     elif arguments and Path(arguments[0]).is_file():
         mode = arguments[1] if len(arguments) >= 2 and arguments[1] in ("dark", "light") else "dark"
         image = str(Path(arguments[0]).resolve())
+        generated = palette_from_matugen(image, mode)
+        if generated:
+            semantic, ansi, material = generated
+            apply_files(image, semantic, ansi, config_dir, state_file, mode,
+                        generator="matugen", material=material, mode_ready=True)
+            reload_components(wm_message)
+            return
         semantic, ansi = palette_from(image)
     else:
         raise SystemExit(

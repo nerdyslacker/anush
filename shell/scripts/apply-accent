@@ -35,13 +35,30 @@ rewrite "$config_dir/rofi/colors.rasi" \
     "/^[[:space:]]*(accent|border|prompt-fg):/ s/#[0-9A-Fa-f]{6}/$accent/"
 
 rewrite "$config_dir/kitty/current-theme.conf" \
-    "/^[[:space:]]*(active_border_color|active_tab_background|mark1_background)[[:space:]]+/ s/#[0-9A-Fa-f]{6}/$accent/"
+    "/^[[:space:]]*(selection_background|url_color|active_border_color|active_tab_background|mark1_background|color4|color12)[[:space:]]+/ s/#[0-9A-Fa-f]{6}/$accent/"
 
 rewrite "$config_dir/dunst/dunstrc" \
     "/THEME: dunst_(frame_(global|low|normal)|highlight_normal)/ s/#[0-9A-Fa-f]{6}/$accent/"
 
 rewrite "$config_dir/skarwm/config.rc" \
     "/^[[:space:]]*sel_outer_border[[:space:]]*:/ s/#[0-9A-Fa-f]{6}/$accent/"
+
+# Skarwm reads its live configuration outside the Anush data directory. Keep
+# that copy in sync as well, respecting the same environment lookup order used
+# by the window manager.
+if [ -n "${SKARWM_CONFIG:-}" ]; then
+    wm_config=$SKARWM_CONFIG
+elif [ -n "${XDG_CONFIG_HOME:-}" ]; then
+    wm_config=$XDG_CONFIG_HOME/skarwm/config.rc
+elif [ -n "${HOME:-}" ]; then
+    wm_config=$HOME/.config/skarwm/config.rc
+else
+    wm_config=
+fi
+if [ "$wm_config" != "$config_dir/skarwm/config.rc" ]; then
+    rewrite "$wm_config" \
+        "/^[[:space:]]*sel_outer_border[[:space:]]*:/ s/#[0-9A-Fa-f]{6}/$accent/"
+fi
 
 # Rofi reads its theme for every invocation. Reload existing Kitty and Dunst
 # processes when their control mechanisms are available.

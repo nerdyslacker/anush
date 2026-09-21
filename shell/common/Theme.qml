@@ -26,7 +26,12 @@ Singleton {
     property string mode: "dark"
     property var themePresets: []
     property bool presetsReady: false
+    property string applicationThemeStatus: ""
     readonly property var activePreset: presetForId(presetId)
+    readonly property bool matugenThemeGenerated:
+        wallpaperThemeEnabled
+        && ShellState.state.theme.palette?.generator === "matugen"
+    readonly property bool applicationThemeApplying: applicationThemeProcess.running
     readonly property bool light: mode === "light"
     // A single persisted appearance value feeds every non-circular surface.
     // Keep the tiers integral so borders and clipping stay pixel-aligned.
@@ -227,6 +232,18 @@ Singleton {
             String(cornerRadius),
             Wm.msgPath
         ])
+    }
+
+    function applyApplicationTheme(toolkit) {
+        const target = String(toolkit)
+        if (!matugenThemeGenerated || ["gtk", "qt", "all"].indexOf(target) < 0)
+            return
+        applicationThemeProcess.running = false
+        applicationThemeProcess.command = [
+            root.scriptsDir + "/apply-application-theme", target
+        ]
+        applicationThemeStatus = "Applying " + target.toUpperCase() + " theme…"
+        applicationThemeProcess.running = true
     }
 
     function persistThemeMode(value) {
@@ -486,6 +503,18 @@ Singleton {
                 }
                 root.presetsReady = true
                 root.loadState()
+            }
+        }
+    }
+
+    Process {
+        id: applicationThemeProcess
+        stderr: StdioCollector { id: applicationThemeError }
+        onRunningChanged: {
+            if (!running && command.length > 0) {
+                const detail = applicationThemeError.text.trim()
+                root.applicationThemeStatus = detail !== ""
+                    ? detail : "Application theme applied"
             }
         }
     }

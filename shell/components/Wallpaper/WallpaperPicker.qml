@@ -264,14 +264,33 @@ Popout {
         height: root.galleryHeight
         visible: root.wallpapers.length > 0
         clip: true
-        cellWidth: 176
+        cellWidth: (width - 8) / 3
         cellHeight: 103
         cacheBuffer: 4000
         model: root.wallpapers
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollBar {
-            policy: grid.contentHeight > grid.height
-                ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+            id: wallpaperScrollbar
+            width: 8
+            policy: ScrollBar.AsNeeded
+            interactive: true
+
+            background: Rectangle {
+                color: Theme.gray2
+                border.width: 1
+                border.color: Theme.gray5
+                radius: Math.min(width / 2, Theme.radiusSmall)
+            }
+
+            contentItem: Rectangle {
+                implicitWidth: 6
+                implicitHeight: 28
+                color: wallpaperScrollbar.pressed ? Theme.brightOrange
+                    : wallpaperScrollbar.hovered ? Theme.orange : Theme.gray6
+                radius: Math.min(width / 2, Theme.radiusSmall)
+
+                Behavior on color { ColorAnimation { duration: 100 } }
+            }
         }
 
         delegate: Item {

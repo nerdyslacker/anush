@@ -28,7 +28,7 @@ corner_radius : 0
 # Window border colours as #RRGGBB. The normal colour remains accepted for
 # config compatibility; unfocused windows currently have no border.
 norm_outer_border : #706b5c
-sel_outer_border  : #7973ca
+sel_outer_border  : #d2cbbc
 
 # True (default): moving the pointer over a window focuses it.
 focus_follows_mouse : true
@@ -36,7 +36,7 @@ focus_follows_mouse : true
 # ---- launching ----------------------------------------------------------------
 
 # bind: run a shell command. Combo = modifier tokens + one key.
-bind : mod + Return : "kitty"
+bind : mod + Return : "kitty --config ${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/anush/config}/kitty/kitty.conf"
 # >>> Anush shell (managed by anushctl) >>>
 bind : mod + a : "anushctl launcher toggle"
 bind : mod + v : "anushctl clipboard toggle"

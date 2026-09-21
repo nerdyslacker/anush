@@ -1,0 +1,6 @@
+# Anush consumes Matugen's JSON output itself. Keep wallpaper setting and
+# application templates disabled so generating a shell palette has no hidden
+# effects on the user's desktop configuration.
+
+[config.wallpaper]
+set = false

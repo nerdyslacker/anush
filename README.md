@@ -42,7 +42,10 @@ Optional desktop integrations:
   power controls;
 - curl, xcolor, xdg-open, flameshot, xinput, notify-send, and xterm for individual
   widget actions;
-- ImageMagick for wallpaper-derived themes;
+- Matugen for Material You wallpaper themes; ImageMagick remains the automatic
+  fallback when Matugen is unavailable or cannot generate a valid palette;
+- `adw-gtk-theme` (`adw-gtk3`) for applying generated colors consistently to
+  GTK applications, and Qt5ct or Qt6ct for Qt applications;
 - lxqt-policykit-agent, xss-lock, Betterlockscreen, and Udiskie for the supplied
   full desktop startup configuration.
 
@@ -57,10 +60,17 @@ printf '%s\n' 'repository=https://github.com/lazylinuxos/lazy-repo/releases/late
 sudo xbps-install -S quickshell picom dunst feh kitty xss-lock \
   betterlockscreen udiskie lxqt-policykit NetworkManager bluez blueman pavucontrol \
   curl flameshot brightnessctl xrandr python3 renCal xterm xinput xdotool xcolor \
-  clipmenu xkb-switch setxkbmap ImageMagick
+  clipmenu xkb-switch setxkbmap ImageMagick matugen adw-gtk-theme
 ```
 
 Package availability depends on the enabled Void repositories; the Nerd Font may need separate installation.
+
+Every Kitty launch provided by Anush passes
+`config/kitty/kitty.conf` explicitly, so it does not depend on a separate
+system or user Kitty configuration. `anushctl start` also exports that location
+to applications launched by the shell. Its selection, URL, active-tab, border,
+and primary ANSI colors follow the current Anush accent. The focused Skarwm
+window border is updated in the live Skarwm configuration at the same time.
 
 ## Install and launch
 
@@ -219,6 +229,16 @@ In light mode, wallpaper-derived palettes lift the wallpaper's dominant
 background hue into a light surface and enforce readable contrast for text and
 accent roles. Bundled presets use the exact named colors from their upstream
 palette documents rather than generated lightening or darkening.
+
+Wallpaper themes prefer Matugen's tonal-spot Material palette when `matugen`
+is available. The existing Anush/ImageMagick generator is used automatically
+if Matugen is missing, exits unsuccessfully, or returns incomplete data. When
+the active wallpaper palette came from Matugen, the layout popup exposes
+explicit **Apply GTK Themes** and **Apply Qt Themes** actions. Applying the GTK
+theme expects `adw-gtk-theme` (the installed theme is normally named
+`adw-gtk3`) and updates application CSS in a managed block without discarding
+existing user CSS. Qt5ct, Qt6ct, and KDE-compatible color-scheme files are
+generated from the same palette.
 
 Bars can optionally shrink along their long axis to their natural widget size
 while the native panel window remains centered on each screen. This keeps the

@@ -64,6 +64,37 @@ Popout {
         }
     }
 
+    component ActionButton: Rectangle {
+        id: actionButton
+        required property string label
+        signal clicked()
+
+        height: 32
+        radius: Theme.radiusSmall
+        color: !enabled ? Theme.surfaceSubtle
+            : actionMouse.containsMouse ? Theme.surfaceVariant : Theme.surface
+        border.width: 1
+        border.color: actionMouse.containsMouse ? Theme.accent : Theme.outline
+        opacity: enabled ? 1 : 0.55
+
+        Text {
+            anchors.centerIn: parent
+            text: actionButton.label
+            color: Theme.foreground
+            font.family: Theme.fontFamily
+            font.pixelSize: Math.max(9, Theme.fontSize - 1)
+            font.bold: true
+        }
+
+        MouseArea {
+            id: actionMouse
+            anchors.fill: parent
+            enabled: actionButton.enabled
+            hoverEnabled: true
+            onClicked: actionButton.clicked()
+        }
+    }
+
     component ThemeSelector: Controls.ComboBox {
         id: selector
         required property string selectedValue
@@ -420,6 +451,44 @@ Popout {
                     }
                 }
             }
+        }
+
+        SectionLabel {
+            text: "Application themes"
+        }
+
+        Row {
+            width: parent.width
+            spacing: 6
+
+            ActionButton {
+                width: (parent.width - parent.spacing) / 2
+                label: "Apply GTK Themes"
+                enabled: Theme.matugenThemeGenerated
+                    && !Theme.applicationThemeApplying
+                onClicked: Theme.applyApplicationTheme("gtk")
+            }
+
+            ActionButton {
+                width: (parent.width - parent.spacing) / 2
+                label: "Apply Qt Themes"
+                enabled: Theme.matugenThemeGenerated
+                    && !Theme.applicationThemeApplying
+                onClicked: Theme.applyApplicationTheme("qt")
+            }
+        }
+
+        Text {
+            width: parent.width
+            text: Theme.applicationThemeStatus !== ""
+                ? Theme.applicationThemeStatus
+                : Theme.matugenThemeGenerated
+                    ? "Install adw-gtk-theme (adw-gtk3) for GTK theming. Qt applications need Qt5ct or Qt6ct."
+                    : "Generate a wallpaper palette with Matugen to enable application themes."
+            color: Theme.foregroundMuted
+            font.family: Theme.fontFamily
+            font.pixelSize: Math.max(8, Theme.fontSize - 2)
+            wrapMode: Text.WordWrap
         }
 
         SectionLabel { text: "Icon theme" }

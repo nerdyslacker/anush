@@ -35,6 +35,23 @@ configure_icon_theme_environment :: proc() {
     _ = os.set_env("QS_ICON_THEME", state.theme.iconTheme)
 }
 
+configure_shell_environment :: proc(root: string) {
+    configure_icon_theme_environment()
+
+    config_buf: [4096]u8
+    if configured := os.get_env_buf(
+            config_buf[:], "ANUSH_CONFIG_DIR"); configured != "" {
+        kitty_config := fmt.aprintf("%s/kitty", configured)
+        defer delete(kitty_config)
+        _ = os.set_env("KITTY_CONFIG_DIRECTORY", kitty_config)
+        return
+    }
+
+    kitty_config := fmt.aprintf("%s/config/kitty", root)
+    defer delete(kitty_config)
+    _ = os.set_env("KITTY_CONFIG_DIRECTORY", kitty_config)
+}
+
 shell_root :: proc() -> string {
     env_buf: [4096]u8
     if configured := os.get_env_buf(env_buf[:], "ANUSH_ROOT"); configured != "" {
@@ -151,6 +168,19 @@ refresh_managed_files :: proc(target, source: string) -> bool {
         defer delete(target_presets)
         if err := os.copy_directory_all(target_presets, source_presets); err != nil {
             fmt.eprintln("anushctl: cannot refresh managed theme presets:", err)
+            return false
+        }
+    }
+
+    // Matugen integration is also managed application data. Keep it current
+    // without replacing the rest of the user's config directory.
+    source_matugen := fmt.aprintf("%s/config/matugen", source)
+    defer delete(source_matugen)
+    if os.exists(source_matugen) {
+        target_matugen := fmt.aprintf("%s/config/matugen", target)
+        defer delete(target_matugen)
+        if err := os.copy_directory_all(target_matugen, source_matugen); err != nil {
+            fmt.eprintln("anushctl: cannot refresh managed Matugen config:", err)
             return false
         }
     }
@@ -355,7 +385,7 @@ restart_shell :: proc() -> int {
         return EXIT_RUNTIME
     }
 
-    configure_icon_theme_environment()
+    configure_shell_environment(root)
     code, out, err_out, launched := run_process(
         []string{"qs", "-d", "--no-duplicate", "-p", shell_dir})
     defer delete(out)
@@ -397,7 +427,7 @@ launch_shell :: proc() -> int {
     shell_dir, _ := filepath.join([]string{root, "shell"})
     defer delete(shell_dir)
 
-    configure_icon_theme_environment()
+    configure_shell_environment(root)
     process, err := os.process_start(os.Process_Desc{
         command = []string{"qs", "--no-duplicate", "-p", shell_dir},
         stdin = os.stdin,
