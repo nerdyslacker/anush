@@ -1,0 +1,19 @@
+{
+  "id": "nord-light",
+  "name": "Nord Light",
+  "mode": "light",
+  "order": 41,
+  "pair": "nord-dark",
+  "preview": ["#ECEFF4", "#D8DEE9", "#5E81AC"],
+  "colors": {
+    "background": "#ECEFF4", "surfaceSubtle": "#E5E9F0", "surface": "#D8DEE9",
+    "surfaceVariant": "#8FBCBB", "pressed": "#88C0D0", "outline": "#81A1C1",
+    "disabled": "#4C566A", "foreground": "#2E3440", "foregroundMuted": "#4C566A",
+    "red": "#BF616A", "orange": "#D08770", "yellow": "#EBCB8B",
+    "green": "#A3BE8C", "cyan": "#88C0D0", "blue": "#5E81AC",
+    "magenta": "#B48EAD", "teal": "#8FBCBB", "shadow": "#4C566A",
+    "white": "#3B4252", "brightRed": "#D08770", "brightOrange": "#D08770",
+    "brightGreen": "#A3BE8C", "brightYellow": "#EBCB8B", "brightBlue": "#81A1C1",
+    "brightMagenta": "#B48EAD", "brightCyan": "#88C0D0"
+  }
+}

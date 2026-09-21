@@ -56,6 +56,9 @@ Singleton {
             launcher: {
                 icon: ""
             },
+            wallpaper: {
+                directory: ""
+            },
             keyboard: {
                 layout: {}
             },
@@ -81,8 +84,10 @@ Singleton {
             },
             theme: {
                 accent: "orange",
-                defaultAccent: "brightYellow",
+                defaultAccent: "yellow",
                 preset: "srcery-dark",
+                iconTheme: "",
+                cursorTheme: "",
                 wallpaperEnabled: false,
                 palette: null,
                 cornerRadius: 0,

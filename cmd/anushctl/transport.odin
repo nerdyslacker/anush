@@ -1,10 +1,39 @@
 package main
 
+import "core:encoding/json"
 import "core:fmt"
 import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import "core:time"
+
+configure_icon_theme_environment :: proc() {
+    state_dir_buf, xdg_state_buf, home_buf: [4096]u8
+    state_dir := os.get_env_buf(state_dir_buf[:], "ANUSH_STATE_DIR")
+    path := ""
+    if state_dir != "" {
+        path = fmt.tprintf("%s/shell-state.json", state_dir)
+    } else if xdg_state := os.get_env_buf(
+            xdg_state_buf[:], "XDG_STATE_HOME"); xdg_state != "" {
+        path = fmt.tprintf("%s/anush/shell-state.json", xdg_state)
+    } else if home := os.get_env_buf(home_buf[:], "HOME"); home != "" {
+        path = fmt.tprintf("%s/.local/state/anush/shell-state.json", home)
+    }
+    if path == "" || !os.exists(path) { return }
+
+    data, read_err := os.read_entire_file(path, context.temp_allocator)
+    if read_err != nil { return }
+    state: struct {
+        theme: struct {
+            iconTheme: string,
+        },
+    }
+    if json.unmarshal(data, &state, allocator = context.temp_allocator) != nil ||
+            state.theme.iconTheme == "" {
+        return
+    }
+    _ = os.set_env("QS_ICON_THEME", state.theme.iconTheme)
+}
 
 shell_root :: proc() -> string {
     env_buf: [4096]u8
@@ -27,6 +56,34 @@ root_is_complete :: proc(root: string) -> bool {
     scripts_dir := fmt.aprintf("%s/shell/scripts", root)
     defer delete(scripts_dir)
     return os.exists(shell_file) && os.exists(config_dir) && os.exists(scripts_dir)
+}
+
+ensure_script_permissions :: proc(root: string) -> bool {
+    scripts_dir := fmt.aprintf("%s/shell/scripts", root)
+    defer delete(scripts_dir)
+    if !os.exists(scripts_dir) { return true }
+
+    script_mode := os.Permissions{
+        .Read_User, .Write_User, .Execute_User,
+        .Read_Group, .Execute_Group,
+        .Read_Other, .Execute_Other,
+    }
+    walker := os.walker_create(scripts_dir)
+    defer os.walker_destroy(&walker)
+    for info in os.walker_walk(&walker) {
+        if info.type != .Regular { continue }
+        if err := os.chmod(info.fullpath, script_mode); err != nil {
+            fmt.eprintln("anushctl: cannot make helper executable:",
+                info.fullpath, ":", err)
+            return false
+        }
+    }
+    if failed_path, err := os.walker_error(&walker); err != nil {
+        fmt.eprintln("anushctl: cannot inspect shell helpers:",
+            failed_path, ":", err)
+        return false
+    }
+    return true
 }
 
 system_root :: proc() -> string {
@@ -71,6 +128,7 @@ refresh_managed_files :: proc(target, source: string) -> bool {
         fmt.eprintln("anushctl: cannot refresh managed shell files:", err)
         return false
     }
+    if !ensure_script_permissions(target) { return false }
 
     source_assets := fmt.aprintf("%s/assets", source)
     defer delete(source_assets)
@@ -79,6 +137,20 @@ refresh_managed_files :: proc(target, source: string) -> bool {
         defer delete(target_assets)
         if err := os.copy_directory_all(target_assets, source_assets); err != nil {
             fmt.eprintln("anushctl: cannot refresh managed assets:", err)
+            return false
+        }
+    }
+
+    // Presets are managed data even though they live under config/ so users
+    // can inspect and extend them. Refresh bundled files without touching
+    // unrelated desktop configuration or user-added preset JSON files.
+    source_presets := fmt.aprintf("%s/config/themes/presets", source)
+    defer delete(source_presets)
+    if os.exists(source_presets) {
+        target_presets := fmt.aprintf("%s/config/themes/presets", target)
+        defer delete(target_presets)
+        if err := os.copy_directory_all(target_presets, source_presets); err != nil {
+            fmt.eprintln("anushctl: cannot refresh managed theme presets:", err)
             return false
         }
     }
@@ -142,6 +214,11 @@ prepare_shell_root :: proc() -> (string, bool) {
     if err := os.copy_directory_all(staging, source); err != nil {
         _ = os.remove_all(staging)
         fmt.eprintln("anushctl: cannot initialize from", source, ":", err)
+        delete(target)
+        return "", false
+    }
+    if !ensure_script_permissions(staging) {
+        _ = os.remove_all(staging)
         delete(target)
         return "", false
     }
@@ -278,6 +355,7 @@ restart_shell :: proc() -> int {
         return EXIT_RUNTIME
     }
 
+    configure_icon_theme_environment()
     code, out, err_out, launched := run_process(
         []string{"qs", "-d", "--no-duplicate", "-p", shell_dir})
     defer delete(out)
@@ -319,6 +397,7 @@ launch_shell :: proc() -> int {
     shell_dir, _ := filepath.join([]string{root, "shell"})
     defer delete(shell_dir)
 
+    configure_icon_theme_environment()
     process, err := os.process_start(os.Process_Desc{
         command = []string{"qs", "--no-duplicate", "-p", shell_dir},
         stdin = os.stdin,

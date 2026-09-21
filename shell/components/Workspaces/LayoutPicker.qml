@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls as Controls
 import "../.."
 
 // Layout and appearance controls adapted to skarwm. Layout selection applies
@@ -8,14 +9,12 @@ import "../.."
 Popout {
     id: root
 
-    readonly property var accents: [
-        "orange", "red", "green", "yellow", "blue", "magenta", "cyan",
-        "brightOrange", "brightRed", "brightGreen", "brightYellow",
-        "brightBlue", "brightMagenta", "brightCyan"
-    ]
+    readonly property var accents: Theme.accentNames
 
     cardWidth: 360
     cardHeight: content.implicitHeight + 2 * cardPadding
+
+    onVisibleChanged: if (visible) AppearanceService.refresh()
 
     Connections {
         target: ShellActions
@@ -63,6 +62,89 @@ Popout {
             anchors.fill: parent
             onClicked: control.toggled()
         }
+    }
+
+    component ThemeSelector: Controls.ComboBox {
+        id: selector
+        required property string selectedValue
+        signal selected(string value)
+
+        width: parent.width
+        height: 34
+        currentIndex: model.indexOf(selectedValue)
+        displayText: selectedValue !== "" ? selectedValue : "Detecting system theme…"
+        leftPadding: 10
+        rightPadding: 34
+
+        contentItem: Text {
+            text: selector.displayText
+            color: Theme.foreground
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+
+        indicator: Text {
+            x: selector.width - width - 10
+            anchors.verticalCenter: parent.verticalCenter
+            text: "󰅀"
+            color: Theme.accent
+            font.family: Theme.iconFontFamily
+            font.pixelSize: Theme.iconSizeSmall
+        }
+
+        background: Rectangle {
+            radius: Theme.radiusSmall
+            color: selector.pressed ? Theme.pressed : Theme.surface
+            border.width: 1
+            border.color: selector.popup.visible ? Theme.accent : Theme.outline
+        }
+
+        delegate: Controls.ItemDelegate {
+            id: option
+            required property var modelData
+            required property int index
+            width: selector.width
+            height: 32
+            highlighted: selector.highlightedIndex === index
+
+            contentItem: Text {
+                text: option.modelData
+                color: option.highlighted ? Theme.selfg : Theme.foreground
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize - 1
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+            }
+            background: Rectangle {
+                color: option.highlighted ? Theme.activeBackground
+                    : option.hovered ? Theme.hover : Theme.surface
+            }
+        }
+
+        popup: Controls.Popup {
+            y: selector.height + 3
+            width: selector.width
+            implicitHeight: Math.min(contentItem.implicitHeight + 2, 230)
+            padding: 1
+
+            contentItem: ListView {
+                clip: true
+                implicitHeight: contentHeight
+                model: selector.popup.visible ? selector.delegateModel : null
+                currentIndex: selector.highlightedIndex
+                Controls.ScrollIndicator.vertical: Controls.ScrollIndicator {}
+            }
+            background: Rectangle {
+                radius: Theme.radiusSmall
+                color: Theme.surface
+                border.width: 1
+                border.color: Theme.outline
+            }
+        }
+
+        onActivated: index => selected(String(model[index]))
     }
 
     Column {
@@ -150,25 +232,99 @@ Popout {
             persistFn: value => Theme.persistCornerRadius(value)
         }
 
-        SectionLabel { text: "Theme preset" }
+        Item {
+            width: parent.width
+            height: 25
 
-        Grid {
+            SectionLabel {
+                text: "Theme preset"
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                topPadding: 0
+            }
+
+            Row {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 7
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Dark"
+                    color: Theme.light ? Theme.foregroundMuted : Theme.accent
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Math.max(9, Theme.fontSize - 2)
+                    font.bold: !Theme.light
+                }
+
+                SettingSwitch {
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: Theme.light
+                    onToggled: Theme.persistThemeMode(
+                        Theme.light ? "dark" : "light")
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Light"
+                    color: Theme.light ? Theme.accent : Theme.foregroundMuted
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Math.max(9, Theme.fontSize - 2)
+                    font.bold: Theme.light
+                }
+            }
+        }
+
+        GridView {
             id: themeGrid
             width: parent.width
-            columns: 3
-            spacing: 5
+            height: cellHeight * 2
+            cellWidth: (width - 8) / 3
+            cellHeight: 57
+            clip: true
+            model: Theme.themePresets
+            boundsBehavior: Flickable.StopAtBounds
+            flickableDirection: Flickable.VerticalFlick
 
-            Repeater {
-                model: Theme.themePresets
+            Controls.ScrollBar.vertical: Controls.ScrollBar {
+                id: themeScrollbar
+                width: 8
+                policy: themeGrid.contentHeight > themeGrid.height
+                    ? Controls.ScrollBar.AsNeeded : Controls.ScrollBar.AlwaysOff
+                interactive: true
+
+                background: Rectangle {
+                    color: Theme.gray2
+                    border.width: 1
+                    border.color: Theme.gray5
+                    radius: Math.min(width / 2, Theme.radiusSmall)
+                }
+
+                contentItem: Rectangle {
+                    implicitWidth: 6
+                    implicitHeight: 28
+                    color: themeScrollbar.pressed ? Theme.brightOrange
+                        : themeScrollbar.hovered ? Theme.orange : Theme.gray6
+                    radius: Math.min(width / 2, Theme.radiusSmall)
+
+                    Behavior on color { ColorAnimation { duration: 100 } }
+                }
+            }
+
+            delegate: Item {
+                id: themeCell
+                required property var modelData
+                width: themeGrid.cellWidth
+                height: themeGrid.cellHeight
 
                 Rectangle {
                     id: themeTile
-                    required property var modelData
                     readonly property bool current:
-                        Theme.presetId === modelData.id
+                        Theme.presetId === themeCell.modelData.id
 
-                    width: (themeGrid.width - themeGrid.spacing * 2) / 3
-                    height: 52
+                    anchors.fill: parent
+                    anchors.rightMargin: 5
+                    anchors.bottomMargin: 5
                     radius: Theme.radiusSmall
                     color: current ? Theme.activeBackground
                         : themeMouse.containsMouse ? Theme.gray3 : Theme.gray2
@@ -183,7 +339,7 @@ Popout {
                             anchors.horizontalCenter: parent.horizontalCenter
                             spacing: 3
                             Repeater {
-                                model: themeTile.modelData.colors
+                                model: themeCell.modelData.preview
                                 Rectangle {
                                     required property string modelData
                                     width: 20
@@ -201,7 +357,7 @@ Popout {
                             width: themeTile.width - 8
                             horizontalAlignment: Text.AlignHCenter
                             elide: Text.ElideRight
-                            text: themeTile.modelData.name
+                            text: themeCell.modelData.name
                             color: themeTile.current ? Theme.selfg : Theme.fg
                             font.family: Theme.fontFamily
                             font.pixelSize: 9
@@ -213,7 +369,7 @@ Popout {
                         id: themeMouse
                         anchors.fill: parent
                         hoverEnabled: true
-                        onClicked: Theme.setThemePreset(themeTile.modelData.id)
+                        onClicked: Theme.setThemePreset(themeCell.modelData.id)
                     }
                 }
             }
@@ -236,7 +392,7 @@ Popout {
                     readonly property bool current:
                         Theme.accentName === modelData
                     readonly property color swatchColor:
-                        Theme.accentColor(modelData)
+                        Theme.mutedAccentColor(modelData)
 
                     width: (accentGrid.width - accentGrid.spacing * 6) / 7
                     height: 31
@@ -266,35 +422,30 @@ Popout {
             }
         }
 
-        Row {
+        SectionLabel { text: "Icon theme" }
+
+        ThemeSelector {
+            selectedValue: AppearanceService.iconTheme
+            model: AppearanceService.iconThemes
+            onSelected: value => AppearanceService.setIconTheme(
+                value, Theme.accent.toString())
+        }
+
+        Text {
             width: parent.width
-            height: 30
-            spacing: 9
+            text: "Folder colors follow the accent when the selected theme supports it."
+            color: Theme.foregroundMuted
+            font.family: Theme.fontFamily
+            font.pixelSize: Math.max(8, Theme.fontSize - 2)
+            wrapMode: Text.WordWrap
+        }
 
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "Dark theme"
-                color: Theme.light ? Theme.foregroundMuted : Theme.accent
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize - 1
-                font.bold: !Theme.light
-            }
+        SectionLabel { text: "Cursor theme" }
 
-            SettingSwitch {
-                anchors.verticalCenter: parent.verticalCenter
-                checked: Theme.light
-                onToggled: Theme.persistThemeMode(
-                    Theme.light ? "dark" : "light")
-            }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "Light theme"
-                color: Theme.light ? Theme.accent : Theme.foregroundMuted
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize - 1
-                font.bold: Theme.light
-            }
+        ThemeSelector {
+            selectedValue: AppearanceService.cursorTheme
+            model: AppearanceService.cursorThemes
+            onSelected: value => AppearanceService.setCursorTheme(value)
         }
     }
 }

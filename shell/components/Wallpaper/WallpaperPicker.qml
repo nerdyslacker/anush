@@ -1,25 +1,65 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import "../.."
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
 
-// Thumbnail picker for images in local/wallpaper. Wallpaper-driven palette
-// generation is optional; disabled mode leaves the current theme unchanged.
+// Thumbnail picker for a configurable local directory. Wallpaper-driven
+// palette generation is optional; disabled mode leaves the theme unchanged.
 Popout {
     id: root
 
     cardWidth: 176 * 3 + 2 * cardPadding
     readonly property real titleHeight: 20
+    readonly property real directoryOptionHeight: 38
     readonly property real galleryHeight: 103 * 4
     readonly property real themeOptionHeight: 30
-    cardHeight: titleHeight + 9 + galleryHeight + 8 + themeOptionHeight
-        + 2 * cardPadding
+    cardHeight: titleHeight + 7 + directoryOptionHeight + 9 + galleryHeight
+        + 8 + themeOptionHeight + 2 * cardPadding
 
     property var wallpapers: []
     property var _found: []
     property bool randomPending: false
     property string selectedPath: ""
+    property bool browsing: false
+    readonly property string defaultDirectory: Theme.configDir + "/wallpaper"
+    readonly property string wallpaperDirectory: {
+        const saved = String(ShellState.state.wallpaper?.directory ?? "").trim()
+        return saved !== "" ? saved : defaultDirectory
+    }
+    readonly property bool customDirectory:
+        wallpaperDirectory !== defaultDirectory
+    signal directoryBrowseRequested()
+
+    closeOnOutside: !browsing
+
+    function directoryUrl() {
+        return "file://" + wallpaperDirectory
+    }
+
+    function pathFromUrl(url) {
+        const value = String(url ?? "")
+        return value.startsWith("file://")
+            ? decodeURIComponent(value.slice(7)) : value
+    }
+
+    function acceptDirectory(url) {
+        let path = pathFromUrl(url)
+        if (path.length > 1)
+            path = path.replace(/\/$/, "")
+        if (path === "") return
+        ShellState.updateSection("wallpaper", { directory: path })
+        selectedPath = ""
+        Qt.callLater(() => scan())
+    }
+
+    function resetDirectory() {
+        ShellState.updateSection("wallpaper", { directory: "" })
+        selectedPath = ""
+        Qt.callLater(() => scan())
+    }
 
     function scan() {
         lister.running = false
@@ -62,21 +102,21 @@ Popout {
 
     Process {
         id: lister
-        command: ["sh", "-c",
-            "find \"" + Theme.configDir + "/wallpaper\" -maxdepth 1 -type f " +
-            "\\( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o " +
-            "-iname '*.webp' \\) 2>/dev/null | sort"]
+        command: ["find", root.wallpaperDirectory, "-maxdepth", "1",
+            "-type", "f", "-print"]
         stdout: SplitParser {
             onRead: line => {
-                if (line.trim() !== "")
-                    root._found.push(line.trim())
+                const path = line.trim()
+                if (/\.(png|jpe?g|webp)$/i.test(path))
+                    root._found.push(path)
             }
         }
         onRunningChanged: {
             if (running) {
                 root._found = []
             } else {
-                root.wallpapers = root._found
+                root.wallpapers = root._found.sort((a, b) =>
+                    a.localeCompare(b))
                 if (root.wallpapers.indexOf(root.selectedPath) < 0)
                     root.selectedPath = ""
                 if (root.randomPending) {
@@ -118,6 +158,35 @@ Popout {
         }
     }
 
+    component DirectoryButton: Rectangle {
+        id: button
+        required property string buttonText
+        signal activated()
+
+        implicitWidth: label.implicitWidth + 18
+        height: 28
+        radius: Theme.radiusSmall
+        color: buttonMouse.containsMouse ? Theme.gray3 : Theme.gray2
+        border.width: 1
+        border.color: Theme.gray5
+
+        Text {
+            id: label
+            anchors.centerIn: parent
+            text: button.buttonText
+            color: Theme.fg
+            font.family: Theme.fontFamily
+            font.pixelSize: Math.max(9, Theme.fontSize - 1)
+        }
+
+        MouseArea {
+            id: buttonMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            onClicked: button.activated()
+        }
+    }
+
     Text {
         id: heading
         anchors.left: parent.left
@@ -132,11 +201,56 @@ Popout {
         verticalAlignment: Text.AlignVCenter
     }
 
+    Row {
+        id: directoryOption
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: heading.bottom
+        anchors.topMargin: 7
+        height: root.directoryOptionHeight
+        spacing: 7
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "󰉋"
+            color: Theme.accent
+            font.family: Theme.iconFontFamily
+            font.pixelSize: Theme.iconSize
+        }
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            width: parent.width - x - changeDirectory.width - parent.spacing
+                - (resetDirectory.visible
+                    ? resetDirectory.width + parent.spacing : 0)
+            text: root.wallpaperDirectory
+            elide: Text.ElideMiddle
+            color: Theme.foregroundMuted
+            font.family: Theme.fontFamily
+            font.pixelSize: Math.max(9, Theme.fontSize - 2)
+        }
+
+        DirectoryButton {
+            id: changeDirectory
+            anchors.verticalCenter: parent.verticalCenter
+            buttonText: "Change…"
+            onActivated: root.directoryBrowseRequested()
+        }
+
+        DirectoryButton {
+            id: resetDirectory
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root.customDirectory
+            buttonText: "Reset"
+            onActivated: root.resetDirectory()
+        }
+    }
+
     Rectangle {
         id: titleSeparator
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.top: heading.bottom
+        anchors.top: directoryOption.bottom
         height: 1
         color: Theme.gray5
     }
@@ -204,7 +318,7 @@ Popout {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: grid.verticalCenter
         visible: root.wallpapers.length === 0
-        text: "Add images to local/wallpaper"
+        text: "No wallpapers found in the selected directory"
         color: Theme.brightBlack
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSize
@@ -220,12 +334,12 @@ Popout {
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: "Use default theme"
+            text: "Generate theme based on wallpaper"
             color: Theme.wallpaperThemeEnabled
-                ? Theme.brightBlack : Theme.accent
+                ? Theme.accent : Theme.brightBlack
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 1
-            font.bold: !Theme.wallpaperThemeEnabled
+            font.bold: Theme.wallpaperThemeEnabled
         }
 
         SettingSwitch {
@@ -233,16 +347,6 @@ Popout {
             checked: Theme.wallpaperThemeEnabled
             onToggled: Theme.persistWallpaperThemeEnabled(
                 !Theme.wallpaperThemeEnabled, root.selectedPath)
-        }
-
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: "Generate theme based on wallpaper"
-            color: Theme.wallpaperThemeEnabled
-                ? Theme.accent : Theme.brightBlack
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize - 1
-            font.bold: Theme.wallpaperThemeEnabled
         }
     }
 }

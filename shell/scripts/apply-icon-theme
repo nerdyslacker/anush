@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 
-"""Keep the desktop icon theme and Papirus folder colour in sync with Anush."""
+"""Discover and apply icon themes without replacing the selected theme."""
 
 from __future__ import annotations
 
-import colorsys
 import os
 from pathlib import Path
 import re
@@ -12,12 +11,21 @@ import shutil
 import subprocess
 import sys
 
+# Older Anush versions selected this generated overlay during every accent
+# change. Keep the name only so existing installations can migrate away from
+# it; no new overlay is created or selected.
+LEGACY_OVERLAY_NAME = "Anush-Papirus"
 
-THEME_NAME = "Anush-Papirus"
-PAPIRUS = Path("/usr/share/icons/Papirus")
-PAPIRUS_BLUE = "#5294e2"
-PAPIRUS_BLUE_REAR = "#4877b1"
-PAPIRUS_BLUE_DETAIL = "#1d344f"
+PAPIRUS_FOLDER_COLOURS = {
+    "black": "#4f4f4f", "blue": "#5294e2", "bluegrey": "#607d8b",
+    "breeze": "#57bee8", "brown": "#8e6e53", "carmine": "#a30002",
+    "cyan": "#00bcd4", "darkcyan": "#009688", "deeporange": "#ff7043",
+    "green": "#4caf50", "grey": "#9e9e9e", "indigo": "#5c6bc0",
+    "magenta": "#e91e63", "nordic": "#81a1c1", "orange": "#ff9800",
+    "palebrown": "#bcaaa4", "paleorange": "#ffcc80", "pink": "#ec407a",
+    "red": "#f44336", "teal": "#009688", "violet": "#9c27b0",
+    "white": "#f5f5f5", "yaru": "#e95420", "yellow": "#ffc107",
+}
 
 
 def run(*command: str) -> None:
@@ -28,118 +36,112 @@ def run(*command: str) -> None:
         pass
 
 
-def exact_colour(value: str) -> str:
-    match = re.fullmatch(r"#?(?:[0-9a-fA-F]{2})?([0-9a-fA-F]{6})", value)
-    if not match:
-        return PAPIRUS_BLUE
-    return "#" + match.group(1).lower()
+def icon_roots() -> list[Path]:
+    roots = [Path.home() / ".icons",
+             Path(os.environ.get("XDG_DATA_HOME",
+                                 Path.home() / ".local/share")) / "icons"]
+    for directory in os.environ.get(
+            "XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":"):
+        if directory:
+            roots.append(Path(directory) / "icons")
+    return list(dict.fromkeys(roots))
 
 
-def derived_colour(accent: str, template: str) -> str:
-    def rgb(value: str) -> tuple[float, float, float]:
-        return tuple(int(value[index:index + 2], 16) / 255
-                     for index in (1, 3, 5))
-
-    accent_h, accent_l, accent_s = colorsys.rgb_to_hls(*rgb(accent))
-    _, base_l, base_s = colorsys.rgb_to_hls(*rgb(PAPIRUS_BLUE))
-    _, layer_l, layer_s = colorsys.rgb_to_hls(*rgb(template))
-    lightness = max(0, min(1, accent_l * layer_l / base_l))
-    saturation = max(0, min(1, accent_s * layer_s / base_s))
-    result = colorsys.hls_to_rgb(accent_h, lightness, saturation)
-    return "#" + "".join(f"{round(channel * 255):02x}" for channel in result)
+def theme_path(name: str) -> Path | None:
+    for root in icon_roots():
+        candidate = root / name
+        if (candidate / "index.theme").is_file():
+            return candidate
+    return None
 
 
-def recolour_svg(source: Path, accent: str) -> str:
-    replacements = {
-        PAPIRUS_BLUE: accent,
-        PAPIRUS_BLUE_REAR: derived_colour(accent, PAPIRUS_BLUE_REAR),
-        PAPIRUS_BLUE_DETAIL: derived_colour(accent, PAPIRUS_BLUE_DETAIL),
-    }
-    text = source.read_text()
-    for original, replacement in replacements.items():
-        text = re.sub(re.escape(original), replacement, text,
-                      flags=re.IGNORECASE)
-    return text
+def index_value(path: Path, key: str) -> str:
+    try:
+        text = (path / "index.theme").read_text(errors="replace")
+    except OSError:
+        return ""
+    match = re.search(rf"(?mi)^{re.escape(key)}\s*=\s*(.+)$", text)
+    return match.group(1).strip() if match else ""
 
 
-def atomic_symlink(source: Path, destination: Path) -> None:
-    temporary = destination.with_name(destination.name + ".new")
-    temporary.unlink(missing_ok=True)
-    temporary.symlink_to(source)
-    os.replace(temporary, destination)
+def icon_themes() -> list[str]:
+    themes: set[str] = set()
+    for root in icon_roots():
+        if not root.is_dir():
+            continue
+        try:
+            children = list(root.iterdir())
+        except OSError:
+            continue
+        for path in children:
+            if not path.is_dir() or path.name == LEGACY_OVERLAY_NAME \
+                    or not (path / "index.theme").is_file():
+                continue
+            directories = index_value(path, "Directories").split(",")
+            if any(item.strip() and "cursor" not in item.lower()
+                   for item in directories):
+                themes.add(path.name)
+    return sorted(themes, key=str.casefold)
+
+
+def configured_theme() -> str:
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME",
+                                      Path.home() / ".config"))
+    for relative in ("gtk-4.0/settings.ini", "gtk-3.0/settings.ini"):
+        path = config_home / relative
+        try:
+            text = path.read_text(errors="replace")
+        except OSError:
+            continue
+        match = re.search(r"(?mi)^gtk-icon-theme-name\s*=\s*(.+)$", text)
+        if match:
+            value = match.group(1).strip().strip("'\"")
+            return value
+    if shutil.which("gsettings"):
+        try:
+            return subprocess.check_output([
+                "gsettings", "get", "org.gnome.desktop.interface", "icon-theme"
+            ], stderr=subprocess.DEVNULL, text=True).strip().strip("'\"")
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return ""
+
+
+def current_theme() -> str:
+    selected = configured_theme()
+    if selected != LEGACY_OVERLAY_NAME:
+        return selected
+    overlay = theme_path(LEGACY_OVERLAY_NAME)
+    inherited = index_value(overlay, "Inherits") if overlay else ""
+    return inherited.split(",")[0].strip()
 
 
 def atomic_write(text: str, destination: Path) -> None:
-    temporary = destination.with_name(destination.name + ".new")
+    temporary = destination.with_name(destination.name + ".tmp")
     temporary.write_text(text)
     os.replace(temporary, destination)
 
 
-def build_overlay(accent: str) -> Path:
-    data_home = Path(os.environ.get(
-        "XDG_DATA_HOME", Path.home() / ".local/share"))
-    overlay = data_home / "icons" / THEME_NAME
-    directories: list[tuple[str, int, int]] = []
+def nearest_papirus_colour(accent: str) -> str:
+    match = re.fullmatch(r"#?(?:[0-9a-fA-F]{2})?([0-9a-fA-F]{6})", accent)
+    if not match:
+        return "blue"
+    value = match.group(1)
+    target = tuple(int(value[index:index + 2], 16) for index in (0, 2, 4))
+    return min(PAPIRUS_FOLDER_COLOURS, key=lambda name: sum(
+        (target[channel] - int(PAPIRUS_FOLDER_COLOURS[name][
+            1 + channel * 2:3 + channel * 2], 16)) ** 2
+        for channel in range(3)))
 
-    for source_places in sorted(PAPIRUS.glob("*x*/places")):
-        dimension = source_places.parent.name
-        match = re.fullmatch(r"(\d+)x\d+(?:@(\d+)x)?", dimension)
-        if not match:
-            continue
-        destination = overlay / dimension / "places"
-        destination.mkdir(parents=True, exist_ok=True)
-        for old in destination.glob("*.svg"):
-            old.unlink()
 
-        prefix = "folder-blue"
-        blue_folders = [source for source in source_places.glob(prefix + "*.svg")
-                        if source.name == "folder-blue.svg"
-                        or source.name.startswith("folder-blue-")]
-        for source in blue_folders:
-            alias = "folder" + source.name[len(prefix):]
-            atomic_write(recolour_svg(source.resolve(), accent),
-                         destination / alias)
-
-        # GTK/GIO commonly requests the MIME generic name directly. Icon-theme
-        # inheritance does not resolve the parent theme's inode-directory ->
-        # folder link back through this overlay, so point every generic alias
-        # at the coloured folder explicitly.
-        generic_folder = destination / "folder.svg"
-        if generic_folder.is_file():
-            coloured_folder = generic_folder.resolve()
-            for alias in ("inode-directory.svg", "gtk-directory.svg"):
-                atomic_symlink(coloured_folder, destination / alias)
-
-        user_prefix = "user-blue"
-        for source in source_places.glob(user_prefix + "*.svg"):
-            suffix = source.name[len(user_prefix):]
-            user_alias = destination / ("user" + suffix)
-            atomic_write(recolour_svg(source.resolve(), accent), user_alias)
-            if suffix.startswith("-home") or suffix.startswith("-desktop"):
-                atomic_symlink(user_alias, destination / ("folder" + suffix))
-
-        if any(destination.iterdir()):
-            directories.append((f"{dimension}/places", int(match.group(1)),
-                                int(match.group(2) or 1)))
-
-    lines = [
-        "[Icon Theme]",
-        "Name=Anush Papirus",
-        "Comment=Papirus with folders matched to the Anush accent",
-        "Inherits=Papirus",
-        "Directories=" + ",".join(item[0] for item in directories),
-        "",
-    ]
-    for directory, size, scale in directories:
-        lines.extend([
-            f"[{directory}]", "Context=Places", f"Size={size}",
-            f"Scale={scale}", "Type=Fixed", "",
-        ])
-    overlay.mkdir(parents=True, exist_ok=True)
-    temporary = overlay / "index.theme.tmp"
-    temporary.write_text("\n".join(lines))
-    os.replace(temporary, overlay / "index.theme")
-    return overlay
+def recolour_folders(theme: str, accent: str) -> None:
+    # Folder recolouring is an explicit capability of Papirus itself. A theme
+    # merely inheriting Papirus is not treated as Papirus: doing so previously
+    # replaced unrelated themes with Anush-Papirus on every accent change.
+    helper = shutil.which("papirus-folders")
+    if not helper or not theme.casefold().startswith("papirus"):
+        return
+    run(helper, "-C", nearest_papirus_colour(accent), "--theme", theme)
 
 
 def set_ini_value(path: Path, section: str, key: str, value: str) -> None:
@@ -155,75 +157,72 @@ def set_ini_value(path: Path, section: str, key: str, value: str) -> None:
         end = text.find("\n[", start)
         end = len(text) if end < 0 else end
         body = text[start:end]
-        if key_pattern.search(body):
-            body = key_pattern.sub(f"{key}={value}", body)
-        else:
-            body += f"\n{key}={value}"
+        body = key_pattern.sub(f"{key}={value}", body) \
+            if key_pattern.search(body) else body + f"\n{key}={value}"
         text = text[:start] + body + text[end:]
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(text)
-    os.replace(temporary, path)
+    atomic_write(text, path)
 
 
-def set_xsettings(path: Path) -> None:
+def set_xsettings(path: Path, key: str, value: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     text = path.read_text() if path.exists() else ""
-    pattern = re.compile(r'(?m)^Net/IconThemeName\s+.*$')
-    line = f'Net/IconThemeName "{THEME_NAME}"'
-    text = pattern.sub(line, text) if pattern.search(text) else text + "\n" + line + "\n"
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(text.lstrip("\n"))
-    os.replace(temporary, path)
+    pattern = re.compile(rf"(?m)^{re.escape(key)}\s+.*$")
+    line = f'{key} "{value}"'
+    text = pattern.sub(line, text) if pattern.search(text) \
+        else text + "\n" + line + "\n"
+    atomic_write(text.lstrip("\n"), path)
 
 
-def configure_desktops(overlay: Path) -> None:
+def configure_desktops(theme: str, cache: Path | None = None) -> None:
     config_home = Path(os.environ.get(
         "XDG_CONFIG_HOME", Path.home() / ".config"))
     for gtk in ("gtk-3.0", "gtk-4.0"):
         set_ini_value(config_home / gtk / "settings.ini", "Settings",
-                      "gtk-icon-theme-name", THEME_NAME)
-    set_xsettings(config_home / "xsettingsd" / "xsettingsd.conf")
-
+                      "gtk-icon-theme-name", theme)
+    set_xsettings(config_home / "xsettingsd" / "xsettingsd.conf",
+                  "Net/IconThemeName", theme)
+    kde = ["--file", "kdeglobals", "--group", "Icons", "--key", "Theme", theme]
     if shutil.which("kwriteconfig6"):
-        run("kwriteconfig6", "--file", "kdeglobals", "--group", "Icons",
-            "--key", "Theme", THEME_NAME)
+        run("kwriteconfig6", *kde)
     elif shutil.which("kwriteconfig5"):
-        run("kwriteconfig5", "--file", "kdeglobals", "--group", "Icons",
-            "--key", "Theme", THEME_NAME)
+        run("kwriteconfig5", *kde)
     if shutil.which("gsettings"):
-        run("gsettings", "set", "org.gnome.desktop.interface", "icon-theme",
-            THEME_NAME)
+        run("gsettings", "set", "org.gnome.desktop.interface", "icon-theme", theme)
     if shutil.which("xfconf-query"):
         run("xfconf-query", "-c", "xsettings", "-p", "/Net/IconThemeName",
-            "-n", "-t", "string", "-s", THEME_NAME)
-    if shutil.which("gtk-update-icon-cache"):
-        run("gtk-update-icon-cache", "-f", "-t", str(overlay))
+            "-n", "-t", "string", "-s", theme)
+    if cache and shutil.which("gtk-update-icon-cache"):
+        run("gtk-update-icon-cache", "-f", "-t", str(cache))
     if shutil.which("dbus-send"):
         run("dbus-send", "--session", "--type=signal", "/KGlobalSettings",
             "org.kde.KGlobalSettings.notifyChange", "int32:4", "int32:0")
-
-    try:
-        subprocess.run(["pkill", "-HUP", "-x", "xsettingsd"], check=False,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except OSError:
-        pass
+    run("pkill", "-HUP", "-x", "xsettingsd")
 
 
 def main() -> int:
-    if len(sys.argv) != 2 or not PAPIRUS.is_dir():
+    if len(sys.argv) == 2 and sys.argv[1] == "--list":
+        print("\n".join(icon_themes()))
         return 0
-    if sys.argv[1] == "--ensure":
-        data_home = Path(os.environ.get(
-            "XDG_DATA_HOME", Path.home() / ".local/share"))
-        overlay = data_home / "icons" / THEME_NAME
-        if not (overlay / "index.theme").is_file():
-            overlay = build_overlay("#ff5f00")
-        configure_desktops(overlay)
+    if len(sys.argv) == 2 and sys.argv[1] == "--current":
+        print(current_theme())
         return 0
-    accent = exact_colour(sys.argv[1])
-    overlay = build_overlay(accent)
-    configure_desktops(overlay)
-    return 0
+    if len(sys.argv) >= 3 and sys.argv[1] == "--set":
+        selected = sys.argv[2]
+        if not theme_path(selected):
+            return 1
+        configure_desktops(selected)
+        if len(sys.argv) >= 4:
+            recolour_folders(selected, sys.argv[3])
+        return 0
+    if len(sys.argv) == 4 and sys.argv[1] == "--accent":
+        selected = sys.argv[2]
+        # Repair settings written by older Anush versions, but otherwise an
+        # accent change must never change the configured icon theme.
+        if configured_theme() == LEGACY_OVERLAY_NAME and theme_path(selected):
+            configure_desktops(selected)
+        recolour_folders(selected, sys.argv[3])
+        return 0
+    return 2
 
 
 if __name__ == "__main__":

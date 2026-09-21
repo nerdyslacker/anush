@@ -1,5 +1,6 @@
 singleton ShellState common/ShellState.qml
 singleton Theme common/Theme.qml
+singleton AppearanceService common/AppearanceService.qml
 singleton Wm common/Wm.qml
 singleton Sys common/Sys.qml
 singleton PopupCoordinator common/PopupCoordinator.qml

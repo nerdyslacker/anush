@@ -1,0 +1,30 @@
+{
+  "id": "catppuccin-light",
+  "name": "Catppuccin Latte",
+  "mode": "light",
+  "order": 21,
+  "pair": "catppuccin-dark",
+  "preview": ["#EFF1F5", "#CCD0DA", "#8839EF"],
+  "colors": {
+    "background": "#EFF1F5", "surfaceSubtle": "#E6E9EF", "surface": "#CCD0DA",
+    "surfaceVariant": "#BCC0CC", "pressed": "#ACB0BE", "outline": "#9CA0B0",
+    "disabled": "#8C8FA1", "foreground": "#4C4F69", "foregroundMuted": "#6C6F85",
+    "red": "#D20F39", "orange": "#FE640B", "yellow": "#DF8E1D",
+    "green": "#40A02B", "cyan": "#04A5E5", "blue": "#1E66F5",
+    "magenta": "#8839EF", "teal": "#179299", "shadow": "#7C7F93",
+    "white": "#5C5F77", "brightRed": "#E64553", "brightOrange": "#DC8A78",
+    "brightGreen": "#40A02B", "brightYellow": "#DF8E1D", "brightBlue": "#7287FD",
+    "brightMagenta": "#EA76CB", "brightCyan": "#209FB5"
+  },
+  "source": {
+    "rosewater": "#DC8A78", "flamingo": "#DD7878", "pink": "#EA76CB",
+    "mauve": "#8839EF", "red": "#D20F39", "maroon": "#E64553",
+    "peach": "#FE640B", "yellow": "#DF8E1D", "green": "#40A02B",
+    "teal": "#179299", "sky": "#04A5E5", "sapphire": "#209FB5",
+    "blue": "#1E66F5", "lavender": "#7287FD", "text": "#4C4F69",
+    "subtext1": "#5C5F77", "subtext0": "#6C6F85", "overlay2": "#7C7F93",
+    "overlay1": "#8C8FA1", "overlay0": "#9CA0B0", "surface2": "#ACB0BE",
+    "surface1": "#BCC0CC", "surface0": "#CCD0DA", "base": "#EFF1F5",
+    "mantle": "#E6E9EF", "crust": "#DCE0E8"
+  }
+}

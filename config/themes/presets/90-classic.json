@@ -1,0 +1,20 @@
+{
+  "id": "classic",
+  "name": "Classic",
+  "mode": "light",
+  "order": 90,
+  "pair": "srcery-dark",
+  "solidBarSurfaces": true,
+  "accentOverride": "#546364",
+  "activeBorder": "#152526",
+  "accentForeground": "#DFDCDB",
+  "preview": ["#C9C8C6", "#DFDCDB", "#546364"],
+  "colors": {
+    "background": "#C9C8C6", "surfaceSubtle": "#D2D0CE", "surface": "#DFDCDB",
+    "surfaceVariant": "#E8E5E4", "pressed": "#B8B5B2", "outline": "#7A7774",
+    "disabled": "#A4A09D", "foreground": "#152526", "foregroundMuted": "#546364",
+    "red": "#8B1E1E", "orange": "#152526", "yellow": "#8A6500",
+    "green": "#27613B", "cyan": "#007C7C", "blue": "#000080",
+    "magenta": "#800080", "teal": "#008080", "shadow": "#6B6967"
+  }
+}

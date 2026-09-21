@@ -37,5 +37,6 @@ clean:
 
 test: build/anushctl
 	./tests/anushctl.sh
+	./tests/icon-theme.sh
 
 .PHONY: all install clean test

@@ -22,13 +22,14 @@ Required:
 
 - Quickshell;
 - Python 3 for state migration and shell helpers;
-- Papirus icon theme for application and accent-matched folder icons;
 - JetBrainsMono Nerd Font for typography and Symbols Nerd Font Mono for
   consistently sized bar icons;
 - for the current skarwm adapter, `skarwm-msg` available in `PATH`.
 
 Optional desktop integrations:
 
+- Any freedesktop icon and XCursor themes; Papirus additionally supports
+  matching folder colors to the selected Anush accent;
 - Picom, Dunst, Feh, and Kitty for the supplied desktop configuration;
 - Clipmenu and Xdotool for clipboard history and pasting;
 - `setxkbmap` and `xkb-switch` for keyboard layouts;
@@ -143,7 +144,7 @@ shell/shell.qml         Quickshell entry point
 Persistent settings live in
 `${XDG_STATE_HOME:-$HOME/.local/state}/anush/shell-state.json`. Set
 `ANUSH_STATE_DIR` to override that directory. The sections are `bar`,
-`weather`, `launcher`, `keyboard`, `tray`, `tags`, `pomodoro`, `theme`,
+`weather`, `launcher`, `wallpaper`, `keyboard`, `tray`, `tags`, `pomodoro`, `theme`,
 `windowManager`, `windowList`, and `desktop`.
 
 The optional **Window list** Bar widget uses one shared pill containing one
@@ -194,10 +195,11 @@ Set `ANUSH_CONFIG_DIR` when anush's writable configuration lives somewhere
 other than its installed `config/` directory.
 
 The layout/appearance popup includes selectable palette cards for Srcery,
-Catppuccin, Gruvbox, and Everforest in dark and light variants, plus the
-Windows 95-inspired Classic palette. The selection and its corresponding mode
-are stored as `theme.preset` and `theme.mode` and update the running shell
-immediately:
+Catppuccin, Gruvbox, Nord, and Everforest in dark and light variants, plus the
+Windows 95-inspired Classic palette. Presets are individual JSON files under
+`config/themes/presets`; adding a valid file adds a card without changing QML.
+The selection and its corresponding mode are stored as `theme.preset` and
+`theme.mode` and update the running shell immediately:
 
 ```json
 "theme": {
@@ -215,7 +217,8 @@ generators to remain separate from component styling.
 
 In light mode, wallpaper-derived palettes lift the wallpaper's dominant
 background hue into a light surface and enforce readable contrast for text and
-accent roles; the fixed Srcery light theme continues to use its canonical cream.
+accent roles. Bundled presets use the exact named colors from their upstream
+palette documents rather than generated lightening or darkening.
 
 Bars can optionally shrink along their long axis to their natural widget size
 while the native panel window remains centered on each screen. This keeps the

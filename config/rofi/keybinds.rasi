@@ -6,7 +6,6 @@
 
 configuration {
     show-icons: true;
-    icon-theme: "Papirus";
     location: 0;
     display-drun: "Launch:";
 }

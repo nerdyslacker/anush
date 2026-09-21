@@ -1,0 +1,29 @@
+{
+  "id": "everforest-light",
+  "name": "Everforest Light",
+  "mode": "light",
+  "order": 51,
+  "pair": "everforest-dark",
+  "preview": ["#FDF6E3", "#EFEBD4", "#8DA101"],
+  "colors": {
+    "background": "#FDF6E3", "surfaceSubtle": "#F4F0D9", "surface": "#EFEBD4",
+    "surfaceVariant": "#E6E2CC", "pressed": "#E0DCC7", "outline": "#BDC3AF",
+    "disabled": "#939F91", "foreground": "#5C6A72", "foregroundMuted": "#829181",
+    "red": "#F85552", "orange": "#F57D26", "yellow": "#DFA000",
+    "green": "#8DA101", "cyan": "#35A77C", "blue": "#3A94C5",
+    "magenta": "#DF69BA", "teal": "#35A77C", "shadow": "#A6B0A0",
+    "white": "#708089", "brightRed": "#E66868", "brightOrange": "#F57D26",
+    "brightGreen": "#93B259", "brightYellow": "#DFA000", "brightBlue": "#3A94C5",
+    "brightMagenta": "#DF69BA", "brightCyan": "#35A77C"
+  },
+  "source": {
+    "bg_dim": "#EFEBD4", "bg0": "#FDF6E3", "bg1": "#F4F0D9",
+    "bg2": "#EFEBD4", "bg3": "#E6E2CC", "bg4": "#E0DCC7", "bg5": "#BDC3AF",
+    "bg_visual": "#EAEDC8", "bg_red": "#FDE3DA", "bg_yellow": "#FAEDCD",
+    "bg_green": "#F0F1D2", "bg_blue": "#E9F0E9", "bg_purple": "#FAE8E2",
+    "fg": "#5C6A72", "red": "#F85552", "orange": "#F57D26",
+    "yellow": "#DFA000", "green": "#8DA101", "aqua": "#35A77C",
+    "blue": "#3A94C5", "purple": "#DF69BA", "grey0": "#A6B0A0",
+    "grey1": "#939F91", "grey2": "#829181"
+  }
+}

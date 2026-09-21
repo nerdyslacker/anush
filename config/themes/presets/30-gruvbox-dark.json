@@ -1,0 +1,19 @@
+{
+  "id": "gruvbox-dark",
+  "name": "Gruvbox Dark",
+  "mode": "dark",
+  "order": 30,
+  "pair": "gruvbox-light",
+  "preview": ["#282828", "#3C3836", "#83A598"],
+  "colors": {
+    "background": "#282828", "surfaceSubtle": "#1D2021", "surface": "#3C3836",
+    "surfaceVariant": "#83A598", "pressed": "#689D6A", "outline": "#83A598",
+    "disabled": "#3C3836", "foreground": "#FBF1C7", "foregroundMuted": "#EBDBB2",
+    "red": "#F44336", "orange": "#EF6C00", "yellow": "#EF6C00",
+    "green": "#689D6A", "cyan": "#83A598", "blue": "#03A9F4",
+    "magenta": "#673AB7", "teal": "#83A598", "shadow": "#000000",
+    "white": "#EBDBB2", "brightRed": "#F44336", "brightOrange": "#EF6C00",
+    "brightGreen": "#4CAF50", "brightYellow": "#EF6C00", "brightBlue": "#03A9F4",
+    "brightMagenta": "#673AB7", "brightCyan": "#83A598"
+  }
+}

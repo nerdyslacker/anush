@@ -1,0 +1,19 @@
+{
+  "id": "nord-dark",
+  "name": "Nord Dark",
+  "mode": "dark",
+  "order": 40,
+  "pair": "nord-light",
+  "preview": ["#2E3440", "#3B4252", "#88C0D0"],
+  "colors": {
+    "background": "#2E3440", "surfaceSubtle": "#3B4252", "surface": "#434C5E",
+    "surfaceVariant": "#4C566A", "pressed": "#5E81AC", "outline": "#81A1C1",
+    "disabled": "#4C566A", "foreground": "#ECEFF4", "foregroundMuted": "#D8DEE9",
+    "red": "#BF616A", "orange": "#D08770", "yellow": "#EBCB8B",
+    "green": "#A3BE8C", "cyan": "#88C0D0", "blue": "#81A1C1",
+    "magenta": "#B48EAD", "teal": "#8FBCBB", "shadow": "#2E3440",
+    "white": "#D8DEE9", "brightRed": "#D08770", "brightOrange": "#D08770",
+    "brightGreen": "#A3BE8C", "brightYellow": "#EBCB8B", "brightBlue": "#88C0D0",
+    "brightMagenta": "#B48EAD", "brightCyan": "#8FBCBB"
+  }
+}

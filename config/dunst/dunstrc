@@ -38,7 +38,6 @@
     min_icon_size = 16
     max_icon_size = 32
     enable_recursive_icon_lookup = true
-    icon_path = /usr/share/icons/Papirus/96x96/devices/:/usr/share/icons/Papirus/48x48/status/:/usr/share/icons/Papirus/96x96/apps/
 
     # History
     sticky_history = yes
