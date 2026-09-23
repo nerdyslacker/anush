@@ -178,6 +178,241 @@ Popout {
         onActivated: index => selected(String(model[index]))
     }
 
+    Controls.Popup {
+        id: customAccentPicker
+
+        property color draftColor: Theme.customAccent
+        property bool syncing: false
+
+        function normalize(value) {
+            const match = String(value ?? "").trim()
+                .match(/^#?([0-9a-fA-F]{6})$/)
+            return match ? ("#" + match[1]).toUpperCase() : ""
+        }
+
+        function loadColor(value) {
+            const normalized = normalize(value)
+            if (normalized === "")
+                return
+            syncing = true
+            draftColor = normalized
+            hueSlider.value = draftColor.hslHue >= 0
+                ? draftColor.hslHue : 0
+            saturationSlider.value = draftColor.hslSaturation
+            lightnessSlider.value = draftColor.hslLightness
+            hexInput.text = normalized
+            syncing = false
+        }
+
+        function syncFromSliders() {
+            if (syncing)
+                return
+            draftColor = Qt.hsla(hueSlider.value,
+                saturationSlider.value, lightnessSlider.value, 1)
+            hexInput.text = draftColor.toString().toUpperCase()
+        }
+
+        function showFor(value) {
+            loadColor(value)
+            open()
+            hexInput.forceActiveFocus()
+            hexInput.selectAll()
+        }
+
+        width: Math.min(326, root.width - 20)
+        height: pickerContent.implicitHeight + 24
+        x: Math.round((root.width - width) / 2)
+        y: Math.max(8, Math.round((root.height - height) / 2))
+        padding: 12
+        modal: false
+        focus: true
+        closePolicy: Controls.Popup.CloseOnEscape
+            | Controls.Popup.CloseOnPressOutside
+
+        background: Rectangle {
+            radius: Theme.radiusMedium
+            color: Theme.surface
+            border.width: 1
+            border.color: Theme.accent
+        }
+
+        contentItem: Column {
+            id: pickerContent
+            spacing: 10
+
+            Text {
+                text: "Custom accent"
+                color: Theme.foreground
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize
+                font.bold: true
+            }
+
+            Row {
+                width: parent.width
+                spacing: 8
+
+                Rectangle {
+                    width: 42
+                    height: 34
+                    radius: Theme.radiusSmall
+                    color: Theme.mutedColor(customAccentPicker.draftColor)
+                    border.width: 1
+                    border.color: Theme.outline
+                }
+
+                Rectangle {
+                    width: parent.width - 50
+                    height: 34
+                    radius: Theme.radiusSmall
+                    color: Theme.background
+                    border.width: 1
+                    border.color: hexInput.activeFocus
+                        ? Theme.accent : Theme.outline
+
+                    TextInput {
+                        id: hexInput
+                        anchors.fill: parent
+                        anchors.leftMargin: 9
+                        anchors.rightMargin: 9
+                        color: Theme.foreground
+                        selectionColor: Theme.accent
+                        selectedTextColor: Theme.accentForeground
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSize
+                        verticalAlignment: TextInput.AlignVCenter
+                        maximumLength: 7
+                        validator: RegularExpressionValidator {
+                            regularExpression: /^#[0-9A-Fa-f]{6}$/
+                        }
+                        onAccepted: {
+                            const normalized = customAccentPicker.normalize(text)
+                            if (normalized !== "")
+                                customAccentPicker.loadColor(normalized)
+                        }
+                        onEditingFinished: {
+                            const normalized = customAccentPicker.normalize(text)
+                            if (normalized !== "")
+                                customAccentPicker.loadColor(normalized)
+                        }
+                    }
+                }
+            }
+
+            Text {
+                text: "Hue"
+                color: Theme.foregroundMuted
+                font.family: Theme.fontFamily
+                font.pixelSize: Math.max(9, Theme.fontSize - 2)
+            }
+
+            Controls.Slider {
+                id: hueSlider
+                width: parent.width
+                from: 0
+                to: 1
+                onValueChanged: if (customAccentPicker.visible)
+                    customAccentPicker.syncFromSliders()
+
+                background: Rectangle {
+                    x: hueSlider.leftPadding
+                    y: hueSlider.topPadding
+                        + hueSlider.availableHeight / 2 - height / 2
+                    width: hueSlider.availableWidth
+                    height: 9
+                    radius: Math.min(height / 2, Theme.radiusSmall)
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0; color: "#FF0000" }
+                        GradientStop { position: 0.17; color: "#FFFF00" }
+                        GradientStop { position: 0.33; color: "#00FF00" }
+                        GradientStop { position: 0.5; color: "#00FFFF" }
+                        GradientStop { position: 0.67; color: "#0000FF" }
+                        GradientStop { position: 0.83; color: "#FF00FF" }
+                        GradientStop { position: 1; color: "#FF0000" }
+                    }
+                }
+
+                handle: Rectangle {
+                    x: hueSlider.leftPadding + hueSlider.visualPosition
+                        * (hueSlider.availableWidth - width)
+                    y: hueSlider.topPadding
+                        + hueSlider.availableHeight / 2 - height / 2
+                    width: 16
+                    height: 16
+                    radius: 8
+                    color: customAccentPicker.draftColor
+                    border.width: 2
+                    border.color: Theme.foreground
+                }
+            }
+
+            Row {
+                width: parent.width
+                spacing: 10
+
+                Column {
+                    width: (parent.width - 10) / 2
+                    spacing: 2
+                    Text {
+                        text: "Saturation"
+                        color: Theme.foregroundMuted
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Math.max(9, Theme.fontSize - 2)
+                    }
+                    Controls.Slider {
+                        id: saturationSlider
+                        width: parent.width
+                        from: 0
+                        to: 1
+                        onValueChanged: if (customAccentPicker.visible)
+                            customAccentPicker.syncFromSliders()
+                    }
+                }
+
+                Column {
+                    width: (parent.width - 10) / 2
+                    spacing: 2
+                    Text {
+                        text: "Lightness"
+                        color: Theme.foregroundMuted
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Math.max(9, Theme.fontSize - 2)
+                    }
+                    Controls.Slider {
+                        id: lightnessSlider
+                        width: parent.width
+                        from: 0.08
+                        to: 0.92
+                        onValueChanged: if (customAccentPicker.visible)
+                            customAccentPicker.syncFromSliders()
+                    }
+                }
+            }
+
+            Row {
+                width: parent.width
+                spacing: 8
+
+                ActionButton {
+                    width: (parent.width - 8) / 2
+                    label: "Cancel"
+                    onClicked: customAccentPicker.close()
+                }
+
+                ActionButton {
+                    width: (parent.width - 8) / 2
+                    label: "Apply"
+                    enabled: customAccentPicker.normalize(hexInput.text) !== ""
+                    onClicked: {
+                        Theme.setCustomAccent(hexInput.text)
+                        customAccentPicker.close()
+                    }
+                }
+            }
+        }
+    }
+
     Column {
         id: content
         anchors.left: parent.left
@@ -411,7 +646,7 @@ Popout {
         Grid {
             id: accentGrid
             width: parent.width
-            columns: 7
+            columns: 8
             spacing: 4
 
             Repeater {
@@ -425,7 +660,7 @@ Popout {
                     readonly property color swatchColor:
                         Theme.mutedAccentColor(modelData)
 
-                    width: (accentGrid.width - accentGrid.spacing * 6) / 7
+                    width: (accentGrid.width - accentGrid.spacing * 7) / 8
                     height: 31
                     radius: Theme.radiusSmall
                     color: swatchMouse.containsMouse
@@ -443,11 +678,26 @@ Popout {
                         border.color: Qt.alpha(Theme.fg, 0.35)
                     }
 
+                    Text {
+                        anchors.centerIn: parent
+                        visible: swatch.modelData === "custom"
+                        text: "󰏫"
+                        color: Theme.accentForeground
+                        font.family: Theme.iconFontFamily
+                        font.pixelSize: Theme.iconSizeSmall
+                    }
+
                     MouseArea {
                         id: swatchMouse
                         anchors.fill: parent
                         hoverEnabled: true
-                        onClicked: Theme.setAccent(swatch.modelData)
+                        onClicked: {
+                            if (swatch.modelData === "custom") {
+                                customAccentPicker.showFor(Theme.customAccent)
+                            } else {
+                                Theme.setAccent(swatch.modelData)
+                            }
+                        }
                     }
                 }
             }

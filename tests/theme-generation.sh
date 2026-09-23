@@ -101,6 +101,23 @@ grep -q 'Anush Matugen (managed)' "$XDG_CONFIG_HOME/gtk-3.0/gtk.css"
 grep -q '^gtk-theme-name=adw-gtk3$' "$XDG_CONFIG_HOME/gtk-3.0/settings.ini"
 grep -q 'color_scheme_path=.*/anush-matugen.conf' \
     "$XDG_CONFIG_HOME/qt6ct/qt6ct.conf"
+grep -q '^custom_palette=true$' "$XDG_CONFIG_HOME/qt5ct/qt5ct.conf"
+grep -q '^custom_palette=true$' "$XDG_CONFIG_HOME/qt6ct/qt6ct.conf"
+grep -q '^style=Fusion$' "$XDG_CONFIG_HOME/qt6ct/qt6ct.conf"
+grep -q '^\[ColorEffects:Disabled\]$' \
+    "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf"
+grep -q '^\[Colors:Header\]\[Inactive\]$' \
+    "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf"
+grep -q '^\[WM\]$' "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf"
+grep -q '^BackgroundNormal=38,51,64$' \
+    "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf"
+grep -q '^DecorationFocus=80,115,149$' \
+    "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf"
+! grep -q '28,27,32' \
+    "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf"
+grep -A12 '^\[Colors:Selection\]$' \
+    "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf" \
+    | grep -q '^ForegroundNormal=210,203,188$'
 test -f "$XDG_DATA_HOME/color-schemes/AnushMatugen.colors"
 
 MATUGEN_FAIL=1 "$repo/shell/scripts/generate-wallpaper-theme" \

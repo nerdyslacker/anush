@@ -16,6 +16,7 @@ Singleton {
     property string statusMessage: ""
     property string clipboardBeforePick: ""
     property string pendingPickerOutput: ""
+    property string pickerStopMessage: ""
     property int resultAttempts: 0
 
     signal picked(string color)
@@ -149,14 +150,29 @@ Singleton {
         statusMessage = "Select a pixel anywhere on screen"
         clipboardBeforePick = String(Quickshell.clipboardText ?? "").trim()
         pendingPickerOutput = ""
+        pickerStopMessage = ""
         resultAttempts = 0
         picking = true
+        pickerTimeout.restart()
         picker.running = true
+    }
+
+    function cancelPick(timedOut) {
+        if (!picking)
+            return
+        pickerStopMessage = timedOut
+            ? "Color picking timed out" : "Picking cancelled"
+        pickerTimeout.stop()
+        picker.running = false
+        picking = false
+        errorMessage = timedOut ? pickerStopMessage : ""
+        statusMessage = timedOut ? "" : pickerStopMessage
     }
 
     IpcHandler {
         target: "colorPicker"
         function pick(): void { root.pick() }
+        function cancel(): void { root.cancelPick(false) }
         function copy(color: string): void { root.copy(color) }
         function clear(): void { root.clearHistory() }
     }
@@ -174,7 +190,12 @@ Singleton {
         stdout: StdioCollector { id: pickerOutput }
         stderr: StdioCollector { id: pickerError }
         onExited: exitCode => {
+            pickerTimeout.stop()
             root.picking = false
+            if (root.pickerStopMessage !== "") {
+                root.pickerStopMessage = ""
+                return
+            }
             if (exitCode !== 0) {
                 const detail = pickerError.text.trim()
                 root.errorMessage = detail !== "" ? detail : ""
@@ -191,6 +212,13 @@ Singleton {
         interval: 100
         repeat: false
         onTriggered: root.resolvePickResult()
+    }
+
+    Timer {
+        id: pickerTimeout
+        interval: 30000
+        repeat: false
+        onTriggered: root.cancelPick(true)
     }
 
     Connections {

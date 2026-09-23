@@ -19,9 +19,12 @@ END = "/* <<< Anush Matugen (managed) <<< */"
 
 def atomic_write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(text)
-    os.replace(temporary, path)
+    temporary = path.with_name(f".{path.name}.anush-{os.getpid()}")
+    try:
+        temporary.write_text(text)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def run(*command: str) -> None:
@@ -88,29 +91,45 @@ def set_ini_value(path: Path, section: str, key: str, value: str) -> None:
     atomic_write(path, text)
 
 
-def gtk_css(semantic: dict, material: dict) -> str:
+def ensure_ini_value(path: Path, section: str, key: str, value: str) -> None:
+    """Set a default without replacing an explicit user preference."""
+    try:
+        text = path.read_text(errors="replace")
+    except OSError:
+        text = ""
+    heading = f"[{section}]"
+    if heading in text:
+        start = text.index(heading) + len(heading)
+        end = text.find("\n[", start)
+        end = len(text) if end < 0 else end
+        if re.search(rf"(?m)^{re.escape(key)}\s*=", text[start:end]):
+            return
+    set_ini_value(path, section, key, value)
+
+
+def gtk_css(semantic: dict, _material: dict) -> str:
     primary = semantic["primary"]
     background = semantic["background"]
     foreground = semantic["foreground"]
     surface = semantic["background-alt"]
-    on_surface = material.get("on_surface", foreground)
+    on_primary = contrast_foreground(primary, background, foreground)
     return f"""@define-color accent_color {primary};
 @define-color accent_bg_color {primary};
-@define-color accent_fg_color {material.get('on_primary', background)};
+@define-color accent_fg_color {on_primary};
 @define-color window_bg_color {background};
 @define-color window_fg_color {foreground};
 @define-color view_bg_color {background};
 @define-color view_fg_color {foreground};
 @define-color headerbar_bg_color {surface};
-@define-color headerbar_fg_color {on_surface};
+@define-color headerbar_fg_color {foreground};
 @define-color popover_bg_color {surface};
-@define-color popover_fg_color {on_surface};
-@define-color card_bg_color {material.get('surface_container', surface)};
-@define-color card_fg_color {on_surface};
+@define-color popover_fg_color {foreground};
+@define-color card_bg_color {surface};
+@define-color card_fg_color {foreground};
 @define-color borders {semantic['border']};
 @define-color error_color {semantic['alert']};
-@define-color success_color {material.get('tertiary', semantic['secondary'])};
-selection {{ background-color: {primary}; color: {material.get('on_primary', background)}; }}"""
+@define-color success_color {semantic['secondary']};
+selection {{ background-color: {primary}; color: {on_primary}; }}"""
 
 
 def gtk_theme_available(name: str) -> bool:
@@ -149,19 +168,61 @@ def rgb(value: str) -> str:
                     for index in (1, 3, 5))
 
 
-def qt_scheme(semantic: dict, material: dict) -> str:
+def relative_luminance(value: str) -> float:
+    channels = []
+    for index in (1, 3, 5):
+        channel = int(value[index:index + 2], 16) / 255
+        channels.append(channel / 12.92 if channel <= 0.04045
+                        else ((channel + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * channels[0] + 0.7152 * channels[1] \
+        + 0.0722 * channels[2]
+
+
+def contrast_foreground(background: str, *candidates: str) -> str:
+    background_luminance = relative_luminance(background)
+
+    def ratio(candidate: str) -> float:
+        candidate_luminance = relative_luminance(candidate)
+        light = max(background_luminance, candidate_luminance)
+        dark = min(background_luminance, candidate_luminance)
+        return (light + 0.05) / (dark + 0.05)
+
+    return max(candidates, key=ratio)
+
+
+def qt_scheme(semantic: dict, _material: dict) -> str:
     background = rgb(semantic["background"])
     surface = rgb(semantic["background-alt"])
+    raised = surface
     foreground = rgb(semantic["foreground"])
     primary = rgb(semantic["primary"])
     secondary = rgb(semantic["secondary"])
     error = rgb(semantic["alert"])
     disabled = rgb(semantic["disabled"])
+    positive = secondary
+    # The shell accent is refined after Matugen runs, so Matugen's on_primary
+    # may belong to a different colour. Derive readable selection text from
+    # the actual semantic accent written into this scheme.
+    on_primary = rgb(contrast_foreground(
+        semantic["primary"], semantic["background"], semantic["foreground"]))
     groups = []
-    for name in ("Button", "Complementary", "Header", "Tooltip", "View", "Window"):
+
+    # qt5ct/qt6ct and KDE consume the same KColorScheme groups. Supplying the
+    # complete set matters: otherwise controls silently fall back to the host
+    # palette and the selected scheme looks only partially themed.
+    group_backgrounds = {
+        "Button": (surface, raised),
+        "Complementary": (surface, background),
+        "Header": (surface, background),
+        "Header][Inactive": (background, surface),
+        "Tooltip": (surface, background),
+        "View": (surface, background),
+        "Window": (surface, background),
+    }
+    for name, (alternate, normal) in group_backgrounds.items():
         groups.append(f"""[Colors:{name}]
-BackgroundAlternate={surface}
-BackgroundNormal={background if name != 'Button' else surface}
+BackgroundAlternate={alternate}
+BackgroundNormal={normal}
 DecorationFocus={primary}
 DecorationHover={primary}
 ForegroundActive={foreground}
@@ -170,7 +231,7 @@ ForegroundLink={secondary}
 ForegroundNegative={error}
 ForegroundNeutral={foreground}
 ForegroundNormal={foreground}
-ForegroundPositive={rgb(material.get('tertiary', semantic['secondary']))}
+ForegroundPositive={positive}
 ForegroundVisited={secondary}
 """)
     groups.append(f"""[Colors:Selection]
@@ -178,22 +239,51 @@ BackgroundAlternate={primary}
 BackgroundNormal={primary}
 DecorationFocus={primary}
 DecorationHover={primary}
-ForegroundActive={rgb(material.get('on_primary', semantic['background']))}
-ForegroundInactive={rgb(material.get('on_primary', semantic['background']))}
+ForegroundActive={on_primary}
+ForegroundInactive={on_primary}
 ForegroundLink={secondary}
 ForegroundNegative={error}
-ForegroundNeutral={rgb(material.get('on_primary', semantic['background']))}
-ForegroundNormal={rgb(material.get('on_primary', semantic['background']))}
+ForegroundNeutral={on_primary}
+ForegroundNormal={on_primary}
 ForegroundPositive={secondary}
 ForegroundVisited={secondary}
 """)
-    return "\n".join(groups) + """\n[General]
+    effects = f"""[ColorEffects:Disabled]
+Color={disabled}
+ColorAmount=0
+ColorEffect=0
+ContrastAmount=0.65
+ContrastEffect=1
+IntensityAmount=0.1
+IntensityEffect=2
+
+[ColorEffects:Inactive]
+ChangeSelectionColor=true
+Color={disabled}
+ColorAmount=0.025
+ColorEffect=2
+ContrastAmount=0.1
+ContrastEffect=2
+Enable=false
+IntensityAmount=0
+IntensityEffect=0
+
+"""
+    return effects + "\n".join(groups) + f"""\n[General]
 ColorScheme=AnushMatugen
 Name=Anush Matugen
 shadeSortColumn=true
 
 [KDE]
 contrast=4
+
+[WM]
+activeBackground={background}
+activeBlend={foreground}
+activeForeground={foreground}
+inactiveBackground={surface}
+inactiveBlend={disabled}
+inactiveForeground={disabled}
 """
 
 
@@ -206,8 +296,13 @@ def apply_qt(semantic: dict, material: dict) -> None:
     for toolkit in ("qt5ct", "qt6ct"):
         scheme_path = config / toolkit / "colors/anush-matugen.conf"
         atomic_write(scheme_path, scheme)
-        set_ini_value(config / toolkit / f"{toolkit}.conf", "Appearance",
+        toolkit_config = config / toolkit / f"{toolkit}.conf"
+        set_ini_value(toolkit_config, "Appearance",
                       "color_scheme_path", str(scheme_path))
+        # A path alone only makes the palette appear in QtCt's selector.
+        # custom_palette is what makes the platform theme actually load it.
+        set_ini_value(toolkit_config, "Appearance", "custom_palette", "true")
+        ensure_ini_value(toolkit_config, "Appearance", "style", "Fusion")
     command = shutil.which("kwriteconfig6") or shutil.which("kwriteconfig5")
     if command:
         run(command, "--file", "kdeglobals", "--group", "General", "--key",

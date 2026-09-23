@@ -15,18 +15,8 @@ import sys
 # change. Keep the name only so existing installations can migrate away from
 # it; no new overlay is created or selected.
 LEGACY_OVERLAY_NAME = "Anush-Papirus"
-
-PAPIRUS_FOLDER_COLOURS = {
-    "black": "#4f4f4f", "blue": "#5294e2", "bluegrey": "#607d8b",
-    "breeze": "#57bee8", "brown": "#8e6e53", "carmine": "#a30002",
-    "cyan": "#00bcd4", "darkcyan": "#009688", "deeporange": "#ff7043",
-    "green": "#4caf50", "grey": "#9e9e9e", "indigo": "#5c6bc0",
-    "magenta": "#e91e63", "nordic": "#81a1c1", "orange": "#ff9800",
-    "palebrown": "#bcaaa4", "paleorange": "#ffcc80", "pink": "#ec407a",
-    "red": "#f44336", "teal": "#009688", "violet": "#9c27b0",
-    "white": "#f5f5f5", "yaru": "#e95420", "yellow": "#ffc107",
-}
-
+MANAGED_OVERLAY_PREFIX = "Anush-"
+MANAGED_OVERLAY_SUFFIX = "-Folders"
 
 def run(*command: str) -> None:
     try:
@@ -74,7 +64,7 @@ def icon_themes() -> list[str]:
         except OSError:
             continue
         for path in children:
-            if not path.is_dir() or path.name == LEGACY_OVERLAY_NAME \
+            if not path.is_dir() or is_managed_overlay(path.name) \
                     or not (path / "index.theme").is_file():
                 continue
             directories = index_value(path, "Directories").split(",")
@@ -109,122 +99,136 @@ def configured_theme() -> str:
 
 def current_theme() -> str:
     selected = configured_theme()
-    if selected != LEGACY_OVERLAY_NAME:
+    if not is_managed_overlay(selected):
         return selected
-    overlay = theme_path(LEGACY_OVERLAY_NAME)
+    overlay = theme_path(selected)
     inherited = index_value(overlay, "Inherits") if overlay else ""
     return inherited.split(",")[0].strip()
 
 
+def is_managed_overlay(name: str) -> bool:
+    return name == LEGACY_OVERLAY_NAME or (
+        name.startswith(MANAGED_OVERLAY_PREFIX)
+        and name.endswith(MANAGED_OVERLAY_SUFFIX))
+
+
 def atomic_write(text: str, destination: Path) -> None:
-    temporary = destination.with_name(destination.name + ".tmp")
-    temporary.write_text(text)
-    os.replace(temporary, destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(
+        f".{destination.name}.anush-{os.getpid()}")
+    try:
+        temporary.write_text(text)
+        os.replace(temporary, destination)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
-def nearest_papirus_colour(accent: str) -> str:
+def normalize_accent(accent: str) -> str | None:
     match = re.fullmatch(r"#?(?:[0-9a-fA-F]{2})?([0-9a-fA-F]{6})", accent)
     if not match:
-        return "blue"
-    value = match.group(1)
-    target = tuple(int(value[index:index + 2], 16) for index in (0, 2, 4))
-    return min(PAPIRUS_FOLDER_COLOURS, key=lambda name: sum(
-        (target[channel] - int(PAPIRUS_FOLDER_COLOURS[name][
-            1 + channel * 2:3 + channel * 2], 16)) ** 2
-        for channel in range(3)))
-
-
-def available_papirus_colours(path: Path) -> set[str]:
-    places = path / "48x48/places"
-    colours = set()
-    for icon in places.glob("folder-*-documents.svg"):
-        match = re.fullmatch(r"folder-(.+)-documents\.svg", icon.name)
-        if match and not icon.is_symlink():
-            colours.add(match.group(1))
-    return colours
-
-
-def nearest_papirus_colour_for_theme(path: Path, accent: str) -> str | None:
-    available = available_papirus_colours(path)
-    known = {name: value for name, value in PAPIRUS_FOLDER_COLOURS.items()
-             if name in available}
-    if not known:
         return None
-    match = re.fullmatch(r"#?(?:[0-9a-fA-F]{2})?([0-9a-fA-F]{6})", accent)
-    if not match:
-        return "blue" if "blue" in known else next(iter(sorted(known)))
-    value = match.group(1)
-    target = tuple(int(value[index:index + 2], 16) for index in (0, 2, 4))
-    return min(known, key=lambda name: sum(
-        (target[channel] - int(known[name][
-            1 + channel * 2:3 + channel * 2], 16)) ** 2
-        for channel in range(3)))
+    return "#" + match.group(1).lower()
 
 
-def recolour_papirus_without_helper(path: Path, colour: str) -> bool:
-    """Apply Papirus's own symlink algorithm to a writable user theme."""
-    changed = False
-    for size in ("22x22", "24x24", "32x32", "48x48", "64x64"):
-        places = path / size / "places"
-        if not places.is_dir() or not os.access(places.resolve(), os.W_OK):
+def dark_accent(accent: str) -> str:
+    return "#" + "".join(
+        f"{round(int(accent[index:index + 2], 16) * 0.82):02x}"
+        for index in (1, 3, 5))
+
+
+def recolour_svg(text: str, accent: str) -> str:
+    text = re.sub(r"#5294e2", accent, text, flags=re.IGNORECASE)
+    return re.sub(r"#4877b1", dark_accent(accent), text,
+                  flags=re.IGNORECASE)
+
+
+def overlay_name(theme: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", theme).strip("-.")
+    return f"{MANAGED_OVERLAY_PREFIX}{safe or 'Papirus'}{MANAGED_OVERLAY_SUFFIX}"
+
+
+def create_papirus_overlay(path: Path, theme: str, accent: str) -> str | None:
+    """Generate Papirus folder SVGs using the exact active accent."""
+    name = overlay_name(theme)
+    data_home = Path(os.environ.get(
+        "XDG_DATA_HOME", Path.home() / ".local/share"))
+    destination = data_home / "icons" / name
+    directories = []
+
+    for size in ("16x16", "22x22", "24x24", "32x32", "48x48", "64x64"):
+        source_places = path / size / "places"
+        if not source_places.is_dir():
             continue
-        for prefix in (f"folder-{colour}", f"user-{colour}"):
-            sources = list(places.glob(prefix + "-*.svg"))
-            direct = places / (prefix + ".svg")
+        target_places = destination / size / "places"
+        linked = False
+        for prefix in ("folder-blue", "user-blue"):
+            sources = list(source_places.glob(prefix + "-*.svg"))
+            direct = source_places / (prefix + ".svg")
             if direct.is_file():
                 sources.append(direct)
             for source in sources:
                 if source.is_symlink() or not source.is_file():
                     continue
-                destination = source.with_name(
-                    source.name.replace(f"-{colour}", "", 1))
-                if destination == source:
-                    continue
-                temporary = destination.with_name(
-                    f".{destination.name}.anush-{os.getpid()}")
+                target_places.mkdir(parents=True, exist_ok=True)
+                generic = source.name.replace("-blue", "", 1)
+                target = target_places / generic
                 try:
-                    temporary.unlink(missing_ok=True)
-                    temporary.symlink_to(source.name)
-                    os.replace(temporary, destination)
-                    changed = True
+                    generated = recolour_svg(
+                        source.read_text(errors="replace"), accent)
+                    atomic_write(generated, target)
+                    linked = True
                 except OSError:
-                    temporary.unlink(missing_ok=True)
-    if changed and shutil.which("gtk-update-icon-cache"):
-        siblings = [path]
-        try:
-            siblings.extend(candidate for candidate in path.parent.iterdir()
-                            if candidate != path
-                            and candidate.name.casefold().startswith("papirus")
-                            and (candidate / "index.theme").is_file())
-        except OSError:
-            pass
-        for theme_path in siblings:
-            run("gtk-update-icon-cache", "-f", "-t", str(theme_path))
-    if changed and shutil.which("dbus-send"):
-        run("dbus-send", "--session", "--type=signal", "/KGlobalSettings",
-            "org.kde.KGlobalSettings.notifyChange", "int32:4", "int32:0")
-    if changed:
-        run("pkill", "-HUP", "-x", "xsettingsd")
-    return changed
+                    pass
+        if linked:
+            # File managers commonly request the MIME icon name for newly
+            # created directories. Papirus normally inherits this symlink
+            # from its base theme, which bypasses our generated folder.svg.
+            folder = target_places / "folder.svg"
+            if folder.is_file():
+                try:
+                    atomic_write(folder.read_text(errors="replace"),
+                                 target_places / "inode-directory.svg")
+                except OSError:
+                    pass
+            directories.append(f"{size}/places")
+
+    if not directories:
+        return None
+
+    sections = []
+    for directory in directories:
+        size = directory.split("x", 1)[0]
+        sections.append(f"""[{directory}]
+Size={size}
+Context=Places
+Type=Fixed
+""")
+    sections_text = "\n".join(sections)
+    index = f"""[Icon Theme]
+Name=Anush {theme} folder colours
+Comment=Accent-coloured folders managed by Anush
+Inherits={theme}
+Directories={','.join(directories)}
+
+{sections_text}"""
+    destination.mkdir(parents=True, exist_ok=True)
+    atomic_write(index, destination / "index.theme")
+    return name
 
 
-def recolour_folders(theme: str, accent: str) -> None:
+def recolour_folders(theme: str, accent: str) -> str:
     # Folder recolouring is an explicit capability of Papirus itself. A theme
     # merely inheriting Papirus is not treated as Papirus: doing so previously
     # replaced unrelated themes with Anush-Papirus on every accent change.
     if not theme.casefold().startswith("papirus"):
-        return
-    helper = shutil.which("papirus-folders")
-    if helper:
-        run(helper, "-C", nearest_papirus_colour(accent), "--theme", theme)
-        return
+        return theme
     path = theme_path(theme)
     if not path:
-        return
-    colour = nearest_papirus_colour_for_theme(path, accent)
-    if not colour:
-        return
-    recolour_papirus_without_helper(path, colour)
+        return theme
+    normalized = normalize_accent(accent)
+    if not normalized:
+        return theme
+    return create_papirus_overlay(path, theme, normalized) or theme
 
 
 def set_ini_value(path: Path, section: str, key: str, value: str) -> None:
@@ -291,19 +295,29 @@ def main() -> int:
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] == "--set":
         selected = sys.argv[2]
+        if is_managed_overlay(selected):
+            overlay = theme_path(selected)
+            inherited = index_value(overlay, "Inherits") if overlay else ""
+            selected = inherited.split(",")[0].strip()
         if not theme_path(selected):
             return 1
-        configure_desktops(selected)
+        applied = selected
         if len(sys.argv) >= 4:
-            recolour_folders(selected, sys.argv[3])
+            applied = recolour_folders(selected, sys.argv[3])
+        configure_desktops(applied, theme_path(applied))
         return 0
     if len(sys.argv) == 4 and sys.argv[1] == "--accent":
         selected = sys.argv[2]
-        # Repair settings written by older Anush versions, but otherwise an
-        # accent change must never change the configured icon theme.
-        if configured_theme() == LEGACY_OVERLAY_NAME and theme_path(selected):
-            configure_desktops(selected)
-        recolour_folders(selected, sys.argv[3])
+        if is_managed_overlay(selected):
+            overlay = theme_path(selected)
+            inherited = index_value(overlay, "Inherits") if overlay else ""
+            selected = inherited.split(",")[0].strip()
+        if not theme_path(selected):
+            return 1
+        applied = recolour_folders(selected, sys.argv[3])
+        # Re-applying the chosen theme also repairs old Anush overlay settings
+        # and tells running desktop settings daemons to invalidate icon caches.
+        configure_desktops(applied, theme_path(applied))
         return 0
     return 2
 

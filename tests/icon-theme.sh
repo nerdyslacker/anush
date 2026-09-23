@@ -13,17 +13,26 @@ export XDG_DATA_HOME="$tmp/data"
 export XDG_DATA_DIRS="$tmp/share"
 export ICON_HELPER_LOG="$tmp/helper.log"
 mkdir -p "$HOME" "$XDG_CONFIG_HOME/gtk-3.0" "$XDG_DATA_HOME/icons" \
-    "$XDG_DATA_DIRS/icons/Fairy" "$XDG_DATA_DIRS/icons/Papirus" "$tmp/bin"
+    "$XDG_DATA_DIRS/icons/Fairy" "$XDG_DATA_HOME/icons/Papirus" "$tmp/bin"
 
-for theme in Fairy Papirus; do
-    cat >"$XDG_DATA_DIRS/icons/$theme/index.theme" <<EOF
+cat >"$XDG_DATA_DIRS/icons/Fairy/index.theme" <<'EOF'
 [Icon Theme]
-Name=$theme
+Name=Fairy
 Directories=48x48/apps
 EOF
-done
 printf '%s\n' 'Inherits=Papirus,hicolor' \
     >>"$XDG_DATA_DIRS/icons/Fairy/index.theme"
+cat >"$XDG_DATA_HOME/icons/Papirus/index.theme" <<'EOF'
+[Icon Theme]
+Name=Papirus
+Directories=48x48/apps,48x48/places
+EOF
+places="$XDG_DATA_HOME/icons/Papirus/48x48/places"
+mkdir -p "$places"
+for icon in folder-blue folder-blue-documents user-blue-home; do
+    printf '%s\n' '<svg fill="#5294e2"><path fill="#4877b1"/></svg>' \
+        >"$places/$icon.svg"
+done
 
 cat >"$tmp/bin/desktop-helper" <<'EOF'
 #!/bin/sh
@@ -43,13 +52,27 @@ grep -q '^gtk-icon-theme-name=Fairy$' \
     "$XDG_CONFIG_HOME/gtk-3.0/settings.ini"
 ! grep -q '^papirus-folders ' "$ICON_HELPER_LOG"
 
-# A direct Papirus selection may use the official helper, but still remains
-# configured as Papirus rather than an Anush overlay.
+# A direct Papirus selection uses an inheriting user overlay so its folder
+# fills can exactly match the muted accent instead of a bright named variant.
 : >"$ICON_HELPER_LOG"
-"$helper" --set Papirus '#ff0000'
-grep -q '^gtk-icon-theme-name=Papirus$' \
+"$helper" --set Papirus '#b8817d'
+overlay="$XDG_DATA_HOME/icons/Anush-Papirus-Folders"
+grep -q '^gtk-icon-theme-name=Anush-Papirus-Folders$' \
     "$XDG_CONFIG_HOME/gtk-3.0/settings.ini"
-grep -q '^papirus-folders .*--theme Papirus$' "$ICON_HELPER_LOG"
+grep -qi '#b8817d' "$overlay/48x48/places/folder-documents.svg"
+grep -qi '#976a66' "$overlay/48x48/places/folder-documents.svg"
+grep -qi '#b8817d' "$overlay/48x48/places/inode-directory.svg"
+! grep -q '^papirus-folders ' "$ICON_HELPER_LOG"
+[ "$("$helper" --current)" = "Papirus" ]
+
+# Every Matugen accent, including arbitrary custom colors, is written exactly
+# into the generated SVG rather than quantized to Papirus's stock palette.
+for accent in '#b8817d' '#6db869' '#bbb169' '#6d7eb7' '#bb6bb7' \
+        '#6db8b7' '#654321'; do
+    "$helper" --accent Papirus "$accent"
+    grep -qi "$accent" "$overlay/48x48/places/folder-documents.svg"
+    grep -qi "$accent" "$overlay/48x48/places/inode-directory.svg"
+done
 
 # Migrate settings left by the old overlay implementation on the next accent
 # update, without treating an inheriting theme as Papirus-capable.
@@ -70,22 +93,37 @@ grep -q '^gtk-icon-theme-name=Fairy$' \
     "$XDG_CONFIG_HOME/gtk-3.0/settings.ini"
 ! grep -q '^papirus-folders ' "$ICON_HELPER_LOG"
 
-# A writable user Papirus installation remains accent-aware even when the
-# optional papirus-folders command is unavailable.
-rm "$tmp/bin/papirus-folders"
-places="$XDG_DATA_DIRS/icons/Papirus/48x48/places"
-mkdir -p "$places"
-for color in red green; do
-    touch "$places/folder-$color-documents.svg"
-    touch "$places/user-$color-home.svg"
+# Distro-installed Papirus variants use the same exact-color overlay without
+# trying to mutate /usr/share/icons or opening a sudo prompt.
+system_theme="$XDG_DATA_DIRS/icons/Papirus-Dark"
+system_places="$system_theme/48x48/places"
+mkdir -p "$system_places"
+cat >"$system_theme/index.theme" <<'EOF'
+[Icon Theme]
+Name=Papirus Dark
+Directories=48x48/places
+EOF
+for icon in folder-blue folder-blue-documents user-blue-home; do
+    printf '%s\n' '<svg fill="#5294e2"><path fill="#4877b1"/></svg>' \
+        >"$system_places/$icon.svg"
 done
-"$helper" --set Papirus '#ff0000'
-[ "$(readlink "$places/folder-documents.svg")" = \
-    "folder-red-documents.svg" ]
-[ "$(readlink "$places/user-home.svg")" = "user-red-home.svg" ]
-"$helper" --accent Papirus '#00ff00'
-[ "$(readlink "$places/folder-documents.svg")" = \
-    "folder-green-documents.svg" ]
-[ "$(readlink "$places/user-home.svg")" = "user-green-home.svg" ]
+"$helper" --set Papirus-Dark '#b8817d'
+overlay="$XDG_DATA_HOME/icons/Anush-Papirus-Dark-Folders"
+grep -q '^gtk-icon-theme-name=Anush-Papirus-Dark-Folders$' \
+    "$XDG_CONFIG_HOME/gtk-3.0/settings.ini"
+grep -q '^Inherits=Papirus-Dark$' "$overlay/index.theme"
+grep -qi '#b8817d' "$overlay/48x48/places/folder-documents.svg"
+grep -qi '#b8817d' "$overlay/48x48/places/inode-directory.svg"
+[ "$("$helper" --current)" = "Papirus-Dark" ]
+"$helper" --accent Papirus-Dark '#00ff00'
+grep -qi '#00ff00' "$overlay/48x48/places/folder-documents.svg"
+grep -qi '#00ff00' "$overlay/48x48/places/inode-directory.svg"
+
+# Moving back to an unrelated theme must remove the managed overlay from the
+# desktop configuration and never force Papirus.
+"$helper" --set Fairy '#00ff00'
+grep -q '^gtk-icon-theme-name=Fairy$' \
+    "$XDG_CONFIG_HOME/gtk-3.0/settings.ini"
+! "$helper" --list | grep -q '^Anush-Papirus-Dark-Folders$'
 
 printf '%s\n' 'icon theme tests passed'

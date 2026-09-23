@@ -84,7 +84,9 @@ Singleton {
             },
             theme: {
                 accent: "orange",
+                customAccent: "#6574A8",
                 defaultAccent: "yellow",
+                usePresetAccent: true,
                 preset: "srcery-dark",
                 iconTheme: "",
                 cursorTheme: "",

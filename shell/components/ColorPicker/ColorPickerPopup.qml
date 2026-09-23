@@ -164,11 +164,16 @@ Popout {
             width: parent.width
             buttonIcon: ColorPickerState.picking ? "" : ""
             buttonText: ColorPickerState.picking
-                ? "Click a pixel on screen…" : "Pick from screen"
+                ? "Cancel screen pick" : "Pick from screen"
             primary: true
-            enabled: ColorPickerState.available && !ColorPickerState.picking
+            enabled: ColorPickerState.available
             opacity: enabled ? 1 : 0.55
-            onActivated: ColorPickerState.pick()
+            onActivated: {
+                if (ColorPickerState.picking)
+                    ColorPickerState.cancelPick(false)
+                else
+                    ColorPickerState.pick()
+            }
         }
 
         Text {

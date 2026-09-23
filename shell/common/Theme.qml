@@ -21,6 +21,11 @@ Singleton {
     property real barUserScale: 1.0
     property real barBackgroundOpacity: 1.0
     property bool wallpaperThemeEnabled: false
+    // Preset accentOverride values are defaults, not locks. Selecting an
+    // accent explicitly disables the preset value until another preset is
+    // selected, and the choice survives a shell restart.
+    property bool usePresetAccent: true
+    property string customAccent: "#6574A8"
     property string defaultAccentName: "yellow"
     property string presetId: "srcery-dark"
     property string mode: "dark"
@@ -111,20 +116,25 @@ Singleton {
     readonly property color alert: error
 
     readonly property var accentNames: [
-        "orange", "red", "green", "yellow", "blue", "magenta", "cyan"
+        "orange", "red", "green", "yellow", "blue", "magenta", "cyan",
+        "custom"
     ]
     property string accentName: "orange"
     readonly property color accent: !wallpaperThemeEnabled
+            && usePresetAccent
             && activePreset?.accentOverride
         ? activePreset.accentOverride : mutedAccentColor(accentName)
     readonly property color activeBackground: !wallpaperThemeEnabled
+            && usePresetAccent
             && activePreset?.activeBackground
         ? activePreset.activeBackground : accent
     readonly property color activeBorder: !wallpaperThemeEnabled
+            && usePresetAccent
             && activePreset?.activeBorder
         ? activePreset.activeBorder : accent
     readonly property color selbg: activeBackground
     readonly property color accentForeground: !wallpaperThemeEnabled
+            && usePresetAccent
             && activePreset?.accentForeground
         ? activePreset.accentForeground
         : light ? (activePreset?.colors?.background ?? brightWhite) : hardBlack
@@ -153,6 +163,7 @@ Singleton {
 
     function accentColor(name) {
         switch (name) {
+        case "custom": return customAccent
         case "red": return red
         case "green": return green
         case "yellow": return yellow
@@ -177,8 +188,7 @@ Singleton {
         return accentNames.indexOf(value) >= 0 ? value : fallback
     }
 
-    function mutedAccentColor(name) {
-        const base = accentColor(normalizedAccentName(name, "orange"))
+    function mutedColor(base) {
         const neutral = foregroundMuted
         const neutralAmount = 0.20
         const baseAmount = 1.0 - neutralAmount
@@ -189,11 +199,19 @@ Singleton {
             1.0)
     }
 
+    function mutedAccentColor(name) {
+        return mutedColor(accentColor(normalizedAccentName(name, "orange")))
+    }
+
     function setAccent(name) {
         if (accentNames.indexOf(name) < 0)
             return
         accentName = name
-        ShellState.updateSection("theme", { accent: name })
+        usePresetAccent = false
+        ShellState.updateSection("theme", {
+            accent: name,
+            usePresetAccent: false
+        })
         if (!wallpaperThemeEnabled) {
             defaultAccentName = name
             ShellState.updateSection("theme", { defaultAccent: name })
@@ -201,9 +219,31 @@ Singleton {
         applyExternalAccent(name)
     }
 
+    function normalizeCustomAccent(value) {
+        const match = String(value ?? "").trim().match(/^#?([0-9a-fA-F]{6})$/)
+        return match ? ("#" + match[1]).toUpperCase() : ""
+    }
+
+    function setCustomAccent(value) {
+        const selected = normalizeCustomAccent(value)
+        if (selected === "")
+            return
+        customAccent = selected
+        accentName = "custom"
+        usePresetAccent = false
+        if (!wallpaperThemeEnabled)
+            defaultAccentName = "custom"
+        ShellState.updateSection("theme", {
+            accent: "custom",
+            customAccent: selected,
+            defaultAccent: !wallpaperThemeEnabled ? "custom" : defaultAccentName,
+            usePresetAccent: false
+        })
+        applyExternalAccent("custom")
+    }
+
     function applyExternalAccent(name) {
-        const selected = !wallpaperThemeEnabled && activePreset?.accentOverride
-            ? accent : mutedAccentColor(name)
+        const selected = accent
         Quickshell.execDetached([
             root.scriptsDir + "/apply-accent",
             selected.toString(),
@@ -316,11 +356,13 @@ Singleton {
         presetId = preset.id
         mode = preset.mode
         wallpaperThemeEnabled = false
+        usePresetAccent = true
         applyPresetPalette()
         ShellState.updateSection("theme", {
             preset: presetId,
             mode: mode,
-            wallpaperEnabled: false
+            wallpaperEnabled: false,
+            usePresetAccent: true
         })
         applyExternalAccent(accentName)
     }
@@ -349,7 +391,11 @@ Singleton {
         } else {
             applyPresetPalette()
             accentName = defaultAccentName
-            ShellState.updateSection("theme", { accent: accentName })
+            usePresetAccent = true
+            ShellState.updateSection("theme", {
+                accent: accentName,
+                usePresetAccent: true
+            })
             if (activePreset?.generatorDefault === true) {
                 Quickshell.execDetached([
                     root.scriptsDir + "/generate-wallpaper-theme",
@@ -500,6 +546,8 @@ Singleton {
             Number(bar.backgroundOpacity)))
         defaultAccentName = normalizedAccentName(theme.defaultAccent, "yellow")
         accentName = normalizedAccentName(theme.accent, "orange")
+        customAccent = normalizeCustomAccent(theme.customAccent) || "#6574A8"
+        usePresetAccent = theme.usePresetAccent !== false
         mode = theme.mode === "light" ? "light" : "dark"
         const savedPreset = String(theme.preset ?? "")
         let selected = presetForId(savedPreset)
