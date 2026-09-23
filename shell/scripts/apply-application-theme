@@ -190,34 +190,91 @@ def contrast_foreground(background: str, *candidates: str) -> str:
     return max(candidates, key=ratio)
 
 
-def qt_scheme(semantic: dict, _material: dict) -> str:
-    background = rgb(semantic["background"])
-    surface = rgb(semantic["background-alt"])
-    raised = surface
-    foreground = rgb(semantic["foreground"])
-    primary = rgb(semantic["primary"])
-    secondary = rgb(semantic["secondary"])
-    error = rgb(semantic["alert"])
-    disabled = rgb(semantic["disabled"])
-    positive = secondary
-    # The shell accent is refined after Matugen runs, so Matugen's on_primary
-    # may belong to a different colour. Derive readable selection text from
-    # the actual semantic accent written into this scheme.
-    on_primary = rgb(contrast_foreground(
-        semantic["primary"], semantic["background"], semantic["foreground"]))
+def qt_scheme(semantic: dict, material: dict) -> str:
+    def role(name: str, fallback: str) -> str:
+        value = material.get(name, fallback)
+        return value if isinstance(value, str) and re.fullmatch(
+            r"#[0-9a-fA-F]{6}", value) else fallback
+
+    background_hex = role("background", semantic["background"])
+    surface_hex = role("surface_container", semantic["background-alt"])
+    surface_low_hex = role("surface_container_low", surface_hex)
+    foreground_hex = role("on_background", semantic["foreground"])
+    disabled_hex = role("on_surface_variant", semantic["disabled"])
+    outline_hex = role("outline", semantic["border"])
+    outline_variant_hex = role("outline_variant", semantic["disabled"])
+    primary_hex = role("primary", semantic["primary"])
+    primary_container_hex = role("primary_container", primary_hex)
+    on_primary_hex = role("on_primary", contrast_foreground(
+        primary_hex, background_hex, foreground_hex))
+    secondary_hex = role("secondary", semantic["secondary"])
+    tertiary_hex = role("tertiary", secondary_hex)
+    error_hex = role("error", semantic["alert"])
+
+    background = rgb(background_hex)
+    surface = rgb(surface_hex)
+    surface_low = rgb(surface_low_hex)
+    foreground = rgb(foreground_hex)
+    primary = rgb(primary_hex)
+    primary_container = rgb(primary_container_hex)
+    on_primary = rgb(on_primary_hex)
+    secondary = rgb(secondary_hex)
+    tertiary = rgb(tertiary_hex)
+    error = rgb(error_hex)
+    disabled = rgb(disabled_hex)
+    outline = rgb(outline_hex)
+    outline_variant = rgb(outline_variant_hex)
+
+    # QtCt's palette loader requires these 21 QPalette roles. KDE color
+    # groups alone make a scheme appear in the selector but QtCt falls back to
+    # its default palette, which is why Anush previously looked unthemed.
+    active_colors = [
+        foreground_hex, background_hex, surface_hex, outline_hex,
+        outline_variant_hex, outline_variant_hex, foreground_hex,
+        on_primary_hex, foreground_hex, background_hex, background_hex,
+        "#000000", primary_hex, on_primary_hex, tertiary_hex, tertiary_hex,
+        surface_low_hex, background_hex, background_hex, disabled_hex,
+        disabled_hex,
+    ]
+    disabled_colors = [
+        disabled_hex, outline_variant_hex, surface_hex, outline_hex,
+        outline_variant_hex, outline_variant_hex, disabled_hex, disabled_hex,
+        disabled_hex, outline_variant_hex, outline_variant_hex, "#000000",
+        outline_variant_hex, disabled_hex, disabled_hex, disabled_hex,
+        outline_variant_hex, outline_variant_hex, outline_variant_hex,
+        disabled_hex, disabled_hex,
+    ]
+    inactive_colors = [
+        disabled_hex, background_hex, surface_hex, outline_hex,
+        outline_variant_hex, outline_variant_hex, disabled_hex, disabled_hex,
+        disabled_hex, background_hex, background_hex, "#000000",
+        tertiary_hex, on_primary_hex, tertiary_hex, tertiary_hex,
+        surface_low_hex, background_hex, background_hex, disabled_hex,
+        disabled_hex,
+    ]
+    color_scheme = """[ColorScheme]
+active_colors={active}
+disabled_colors={disabled_values}
+inactive_colors={inactive}
+
+""".format(
+        active=", ".join(active_colors),
+        disabled_values=", ".join(disabled_colors),
+        inactive=", ".join(inactive_colors),
+    )
     groups = []
 
     # qt5ct/qt6ct and KDE consume the same KColorScheme groups. Supplying the
     # complete set matters: otherwise controls silently fall back to the host
     # palette and the selected scheme looks only partially themed.
     group_backgrounds = {
-        "Button": (surface, raised),
+        "Button": (surface, background),
         "Complementary": (surface, background),
-        "Header": (surface, background),
-        "Header][Inactive": (background, surface),
-        "Tooltip": (surface, background),
-        "View": (surface, background),
-        "Window": (surface, background),
+        "Header": (background, background),
+        "Header][Inactive": (background, background),
+        "Tooltip": (background, background),
+        "View": (surface_low, background),
+        "Window": (background, background),
     }
     for name, (alternate, normal) in group_backgrounds.items():
         groups.append(f"""[Colors:{name}]
@@ -225,28 +282,28 @@ BackgroundAlternate={alternate}
 BackgroundNormal={normal}
 DecorationFocus={primary}
 DecorationHover={primary}
-ForegroundActive={foreground}
+ForegroundActive={primary}
 ForegroundInactive={disabled}
 ForegroundLink={secondary}
 ForegroundNegative={error}
-ForegroundNeutral={foreground}
+ForegroundNeutral={tertiary}
 ForegroundNormal={foreground}
-ForegroundPositive={positive}
-ForegroundVisited={secondary}
+ForegroundPositive={secondary}
+ForegroundVisited={tertiary}
 """)
     groups.append(f"""[Colors:Selection]
-BackgroundAlternate={primary}
+BackgroundAlternate={primary_container}
 BackgroundNormal={primary}
 DecorationFocus={primary}
 DecorationHover={primary}
 ForegroundActive={on_primary}
-ForegroundInactive={on_primary}
+ForegroundInactive={disabled}
 ForegroundLink={secondary}
 ForegroundNegative={error}
-ForegroundNeutral={on_primary}
+ForegroundNeutral={tertiary}
 ForegroundNormal={on_primary}
 ForegroundPositive={secondary}
-ForegroundVisited={secondary}
+ForegroundVisited={tertiary}
 """)
     effects = f"""[ColorEffects:Disabled]
 Color={disabled}
@@ -259,7 +316,7 @@ IntensityEffect=2
 
 [ColorEffects:Inactive]
 ChangeSelectionColor=true
-Color={disabled}
+Color={outline}
 ColorAmount=0.025
 ColorEffect=2
 ContrastAmount=0.1
@@ -269,7 +326,7 @@ IntensityAmount=0
 IntensityEffect=0
 
 """
-    return effects + "\n".join(groups) + f"""\n[General]
+    return color_scheme + effects + "\n".join(groups) + f"""\n[General]
 ColorScheme=AnushMatugen
 Name=Anush Matugen
 shadeSortColumn=true
@@ -281,7 +338,7 @@ contrast=4
 activeBackground={background}
 activeBlend={foreground}
 activeForeground={foreground}
-inactiveBackground={surface}
+inactiveBackground={background}
 inactiveBlend={disabled}
 inactiveForeground={disabled}
 """

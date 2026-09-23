@@ -104,20 +104,30 @@ grep -q 'color_scheme_path=.*/anush-matugen.conf' \
 grep -q '^custom_palette=true$' "$XDG_CONFIG_HOME/qt5ct/qt5ct.conf"
 grep -q '^custom_palette=true$' "$XDG_CONFIG_HOME/qt6ct/qt6ct.conf"
 grep -q '^style=Fusion$' "$XDG_CONFIG_HOME/qt6ct/qt6ct.conf"
+grep -q '^\[ColorScheme\]$' \
+    "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf"
+grep -q '^active_colors=#e4e2e7, #101114, #1c1b20, #92909a' \
+    "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf"
 grep -q '^\[ColorEffects:Disabled\]$' \
     "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf"
 grep -q '^\[Colors:Header\]\[Inactive\]$' \
     "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf"
 grep -q '^\[WM\]$' "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf"
-grep -q '^BackgroundNormal=38,51,64$' \
+grep -q '^BackgroundNormal=16,17,20$' \
     "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf"
-grep -q '^DecorationFocus=80,115,149$' \
-    "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf"
-! grep -q '28,27,32' \
+grep -q '^DecorationFocus=184,196,255$' \
     "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf"
 grep -A12 '^\[Colors:Selection\]$' \
     "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf" \
-    | grep -q '^ForegroundNormal=210,203,188$'
+    | grep -q '^ForegroundNormal=21,37,92$'
+python3 - "$XDG_CONFIG_HOME/qt6ct/colors/anush-matugen.conf" <<'PY'
+import sys
+lines = open(sys.argv[1]).read().splitlines()
+for key in ("active_colors", "disabled_colors", "inactive_colors"):
+    value = next(line.split("=", 1)[1] for line in lines
+                 if line.startswith(key + "="))
+    assert len(value.split(", ")) == 21, (key, value)
+PY
 test -f "$XDG_DATA_HOME/color-schemes/AnushMatugen.colors"
 
 MATUGEN_FAIL=1 "$repo/shell/scripts/generate-wallpaper-theme" \
