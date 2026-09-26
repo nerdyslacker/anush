@@ -1,0 +1,789 @@
+#!/usr/bin/env python3
+"""NetworkManager-backed hotspot control for the Anush shell.
+
+Secrets arrive on stdin and are written through libnm, never process argv.
+Normal status output never contains the hotspot password.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import secrets
+import shutil
+import socket
+import string
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, Callable
+
+PROFILE_ID = "Anush Hotspot"
+PROFILE_MARKER = "anush.hotspot"
+PROBE_ADDRESS = "1.1.1.1"
+
+
+class HotspotError(RuntimeError):
+    pass
+
+
+def run(command: list[str], timeout: int = 15) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        command, capture_output=True, text=True, timeout=timeout, check=False
+    )
+
+
+def command_error(proc: subprocess.CompletedProcess[str], fallback: str) -> str:
+    message = (proc.stderr or proc.stdout).strip()
+    if "not authorized" in message.lower() or "permission" in message.lower():
+        return "NetworkManager permission was denied. Check the desktop polkit agent."
+    return message or fallback
+
+
+def default_ssid() -> str:
+    host = socket.gethostname().split(".", 1)[0].strip()
+    return f"{host or 'Anush'} Hotspot"
+
+
+def generated_password() -> str:
+    alphabet = string.ascii_letters + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(16))
+
+
+def validate_ssid(value: Any) -> str:
+    ssid = str(value or "").strip()
+    if not ssid:
+        raise HotspotError("Network name cannot be empty.")
+    if "\x00" in ssid or "\n" in ssid or "\r" in ssid:
+        raise HotspotError("Network name cannot contain NUL or line breaks.")
+    if len(ssid.encode("utf-8")) > 32:
+        raise HotspotError("Network name must be at most 32 UTF-8 bytes.")
+    return ssid
+
+
+def validate_password(value: Any) -> str:
+    password = str(value or "")
+    if not 8 <= len(password) <= 63:
+        raise HotspotError("Password must contain 8–63 printable ASCII characters.")
+    if any(ord(char) < 32 or ord(char) > 126 for char in password):
+        raise HotspotError("Password must contain only printable ASCII characters.")
+    return password
+
+
+def load_nm() -> tuple[Any, Any, Any]:
+    try:
+        import gi
+
+        gi.require_version("NM", "1.0")
+        from gi.repository import GLib, NM
+
+        client = NM.Client.new(None)
+        return NM, GLib, client
+    except Exception as exc:  # noqa: BLE001
+        raise HotspotError(f"NetworkManager/libnm is unavailable: {exc}") from exc
+
+
+def find_profile(client: Any, NM: Any) -> Any | None:
+    for connection in client.get_connections():
+        setting = connection.get_setting_connection()
+        if not setting or setting.get_connection_type() != NM.SETTING_WIRELESS_SETTING_NAME:
+            continue
+        user = connection.get_setting(NM.SettingUser)
+        if (user and user.get_data(PROFILE_MARKER) == "true") or setting.get_id() == PROFILE_ID:
+            return connection
+    return None
+
+
+def active_for_uuid(client: Any, uuid: str) -> Any | None:
+    for active in client.get_active_connections():
+        if active.get_uuid() == uuid:
+            return active
+    return None
+
+
+def active_device_name(active: Any) -> str:
+    devices = active.get_devices() or []
+    return devices[0].get_iface() if devices else ""
+
+
+def route_device() -> str:
+    if not shutil.which("ip"):
+        return ""
+    proc = run(["ip", "-j", "route", "get", PROBE_ADDRESS])
+    if proc.returncode != 0:
+        return ""
+    try:
+        routes = json.loads(proc.stdout)
+        return str(routes[0].get("dev") or "") if routes else ""
+    except (ValueError, TypeError, IndexError):
+        return ""
+
+
+def connection_kind(active: Any, NM: Any) -> str:
+    value = str(active.get_connection_type() or "")
+    if active.get_vpn() or value in {"vpn", "wireguard", "tun"}:
+        return "vpn"
+    if value == NM.SETTING_WIRED_SETTING_NAME:
+        return "ethernet"
+    if value == NM.SETTING_WIRELESS_SETTING_NAME:
+        return "wifi"
+    return ""
+
+
+def active_upstreams(client: Any, NM: Any, default_device: str) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for active in client.get_active_connections():
+        if active.get_id() == PROFILE_ID:
+            continue
+        kind = connection_kind(active, NM)
+        if not kind:
+            continue
+        device = active_device_name(active)
+        usable = bool(device and device == default_device)
+        reason = ""
+        if not usable:
+            reason = "Not the current Internet route"
+        label = {"ethernet": "Ethernet/LAN", "wifi": "Wi-Fi", "vpn": "VPN"}[kind]
+        result.append(
+            {
+                "uuid": str(active.get_uuid() or ""),
+                "name": str(active.get_id() or label),
+                "type": kind,
+                "device": device,
+                "label": f"{label} · {active.get_id()}",
+                "usable": usable,
+                "reason": reason,
+            }
+        )
+    order = {"vpn": 0, "ethernet": 1, "wifi": 2}
+    result.sort(key=lambda item: (not item["usable"], order[item["type"]], item["name"]))
+    return result
+
+
+def phy_for_interface(interface: str) -> str:
+    link = Path("/sys/class/net") / interface / "phy80211"
+    try:
+        return link.resolve().name
+    except OSError:
+        pass
+    if not shutil.which("iw"):
+        return ""
+    proc = run(["iw", "dev", interface, "info"])
+    match = re.search(r"^\s*wiphy\s+(\d+)\s*$", proc.stdout, re.MULTILINE)
+    return f"phy{match.group(1)}" if match else ""
+
+
+def parse_iw_capabilities(text: str) -> dict[str, Any]:
+    ap_supported = bool(re.search(r"^\s*\*\s+AP\s*$", text, re.MULTILINE))
+    channels_24: list[int] = []
+    channels_5: list[int] = []
+    frequency_pattern = re.compile(
+        r"^\s*\*\s+(\d+)(?:\.\d+)?\s+MHz\s+\[(\d+)\](.*)$"
+    )
+    for line in text.splitlines():
+        match = frequency_pattern.match(line)
+        if not match:
+            continue
+        frequency = int(match.group(1))
+        channel = int(match.group(2))
+        flags = match.group(3).lower()
+        if "disabled" in flags or "no ir" in flags:
+            continue
+        if 2400 <= frequency < 2500:
+            channels_24.append(channel)
+        elif 4900 <= frequency < 5925:
+            channels_5.append(channel)
+
+    concurrent = False
+    combination_lines: list[str] = []
+    collecting = False
+    for line in text.splitlines():
+        if "valid interface combinations:" in line:
+            collecting = True
+            continue
+        if collecting:
+            if line and not line[0].isspace():
+                break
+            if line.strip():
+                combination_lines.append(line.strip())
+    combinations = " ".join(combination_lines)
+    for candidate in re.split(r"\s*\*,\s*(?=#\{)", combinations):
+        has_managed = re.search(r"#\{[^}]*managed[^}]*\}\s*<=\s*\d+", candidate)
+        has_ap = re.search(r"#\{[^}]*\bAP\b[^}]*\}\s*<=\s*\d+", candidate)
+        total = re.search(r"total\s*<=\s*(\d+)", candidate)
+        if has_managed and has_ap and total and int(total.group(1)) >= 2:
+            concurrent = True
+            break
+    # Some drivers print a single combination across comma-separated lines.
+    if not concurrent:
+        concurrent = bool(
+            re.search(r"managed", combinations)
+            and re.search(r"#\{[^}]*\bAP\b", combinations)
+            and re.search(r"total\s*<=\s*([2-9]|\d{2,})", combinations)
+        )
+
+    return {
+        "apSupported": ap_supported,
+        "concurrentApStation": concurrent,
+        "channels24": sorted(set(channels_24)),
+        "channels5": sorted(set(channels_5)),
+    }
+
+
+def wifi_devices(client: Any, NM: Any) -> list[dict[str, Any]]:
+    devices: list[dict[str, Any]] = []
+    for device in client.get_devices():
+        if device.get_device_type() != NM.DeviceType.WIFI:
+            continue
+        interface = str(device.get_iface() or "")
+        phy = phy_for_interface(interface)
+        info = ""
+        if phy and shutil.which("iw"):
+            proc = run(["iw", "phy", phy, "info"])
+            if proc.returncode == 0:
+                info = proc.stdout
+        caps = parse_iw_capabilities(info)
+        caps.update(
+            {
+                "name": interface,
+                "label": f"{interface} ({phy})" if phy else interface,
+                "phy": phy,
+                "connected": device.get_state() == NM.DeviceState.ACTIVATED,
+            }
+        )
+        devices.append(caps)
+    return devices
+
+
+def current_wifi_channel(interface: str) -> tuple[str, int]:
+    if not interface or not shutil.which("iw"):
+        return "", 0
+    proc = run(["iw", "dev", interface, "link"])
+    match = re.search(r"^\s*freq:\s*(\d+)\s*$", proc.stdout, re.MULTILINE)
+    if not match:
+        return "", 0
+    frequency = int(match.group(1))
+    if frequency == 2484:
+        return "2.4", 14
+    if 2407 < frequency < 2484:
+        return "2.4", (frequency - 2407) // 5
+    if 4900 <= frequency < 5925:
+        return "5", (frequency - 5000) // 5
+    return "", 0
+
+
+def selected_ap_device(
+    devices: list[dict[str, Any]], upstream: dict[str, Any], requested: str
+) -> dict[str, Any]:
+    capable = [device for device in devices if device["apSupported"]]
+    if not capable:
+        raise HotspotError("No Wi-Fi adapter with access-point mode is available.")
+    if requested:
+        match = next((item for item in capable if item["name"] == requested), None)
+        if not match:
+            raise HotspotError("The selected hotspot adapter is unavailable or lacks AP mode.")
+        candidate = match
+    elif upstream.get("type") in {"wifi", "vpn"}:
+        candidate = next(
+            (
+                item
+                for item in capable
+                if item["name"] != upstream.get("device") and not item["connected"]
+            ),
+            capable[0],
+        )
+    else:
+        candidate = capable[0]
+    if upstream.get("type") == "wifi" and candidate["name"] == upstream.get("device"):
+        detail = "The radio reports station + AP concurrency, but"
+        if not candidate["concurrentApStation"]:
+            detail = "The radio lacks station + AP concurrency and"
+        raise HotspotError(
+            f"{detail} NetworkManager cannot safely place both connections on one interface. "
+            "Select a second Wi-Fi adapter."
+        )
+    if upstream.get("type") == "vpn" and candidate["connected"]:
+        raise HotspotError(
+            "The VPN may depend on this active Wi-Fi adapter. Disconnect Wi-Fi for an "
+            "Ethernet-backed VPN or select a second AP-capable adapter."
+        )
+    return candidate
+
+
+def read_profile(profile: Any, NM: Any | None = None) -> dict[str, Any]:
+    if not profile:
+        return {
+            "exists": False,
+            "uuid": "",
+            "ssid": default_ssid(),
+            "band": "auto",
+            "channel": 0,
+            "wifiDevice": "",
+            "upstreamUuid": "",
+            "upstreamType": "",
+        }
+    connection = profile.get_setting_connection()
+    wireless = profile.get_setting_wireless()
+    if NM is None:
+        NM, _GLib, _client = load_nm()
+    user = profile.get_setting(NM.SettingUser)
+    ssid = default_ssid()
+    raw_ssid = wireless.get_ssid() if wireless else None
+    if raw_ssid:
+        try:
+            ssid = bytes(raw_ssid.get_data()).decode("utf-8", "replace")
+        except (AttributeError, TypeError):
+            pass
+    band_value = str(wireless.get_band() or "") if wireless else ""
+    return {
+        "exists": True,
+        "uuid": str(connection.get_uuid() or ""),
+        "ssid": ssid,
+        "band": "2.4" if band_value == "bg" else "5" if band_value == "a" else "auto",
+        "channel": int(wireless.get_channel() or 0) if wireless else 0,
+        "wifiDevice": str(connection.get_interface_name() or ""),
+        "upstreamUuid": str(user.get_data("anush.upstream-uuid") or "") if user else "",
+        "upstreamType": str(user.get_data("anush.upstream-type") or "") if user else "",
+    }
+
+
+def associated_clients(interface: str) -> list[dict[str, Any]]:
+    if not interface or not shutil.which("iw"):
+        return []
+    proc = run(["iw", "dev", interface, "station", "dump"])
+    if proc.returncode != 0:
+        return []
+    neighbors: dict[str, str] = {}
+    if shutil.which("ip"):
+        neighbor_proc = run(["ip", "-j", "neigh", "show", "dev", interface])
+        try:
+            for neighbor in json.loads(neighbor_proc.stdout or "[]"):
+                mac = str(neighbor.get("lladdr") or "").lower()
+                if mac and str(neighbor.get("state") or "").upper() != "FAILED":
+                    neighbors[mac] = str(neighbor.get("dst") or "")
+        except (ValueError, TypeError):
+            pass
+
+    clients: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    for line in proc.stdout.splitlines():
+        station = re.match(r"^Station\s+([0-9a-fA-F:]{17})", line)
+        if station:
+            if current:
+                clients.append(current)
+            mac = station.group(1).lower()
+            current = {
+                "id": mac,
+                "macAddress": mac,
+                "ipAddress": neighbors.get(mac, ""),
+                "hostname": "",
+                "connectedSince": 0,
+                "signal": 0,
+            }
+            continue
+        if not current:
+            continue
+        connected = re.match(r"^\s*connected time:\s*(\d+)\s+seconds", line)
+        signal = re.match(r"^\s*signal:\s*(-?\d+)", line)
+        if connected:
+            current["connectedSince"] = int(connected.group(1))
+        elif signal:
+            current["signal"] = int(signal.group(1))
+    if current:
+        clients.append(current)
+    return clients
+
+
+def dependency_status() -> dict[str, bool]:
+    return {
+        name: shutil.which(name) is not None
+        for name in ("nmcli", "iw", "ip", "dnsmasq", "hostapd", "create_ap")
+    }
+
+
+def build_status(enforce_vpn: bool = True) -> dict[str, Any]:
+    NM, _GLib, client = load_nm()
+    profile = find_profile(client, NM)
+    profile_data = read_profile(profile, NM)
+    active = active_for_uuid(client, profile_data["uuid"]) if profile else None
+    default_device = route_device()
+    upstreams = active_upstreams(client, NM, default_device)
+    selected_upstream = next(
+        (item for item in upstreams if item["uuid"] == profile_data["upstreamUuid"]), None
+    )
+    error = ""
+    vpn_safety_stop = bool(
+        active
+        and profile_data["upstreamType"] == "vpn"
+        and (not selected_upstream or not selected_upstream["usable"])
+    )
+    if vpn_safety_stop and enforce_vpn:
+        proc = run(["nmcli", "-w", "10", "connection", "down", "uuid", profile_data["uuid"]])
+        if proc.returncode == 0:
+            active = None
+            error = "VPN upstream was lost; the hotspot was stopped to prevent an unprotected fallback."
+        else:
+            error = command_error(proc, "VPN was lost and the hotspot could not be stopped safely.")
+
+    devices = wifi_devices(client, NM)
+    ap_interfaces = {item["name"] for item in devices if item["apSupported"]}
+    for upstream in upstreams:
+        if not upstream["usable"]:
+            continue
+        if upstream["type"] == "vpn" and not any(
+            item["apSupported"] and not item["connected"] for item in devices
+        ):
+            upstream["usable"] = False
+            upstream["reason"] = (
+                "The VPN may depend on the active Wi-Fi radio; use Ethernet beneath "
+                "the VPN or a second AP-capable adapter."
+            )
+        elif upstream["type"] == "wifi" and not any(
+            interface != upstream["device"] for interface in ap_interfaces
+        ):
+            radio = next(
+                (item for item in devices if item["name"] == upstream["device"]), None
+            )
+            upstream["usable"] = False
+            upstream["reason"] = (
+                "Hardware reports station + AP concurrency, but this NetworkManager "
+                "backend cannot safely create the required virtual AP interface; use a second adapter."
+                if radio and radio["concurrentApStation"]
+                else "A second AP-capable Wi-Fi adapter is required."
+            )
+    selected_device = next(
+        (item for item in devices if item["name"] == profile_data["wifiDevice"]), None
+    )
+    capable = [item for item in devices if item["apSupported"]]
+    display_device = selected_device or (capable[0] if capable else None)
+    channels24 = display_device["channels24"] if display_device else []
+    channels5 = display_device["channels5"] if display_device else []
+    bands = [{"value": "auto", "label": "Auto"}]
+    if channels5:
+        bands.append({"value": "5", "label": "5 GHz"})
+    if channels24:
+        bands.append({"value": "2.4", "label": "2.4 GHz"})
+    channels = (
+        channels24
+        if profile_data["band"] == "2.4"
+        else channels5
+        if profile_data["band"] == "5"
+        else []
+    )
+    clients = associated_clients(profile_data["wifiDevice"]) if active else []
+    upstream_lost = bool(active and (not selected_upstream or not selected_upstream["usable"]))
+    return {
+        "available": True,
+        "supported": bool(capable),
+        "supportReason": "" if capable else "No Wi-Fi adapter reports AP mode support.",
+        "active": bool(active),
+        "profileExists": profile_data["exists"],
+        "ssid": profile_data["ssid"],
+        "band": profile_data["band"],
+        "channel": profile_data["channel"],
+        "wifiDevice": profile_data["wifiDevice"],
+        "wifiDevices": devices,
+        "upstreams": upstreams,
+        "upstreamUuid": profile_data["upstreamUuid"],
+        "upstreamType": profile_data["upstreamType"],
+        "upstreamLost": upstream_lost,
+        "upstreamMessage": (
+            "Hotspot active without a usable Internet upstream."
+            if upstream_lost and profile_data["upstreamType"] != "vpn"
+            else ""
+        ),
+        "vpnProtected": bool(
+            active
+            and selected_upstream
+            and selected_upstream["type"] == "vpn"
+            and selected_upstream["usable"]
+        ),
+        "bands": bands,
+        "channels": channels,
+        "clients": clients,
+        "clientCount": len(clients),
+        "clientLimitSupported": False,
+        "clientLimitReason": (
+            "NetworkManager does not expose a reliable maximum-station setting; "
+            "hostapd max_num_sta is unavailable through this backend."
+        ),
+        "dependencies": dependency_status(),
+        "error": error,
+    }
+
+
+def wait_for_async(
+    start: Callable[[Callable[..., None]], None],
+    finish: Callable[[Any], Any],
+    GLib: Any,
+) -> Any:
+    loop = GLib.MainLoop()
+    state: dict[str, Any] = {}
+
+    def callback(_source: Any, result: Any, _user_data: Any = None) -> None:
+        try:
+            state["value"] = finish(result)
+        except Exception as exc:  # noqa: BLE001
+            state["error"] = exc
+        loop.quit()
+
+    start(callback)
+    loop.run()
+    if "error" in state:
+        raise state["error"]
+    return state.get("value")
+
+
+def setting(connection: Any, setting_type: Any) -> Any:
+    current = connection.get_setting(setting_type)
+    if current:
+        return current
+    current = setting_type.new()
+    connection.add_setting(current)
+    return current
+
+
+def configure_profile(config: dict[str, Any], activate: bool) -> dict[str, Any]:
+    NM, GLib, client = load_nm()
+    before_status = build_status(enforce_vpn=False)
+    upstream_uuid = str(config.get("upstreamUuid") or before_status.get("upstreamUuid") or "")
+    upstream = next(
+        (item for item in before_status["upstreams"] if item["uuid"] == upstream_uuid), None
+    )
+    if activate and (not upstream or not upstream["usable"]):
+        raise HotspotError(
+            upstream.get("reason", "") if upstream else "Choose an active Internet upstream."
+        )
+    if not upstream:
+        upstream = {"uuid": "", "type": "", "device": ""}
+
+    profile = find_profile(client, NM)
+    wifi = selected_ap_device(
+        before_status["wifiDevices"], upstream,
+        str(config.get("wifiDevice") or before_status.get("wifiDevice") or ""),
+    )
+    # CLI `on` with no payload activates the saved profile as-is. Avoid a
+    # no-op profile commit because remote settings intentionally omit secrets,
+    # and committing that object could discard the saved PSK.
+    if profile and not config and activate:
+        up = run(
+            [
+                "nmcli", "-w", "35", "connection", "up", "uuid",
+                profile.get_uuid(), "ifname", wifi["name"],
+            ],
+            timeout=40,
+        )
+        if up.returncode != 0:
+            raise HotspotError(command_error(up, "Hotspot activation failed."))
+        return build_status()
+
+    ssid = validate_ssid(config.get("ssid") or before_status["ssid"])
+    password_value = config.get("password")
+    if password_value in (None, "") and not profile:
+        password_value = generated_password()
+    password = validate_password(password_value) if password_value not in (None, "") else ""
+    band = str(config.get("band") or before_status.get("band") or "auto")
+    if band not in {"auto", "2.4", "5"}:
+        raise HotspotError("Unsupported hotspot band.")
+    available_channels = wifi["channels24"] if band == "2.4" else wifi["channels5"] if band == "5" else []
+    if band != "auto" and not available_channels:
+        raise HotspotError(f"{band} GHz AP mode is unavailable on {wifi['name']}.")
+    channel = int(config.get("channel") or 0)
+    if channel and (band == "auto" or channel not in available_channels):
+        raise HotspotError("The selected channel is unavailable for this adapter and band.")
+    if upstream.get("type") == "wifi" and wifi["name"] == upstream.get("device"):
+        station_band, station_channel = current_wifi_channel(wifi["name"])
+        if band != "auto" and station_band and band != station_band:
+            raise HotspotError(
+                "This adapter supports concurrent station + AP only on the station's current band."
+            )
+        if channel and station_channel and channel != station_channel:
+            raise HotspotError(
+                "This adapter supports concurrent station + AP only on the station's current channel."
+            )
+
+    snapshot = NM.SimpleConnection.new_clone(profile) if profile else None
+    was_active = bool(profile and active_for_uuid(client, profile.get_uuid()))
+    connection = profile if profile else NM.SimpleConnection.new()
+    con = setting(connection, NM.SettingConnection)
+    if not profile:
+        con.set_property(NM.SETTING_CONNECTION_ID, PROFILE_ID)
+        con.set_property(NM.SETTING_CONNECTION_UUID, NM.utils_uuid_generate())
+        con.set_property(NM.SETTING_CONNECTION_TYPE, NM.SETTING_WIRELESS_SETTING_NAME)
+    con.set_property(NM.SETTING_CONNECTION_INTERFACE_NAME, wifi["name"])
+    con.set_property(NM.SETTING_CONNECTION_AUTOCONNECT, False)
+
+    wireless = setting(connection, NM.SettingWireless)
+    wireless.set_property(NM.SETTING_WIRELESS_SSID, GLib.Bytes.new(ssid.encode("utf-8")))
+    wireless.set_property(NM.SETTING_WIRELESS_MODE, "ap")
+    wireless.set_property(NM.SETTING_WIRELESS_BAND, "bg" if band == "2.4" else "a" if band == "5" else None)
+    wireless.set_property(NM.SETTING_WIRELESS_CHANNEL, channel)
+
+    security = setting(connection, NM.SettingWirelessSecurity)
+    security.set_property(NM.SETTING_WIRELESS_SECURITY_KEY_MGMT, "wpa-psk")
+    security.set_property("proto", ["rsn"])
+    security.set_property("pairwise", ["ccmp"])
+    security.set_property("group", ["ccmp"])
+    if password:
+        security.set_property(NM.SETTING_WIRELESS_SECURITY_PSK, password)
+
+    ip4 = setting(connection, NM.SettingIP4Config)
+    ip4.set_property(NM.SETTING_IP_CONFIG_METHOD, NM.SETTING_IP4_CONFIG_METHOD_SHARED)
+    ip6 = setting(connection, NM.SettingIP6Config)
+    ip6.set_property(NM.SETTING_IP_CONFIG_METHOD, NM.SETTING_IP6_CONFIG_METHOD_DISABLED)
+    user = setting(connection, NM.SettingUser)
+    user.set_data(PROFILE_MARKER, "true")
+    user.set_data("anush.upstream-uuid", upstream["uuid"])
+    user.set_data("anush.upstream-type", upstream["type"])
+
+    try:
+        if profile:
+            if not profile.commit_changes(True, None):
+                raise HotspotError("NetworkManager rejected the hotspot profile update.")
+        else:
+            profile = wait_for_async(
+                lambda callback: client.add_connection_async(
+                    connection, True, None, callback, None
+                ),
+                client.add_connection_finish,
+                GLib,
+            )
+        if was_active or activate:
+            if was_active:
+                run(["nmcli", "-w", "10", "connection", "down", "uuid", profile.get_uuid()])
+            up = run(
+                [
+                    "nmcli",
+                    "-w",
+                    "35",
+                    "connection",
+                    "up",
+                    "uuid",
+                    profile.get_uuid(),
+                    "ifname",
+                    wifi["name"],
+                ],
+                timeout=40,
+            )
+            if up.returncode != 0:
+                raise HotspotError(command_error(up, "Hotspot activation failed."))
+    except Exception as exc:  # noqa: BLE001
+        if snapshot and profile:
+            try:
+                profile.replace_settings_from_connection(snapshot)
+                profile.commit_changes(True, None)
+                if was_active:
+                    run(["nmcli", "-w", "35", "connection", "up", "uuid", profile.get_uuid()])
+            except Exception:  # noqa: BLE001
+                pass
+        elif profile and not snapshot:
+            try:
+                profile.delete(None)
+            except Exception:  # noqa: BLE001
+                pass
+        if isinstance(exc, HotspotError):
+            raise
+        raise HotspotError(str(exc)) from exc
+
+    result = build_status()
+    result["generatedPassword"] = password if not snapshot and password else ""
+    return result
+
+
+def deactivate() -> dict[str, Any]:
+    NM, _GLib, client = load_nm()
+    profile = find_profile(client, NM)
+    if not profile:
+        return build_status()
+    proc = run(["nmcli", "-w", "15", "connection", "down", "uuid", profile.get_uuid()])
+    if proc.returncode != 0 and "not active" not in (proc.stderr or "").lower():
+        raise HotspotError(command_error(proc, "Could not stop the hotspot."))
+    return build_status()
+
+
+def credentials() -> dict[str, str]:
+    NM, _GLib, client = load_nm()
+    profile = find_profile(client, NM)
+    if not profile:
+        return {"ssid": default_ssid(), "password": generated_password()}
+    password = ""
+    try:
+        raw = profile.get_secrets(NM.SETTING_WIRELESS_SECURITY_SETTING_NAME, None)
+        unpacked = raw.unpack() if raw else {}
+        values = unpacked.get(NM.SETTING_WIRELESS_SECURITY_SETTING_NAME, {})
+        password = str(values.get(NM.SETTING_WIRELESS_SECURITY_PSK) or "")
+    except Exception as exc:  # noqa: BLE001
+        raise HotspotError(f"Could not read the NetworkManager hotspot secret: {exc}") from exc
+    return {"ssid": read_profile(profile, NM)["ssid"], "password": password}
+
+
+def read_payload() -> dict[str, Any]:
+    try:
+        value = json.load(sys.stdin)
+    except json.JSONDecodeError as exc:
+        raise HotspotError("Hotspot settings were not valid JSON.") from exc
+    if not isinstance(value, dict):
+        raise HotspotError("Hotspot settings must be a JSON object.")
+    return value
+
+
+def self_test() -> dict[str, Any]:
+    assert validate_ssid("Café") == "Café"
+    assert validate_password("correct-horse") == "correct-horse"
+    for invalid in ("", "x" * 33):
+        try:
+            validate_ssid(invalid)
+            raise AssertionError("invalid SSID accepted")
+        except HotspotError:
+            pass
+    sample = """
+Supported interface modes:
+         * managed
+         * AP
+Band 1:
+        * 2412 MHz [1] (20.0 dBm)
+        * 2467 MHz [12] (disabled)
+Band 2:
+        * 5180 MHz [36] (23.0 dBm)
+        * 5260 MHz [52] (20.0 dBm) (no IR, radar detection)
+valid interface combinations:
+         * #{ managed } <= 1, #{ AP } <= 1, total <= 2, #channels <= 1
+"""
+    parsed = parse_iw_capabilities(sample)
+    assert parsed["apSupported"]
+    assert parsed["concurrentApStation"]
+    assert parsed["channels24"] == [1]
+    assert parsed["channels5"] == [36]
+    return {"ok": True}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "action", choices=("status", "credentials", "apply", "on", "off", "self-test")
+    )
+    args = parser.parse_args()
+    try:
+        if args.action == "status":
+            result = build_status()
+        elif args.action == "credentials":
+            result = credentials()
+        elif args.action in {"apply", "on"}:
+            result = configure_profile(read_payload(), activate=args.action == "on")
+        elif args.action == "off":
+            result = deactivate()
+        else:
+            result = self_test()
+        print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+        return 0
+    except (HotspotError, subprocess.TimeoutExpired) as exc:
+        print(json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stdout)
+        return 1
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"error": f"Unexpected hotspot backend failure: {exc}"}), file=sys.stdout)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

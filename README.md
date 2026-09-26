@@ -38,6 +38,10 @@ Optional desktop integrations:
 - renCal for calendar events;
 - NetworkManager, its command-line/editor tools, BlueZ, Blueman, `pactl`, and
   Pavucontrol for network, Bluetooth, and audio controls;
+- for the Wi-Fi hotspot popup: NetworkManager/libnm GIR bindings for PyGObject,
+  `iw`, `iproute2`, `dnsmasq`, `hostapd`, and `create_ap`; NetworkManager owns
+  the active AP/DHCP/NAT path, while `hostapd` and `create_ap` are compatibility
+  tools rather than commands invoked by Anush;
 - Easy Effects for optional audio-effect bypass and preset controls;
 - tmux for the optional bar session manager;
 - brightnessctl, powerprofilesctl, redshift, xset, and xrandr for hardware and
@@ -61,7 +65,8 @@ printf '%s\n' 'repository=https://github.com/lazylinuxos/lazy-repo/releases/late
 ```sh
 sudo xbps-install -S quickshell picom dunst feh kitty xss-lock \
   betterlockscreen udiskie lxqt-policykit NetworkManager bluez blueman pavucontrol \
-  curl flameshot brightnessctl xrandr python3 renCal xterm xinput xdotool xcolor \
+  curl flameshot brightnessctl xrandr python3 python3-gobject iw iproute2 dnsmasq \
+  hostapd create_ap renCal xterm xinput xdotool xcolor \
   clipmenu xkb-switch setxkbmap ImageMagick matugen adw-gtk-theme
 ```
 
@@ -103,6 +108,8 @@ anushctl lock
 anushctl launcher toggle
 anushctl notes toggle
 anushctl popup network
+anushctl popup hotspot
+anushctl hotspot status
 anushctl wallpaper set ~/Pictures/wallpaper.jpg
 anushctl theme mode dark
 ```
@@ -184,6 +191,13 @@ with a middle click, and opens Easy Effects controls with a right click. When
 Easy Effects is installed, that popup controls global bypass, selects input and
 output presets, refreshes their state, or opens the full application. The
 normal mixer remains available when Easy Effects is absent.
+
+The Network widget opens the existing Network/VPN popup with a left click and
+the Wi-Fi Hotspot popup with a right click; middle click opens the full
+NetworkManager editor. Hotspot settings live in NetworkManager, including its
+secret store, rather than Anush state. AP/channel capabilities and associated
+stations come from `iw`, and NetworkManager shared IPv4 provides DHCP/NAT.
+Wi-Fi upstream sharing currently requires a second AP-capable adapter.
 
 The optional tmux bar widget shows the number of running sessions. Its popup
 can create and attach sessions in `$TERMINAL`, Kitty, Foot, Alacritty, WezTerm,

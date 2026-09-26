@@ -95,6 +95,18 @@ $binary notes new
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call notepad newNote'
 $binary popup bluetooth
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call bluetooth open'
+$binary popup hotspot
+assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call hotspot openPopup'
+$binary hotspot status
+assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call hotspot status'
+$binary hotspot on
+assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call hotspot enable'
+$binary hotspot off
+assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call hotspot disable'
+$binary hotspot toggle
+assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call hotspot toggle'
+$binary hotspot clients
+assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call hotspot clients'
 $binary theme mode light
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call anush themeMode light'
 $binary lock

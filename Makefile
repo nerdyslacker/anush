@@ -37,6 +37,7 @@ clean:
 
 test: build/anushctl
 	./tests/anushctl.sh
+	./tests/hotspot-control.sh
 	./tests/icon-theme.sh
 	./tests/theme-generation.sh
 

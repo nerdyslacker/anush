@@ -36,7 +36,13 @@ anushctl notes new
 anushctl notes save
 anushctl notes close
 anushctl popup network
+anushctl popup hotspot
 anushctl popup bluetooth
+anushctl hotspot status
+anushctl hotspot on
+anushctl hotspot off
+anushctl hotspot toggle
+anushctl hotspot clients
 anushctl wallpaper set ~/Pictures/wallpaper.jpg
 anushctl wallpaper random
 anushctl wallpaper restore
@@ -96,6 +102,8 @@ launcher.toggleCentered()
 clipboard.toggle()
 notepad.toggle() | newNote() | save() | close()
 network.open()
+hotspot.openPopup()
+hotspot.status() | enable() | disable() | toggle() | clients()
 bluetooth.open()
 wallpapers.set(path) | random()
 ```

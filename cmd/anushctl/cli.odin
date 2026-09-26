@@ -26,7 +26,9 @@ Runtime commands:
   clipboard toggle|daemon       Toggle history or run its capture daemon
   sidebar toggle                Toggle the Notepad sidebar
   notes toggle|new|save|close    Control Notepad
-  popup network|bluetooth        Open a connectivity popup
+  popup network|hotspot|bluetooth Open a connectivity popup
+  hotspot status|on|off|toggle   Control the NetworkManager hotspot
+  hotspot clients                Show associated hotspot stations
   wallpaper set FILE             Set the desktop wallpaper
   wallpaper random|restore       Pick a random or restore the last wallpaper
   theme mode light|dark          Change the shell colour mode
@@ -108,12 +110,25 @@ run_cli :: proc(args: []string) -> int {
         }
     case "popup":
         if len(args) != 2 {
-            return usage_error("expected: popup network|bluetooth")
+            return usage_error("expected: popup network|hotspot|bluetooth")
         }
         switch args[1] {
         case "network":   return ipc_call("network", "open", nil)
+        case "hotspot":   return ipc_call("hotspot", "openPopup", nil)
         case "bluetooth": return ipc_call("bluetooth", "open", nil)
-        case: return usage_error("expected: popup network|bluetooth")
+        case: return usage_error("expected: popup network|hotspot|bluetooth")
+        }
+    case "hotspot":
+        if len(args) != 2 {
+            return usage_error("expected: hotspot status|on|off|toggle|clients")
+        }
+        switch args[1] {
+        case "status":  return ipc_call("hotspot", "status", nil)
+        case "on":      return ipc_call("hotspot", "enable", nil)
+        case "off":     return ipc_call("hotspot", "disable", nil)
+        case "toggle":  return ipc_call("hotspot", "toggle", nil)
+        case "clients": return ipc_call("hotspot", "clients", nil)
+        case: return usage_error("expected: hotspot status|on|off|toggle|clients")
         }
     case "wallpaper":
         if len(args) == 2 && args[1] == "random" {
