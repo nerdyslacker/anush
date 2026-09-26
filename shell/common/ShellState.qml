@@ -68,7 +68,9 @@ Singleton {
             tags: {
                 count: 9,
                 showNumbers: true,
-                dynamicWorkspaces: false
+                dynamicWorkspaces: false,
+                limitVisibleTags: false,
+                visibleTagLimit: 5
             },
             pomodoro: {
                 endMs: 0,

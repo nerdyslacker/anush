@@ -10,15 +10,21 @@ Singleton {
     property int count: 9
     property bool showNumbers: true
     property bool dynamicWorkspaces: false
+    property bool limitVisibleTags: false
+    property int visibleTagLimit: 5
 
-    function save(newCount, numbersVisible, dynamic) {
+    function save(newCount, numbersVisible, dynamic, limitEnabled, newLimit) {
         count = Math.max(1, Math.min(20, Math.round(newCount)))
         showNumbers = numbersVisible
         dynamicWorkspaces = dynamic === true
+        limitVisibleTags = limitEnabled === true
+        visibleTagLimit = Math.max(1, Math.min(20, Math.round(newLimit)))
         ShellState.updateSection("tags", {
             count: count,
             showNumbers: showNumbers,
-            dynamicWorkspaces: dynamicWorkspaces
+            dynamicWorkspaces: dynamicWorkspaces,
+            limitVisibleTags: limitVisibleTags,
+            visibleTagLimit: visibleTagLimit
         })
     }
 
@@ -29,6 +35,10 @@ Singleton {
             root.count = Math.max(1, Math.min(20, Math.round(savedCount)))
         root.showNumbers = saved.showNumbers !== false
         root.dynamicWorkspaces = saved.dynamicWorkspaces === true
+        root.limitVisibleTags = saved.limitVisibleTags === true
+        const savedLimit = Number(saved.visibleTagLimit)
+        if (isFinite(savedLimit))
+            root.visibleTagLimit = Math.max(1, Math.min(20, Math.round(savedLimit)))
     }
 
     Connections {

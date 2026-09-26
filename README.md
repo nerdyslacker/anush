@@ -190,6 +190,11 @@ can create and attach sessions in `$TERMINAL`, Kitty, Foot, Alacritty, WezTerm,
 or XTerm; it also renames sessions and uses a two-click confirmation before
 killing one. Middle-clicking the widget refreshes its session count.
 
+Right-click a tag to configure the workspace count, dynamic workspaces, tag
+numbers, and an optional per-page tag limit. When the available tags exceed
+that limit, arrow buttons page through them; selecting a workspace by another
+method automatically reveals its page.
+
 Rounded corners are controlled by the canonical `theme.cornerRadius` value.
 It is watched at runtime along with the rest of the state, so editing the state
 file updates open shell surfaces without a restart. `0` keeps every non-circular

@@ -7,6 +7,8 @@ Popout {
     property int draftCount: TagConfig.count
     property bool draftShowNumbers: TagConfig.showNumbers
     property bool draftDynamicWorkspaces: TagConfig.dynamicWorkspaces
+    property bool draftLimitVisibleTags: TagConfig.limitVisibleTags
+    property int draftVisibleTagLimit: TagConfig.visibleTagLimit
 
     cardWidth: 270
     cardHeight: content.implicitHeight + 2 * cardPadding
@@ -16,6 +18,8 @@ Popout {
             draftCount = TagConfig.count
             draftShowNumbers = TagConfig.showNumbers
             draftDynamicWorkspaces = TagConfig.dynamicWorkspaces
+            draftLimitVisibleTags = TagConfig.limitVisibleTags
+            draftVisibleTagLimit = TagConfig.visibleTagLimit
         }
     }
 
@@ -123,7 +127,7 @@ Popout {
             Text {
                 width: parent.width - controls.width
                 anchors.verticalCenter: parent.verticalCenter
-                text: "Visible tags"
+                text: "Available tags"
                 color: Theme.fg
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSize
@@ -149,6 +153,69 @@ Popout {
                 StepButton {
                     symbol: "+"
                     onActivated: root.draftCount = Math.min(20, root.draftCount + 1)
+                }
+            }
+        }
+
+        Item {
+            width: parent.width
+            height: 30
+
+            Text {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Limit tags on bar"
+                color: Theme.fg
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize
+            }
+
+            SettingSwitch {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                checked: root.draftLimitVisibleTags
+                onToggled: root.draftLimitVisibleTags =
+                    !root.draftLimitVisibleTags
+            }
+        }
+
+        Row {
+            width: parent.width
+            height: 28
+            opacity: root.draftLimitVisibleTags ? 1 : 0.42
+            Behavior on opacity { NumberAnimation { duration: 120 } }
+
+            Text {
+                width: parent.width - limitControls.width
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Tags per page"
+                color: Theme.fg
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize
+            }
+            Row {
+                id: limitControls
+                enabled: root.draftLimitVisibleTags
+                spacing: 7
+                StepButton {
+                    symbol: "−"
+                    onActivated: root.draftVisibleTagLimit =
+                        Math.max(1, root.draftVisibleTagLimit - 1)
+                }
+                Text {
+                    width: 24
+                    anchors.verticalCenter: parent.verticalCenter
+                    horizontalAlignment: Text.AlignHCenter
+                    text: root.draftVisibleTagLimit
+                    color: Theme.accent
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize
+                    font.bold: true
+                }
+                StepButton {
+                    symbol: "+"
+                    onActivated: root.draftVisibleTagLimit =
+                        Math.min(20, root.draftVisibleTagLimit + 1)
                 }
             }
         }
@@ -194,7 +261,8 @@ Popout {
                 hoverEnabled: true
                 onClicked: {
                     TagConfig.save(root.draftCount, root.draftShowNumbers,
-                        root.draftDynamicWorkspaces)
+                        root.draftDynamicWorkspaces,
+                        root.draftLimitVisibleTags, root.draftVisibleTagLimit)
                     root.visible = false
                 }
             }
