@@ -121,6 +121,8 @@ PanelWindow {
                     item.barScreen = root.modelData;
                 if (widgetSlot.widgetKey === "title" && item)
                     item.barScreen = root.modelData;
+                if (widgetSlot.widgetKey === "tags" && item)
+                    item.barScreen = root.modelData;
                 if (widgetSlot.widgetKey === "notepad" && item)
                     item.barScreen = root.modelData;
                 if (widgetSlot.widgetKey === "commands" && item) {

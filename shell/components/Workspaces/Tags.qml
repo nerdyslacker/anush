@@ -5,6 +5,8 @@ import "../.."
 
 Rectangle {
     id: root
+    property var barScreen
+    readonly property string outputName: String(barScreen?.name ?? "")
     readonly property int visibleTagCount: TagConfig.dynamicWorkspaces
         ? Wm.dynamicTagCount : Math.max(TagConfig.count, Wm.tagCount)
 
@@ -19,7 +21,7 @@ Rectangle {
 
     WheelHandler {
         onWheel: event => Wm.cycleTag(
-            event.angleDelta.y > 0 ? -1 : 1, root.visibleTagCount)
+            event.angleDelta.y > 0 ? -1 : 1, root.visibleTagCount, root.outputName)
     }
 
     Grid {
@@ -34,9 +36,9 @@ Rectangle {
             Rectangle {
                 id: tag
                 required property int index
-                readonly property bool selected: Wm.isSelected(index)
-                readonly property bool occupied: Wm.isOccupied(index)
-                readonly property bool urgent: Wm.isUrgent(index)
+                readonly property bool selected: Wm.isSelected(index, root.outputName)
+                readonly property bool occupied: Wm.isOccupied(index, root.outputName)
+                readonly property bool urgent: Wm.isUrgent(index, root.outputName)
                 width: BarVisibility.verticalBar ? Theme.moduleHeight - 8
                     : selected ? 28 : 22
                 height: BarVisibility.verticalBar
@@ -81,7 +83,7 @@ Rectangle {
                         } else if (mouse.button === Qt.MiddleButton) {
                             Wm.sendToTag(tag.index)
                         } else {
-                            Wm.viewTag(tag.index)
+                            Wm.viewTag(tag.index, root.outputName)
                         }
                     }
                 }

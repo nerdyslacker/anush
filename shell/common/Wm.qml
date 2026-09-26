@@ -50,22 +50,23 @@ Singleton {
         : focusedWindow?.column_layout === "tabbed" ? 1 : 0
     property int gaps: 8
 
-    function workspaceAt(index) {
+    function workspaceAt(index, outputName) {
         const id = index + 1
         for (const ws of workspaces)
-            if (ws.id === id) return ws
+            if (Number(ws.id) === id
+                    && (!outputName || String(ws.output) === String(outputName))) return ws
         return null
     }
-    function isSelected(index) {
-        const ws = workspaceAt(index)
-        return ws !== null && ws.focused
+    function isSelected(index, outputName) {
+        const ws = workspaceAt(index, outputName)
+        return ws !== null && (outputName ? ws.visible === true : ws.focused === true)
     }
-    function isOccupied(index) {
-        const ws = workspaceAt(index)
+    function isOccupied(index, outputName) {
+        const ws = workspaceAt(index, outputName)
         return ws !== null && ws.windows > 0
     }
-    function isUrgent(index) {
-        const ws = workspaceAt(index)
+    function isUrgent(index, outputName) {
+        const ws = workspaceAt(index, outputName)
         return ws !== null && ws.urgent
     }
 
@@ -221,24 +222,27 @@ Singleton {
         }
     }
 
-    function viewTag(index) {
-        Quickshell.execDetached([msgPath, "workspace", String(index + 1)])
+    function viewTag(index, outputName) {
+        const command = [msgPath, "workspace", String(index + 1)]
+        if (outputName) command.push("output", String(outputName))
+        Quickshell.execDetached(command)
     }
-    function toggleViewTag(index) { viewTag(index) }
+    function toggleViewTag(index, outputName) { viewTag(index, outputName) }
     function sendToTag(index) {
         Quickshell.execDetached([msgPath, "move", "workspace", String(index + 1)])
     }
-    function cycleTag(direction, visibleCount) {
+    function cycleTag(direction, visibleCount, outputName) {
         const count = Math.max(1, Math.round(Number(visibleCount) || tagCount))
         let current = 0
         for (const ws of workspaces) {
-            if (ws.focused) {
+            if ((!outputName && ws.focused)
+                    || (outputName && String(ws.output) === String(outputName) && ws.visible)) {
                 current = Math.max(0, Number(ws.id) - 1)
                 break
             }
         }
         const step = direction > 0 ? 1 : -1
-        viewTag((current + step + count) % count)
+        viewTag((current + step + count) % count, outputName)
     }
     function setLayout(index) {
         const layout = layouts[index]
