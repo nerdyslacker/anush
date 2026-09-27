@@ -10,7 +10,7 @@ case $radius in
 esac
 [ "$radius" -le 4096 ] || exit 2
 
-config_dir=${ANUSH_CONFIG_DIR:-$(CDPATH= cd "$(dirname "$0")/../../config" && pwd)}
+config_dir=${ANUSH_CONFIG_DIR:-$(CDPATH= cd "$(dirname "$0")/../../../config" && pwd)}
 config_file=$config_dir/skarwm/config.rc
 
 [ -f "$config_file" ] && [ -w "$config_file" ] || exit 0

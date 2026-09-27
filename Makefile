@@ -30,9 +30,9 @@ install: build/anushctl
 
 	install -Dm755 build/anushctl \
 		"$(DESTDIR)$(BINDIR)/anushctl"
-	install -Dm755 shell/scripts/hotspot-limit-enforcer \
+	install -Dm755 shell/scripts/hotspot/hotspot-limit-enforcer \
 		"$(DESTDIR)$(LIBEXECDIR)/anush-hotspot-limit-enforcer"
-	install -Dm755 shell/scripts/hotspot-create-ap-helper \
+	install -Dm755 shell/scripts/hotspot/hotspot-create-ap-helper \
 		"$(DESTDIR)$(LIBEXECDIR)/anush-hotspot-create-ap-helper"
 	install -Dm644 packaging/org.anush.hotspot-limit.policy \
 		"$(DESTDIR)$(DATADIR)/polkit-1/actions/org.anush.hotspot-limit.policy"

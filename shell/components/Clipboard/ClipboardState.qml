@@ -20,7 +20,7 @@ Singleton {
     signal popupRequested()
 
     function helperCommand(action) {
-        return "exec '" + Theme.scriptsDir + "/clipboard-history' " + action
+        return "exec '" + Theme.scriptsDir + "/clipboard/clipboard-history' " + action
     }
 
     function parseHistory(raw) {

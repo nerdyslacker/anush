@@ -493,8 +493,26 @@ Popout {
             }
 
             Controls.ScrollBar.vertical: Controls.ScrollBar {
-                policy: parent.contentHeight > parent.height + 0.5
-                    ? Controls.ScrollBar.AlwaysOn : Controls.ScrollBar.AlwaysOff
+                width: 8
+                policy: Controls.ScrollBar.AsNeeded
+                interactive: true
+
+                background: Rectangle {
+                    color: Theme.gray2
+                    border.width: 1
+                    border.color: Theme.gray5
+                    radius: Math.min(width / 2, Theme.radiusSmall)
+                }
+
+                contentItem: Rectangle {
+                    implicitWidth: 6
+                    implicitHeight: 28
+                    color: parent.pressed ? Theme.brightOrange
+                         : parent.hovered ? Theme.orange : Theme.gray6
+                    radius: Math.min(width / 2, Theme.radiusSmall)
+
+                    Behavior on color { ColorAnimation { duration: 100 } }
+                }
             }
         }
 

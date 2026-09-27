@@ -14,10 +14,13 @@ export ANUSH_CONFIG_DIR="$tmp/config"
 export ANUSH_STATE_DIR="$tmp/state"
 export ANUSH_THEME_NO_RELOAD=1
 mkdir -p "$tmp/bin" "$ANUSH_CONFIG_DIR/rofi" "$ANUSH_CONFIG_DIR/kitty" \
+    "$ANUSH_CONFIG_DIR/fastfetch" \
     "$ANUSH_CONFIG_DIR/skarwm" "$ANUSH_STATE_DIR" \
     "$XDG_CONFIG_HOME/gtk-3.0" "$XDG_CONFIG_HOME/skarwm" \
     "$XDG_DATA_DIRS/themes/adw-gtk3/gtk-3.0" "$ANUSH_CONFIG_DIR/matugen"
 cp "$repo/config/matugen/config.toml" "$ANUSH_CONFIG_DIR/matugen/config.toml"
+cp "$repo/config/fastfetch/config.jsonc" \
+    "$ANUSH_CONFIG_DIR/fastfetch/config.jsonc"
 cp "$repo/config/skarwm/config.rc" "$ANUSH_CONFIG_DIR/skarwm/config.rc"
 cp "$repo/config/skarwm/config.rc" "$XDG_CONFIG_HOME/skarwm/config.rc"
 touch "$tmp/wallpaper.png"
@@ -44,7 +47,7 @@ EOF
 chmod +x "$tmp/bin/matugen" "$tmp/bin/magick"
 export PATH="$tmp/bin:/usr/bin:/bin"
 
-"$repo/shell/scripts/generate-wallpaper-theme" "$tmp/wallpaper.png" dark
+"$repo/shell/scripts/theme/generate-wallpaper-theme" "$tmp/wallpaper.png" dark
 python3 - "$ANUSH_STATE_DIR/shell-state.json" <<'PY'
 import json, sys
 palette = json.load(open(sys.argv[1]))["theme"]["palette"]
@@ -59,10 +62,25 @@ grep -q '^selection_background #507395$' \
 grep -q '^url_color #507395$' "$ANUSH_CONFIG_DIR/kitty/current-theme.conf"
 grep -q '^color4 #507395$' "$ANUSH_CONFIG_DIR/kitty/current-theme.conf"
 grep -q '^color12 #507395$' "$ANUSH_CONFIG_DIR/kitty/current-theme.conf"
+python3 - "$ANUSH_STATE_DIR/shell-state.json" \
+    "$ANUSH_CONFIG_DIR/fastfetch/config.jsonc" <<'PY'
+import json, sys
+palette = json.load(open(sys.argv[1]))["theme"]["palette"]["semantic"]
+config = open(sys.argv[2]).read()
+for marker, role in {
+    "fastfetch_primary": "primary",
+    "fastfetch_foreground": "foreground",
+    "fastfetch_secondary": "secondary",
+}.items():
+    red, green, blue = (int(palette[role][i:i + 2], 16) for i in (1, 3, 5))
+    expected = f"38;2;{red};{green};{blue}"
+    lines = [line for line in config.splitlines() if f"THEME: {marker}" in line]
+    assert lines and all(expected in line for line in lines), (marker, expected, lines)
+PY
 grep -q '^sel_outer_border  : #507395$' \
     "$XDG_CONFIG_HOME/skarwm/config.rc"
 
-"$repo/shell/scripts/save-wallpaper-preset" \
+"$repo/shell/scripts/theme/save-wallpaper-preset" \
     "$ANUSH_STATE_DIR/shell-state.json" \
     "$ANUSH_CONFIG_DIR/themes/presets" "Snake Night"
 python3 - "$ANUSH_CONFIG_DIR/themes/presets/user-snake-night.json" <<'PY'
@@ -74,9 +92,9 @@ assert preset["generator"] == "matugen"
 assert preset["accentOverride"] == "#507395"
 assert preset["colors"]["background"] == "#263340"
 PY
-"$repo/shell/scripts/load-theme-presets" \
+"$repo/shell/scripts/theme/load-theme-presets" \
     "$ANUSH_CONFIG_DIR/themes/presets" | grep -q 'wallpaper-snake-night'
-if "$repo/shell/scripts/save-wallpaper-preset" \
+if "$repo/shell/scripts/theme/save-wallpaper-preset" \
         "$ANUSH_STATE_DIR/shell-state.json" \
         "$ANUSH_CONFIG_DIR/themes/presets" "snake night" \
         >"$tmp/duplicate.out" 2>"$tmp/duplicate.err"; then
@@ -85,17 +103,27 @@ if "$repo/shell/scripts/save-wallpaper-preset" \
 fi
 grep -qi 'already exists' "$tmp/duplicate.err"
 
-ANUSH_ACCENT_NO_RELOAD=1 "$repo/shell/scripts/apply-accent" '#6574a8'
+ANUSH_ACCENT_NO_RELOAD=1 "$repo/shell/scripts/theme/apply-accent" \
+    '#6574a8' '' '#fce8c3' '#68a8e4'
 grep -q '^selection_background #6574a8$' \
     "$ANUSH_CONFIG_DIR/kitty/current-theme.conf"
 grep -q '^url_color #6574a8$' "$ANUSH_CONFIG_DIR/kitty/current-theme.conf"
 grep -q '^color4 #6574a8$' "$ANUSH_CONFIG_DIR/kitty/current-theme.conf"
 grep -q '^color12 #6574a8$' "$ANUSH_CONFIG_DIR/kitty/current-theme.conf"
+grep 'THEME: fastfetch_primary' \
+    "$ANUSH_CONFIG_DIR/fastfetch/config.jsonc" | \
+    grep -q '38;2;101;116;168'
+grep 'THEME: fastfetch_foreground' \
+    "$ANUSH_CONFIG_DIR/fastfetch/config.jsonc" | \
+    grep -q '38;2;252;232;195'
+grep 'THEME: fastfetch_secondary' \
+    "$ANUSH_CONFIG_DIR/fastfetch/config.jsonc" | \
+    grep -q '38;2;104;168;228'
 grep -q '^sel_outer_border  : #6574a8$' \
     "$XDG_CONFIG_HOME/skarwm/config.rc"
 
-"$repo/shell/scripts/apply-application-theme" gtk
-"$repo/shell/scripts/apply-application-theme" qt
+"$repo/shell/scripts/theme/apply-application-theme" gtk
+"$repo/shell/scripts/theme/apply-application-theme" qt
 grep -q 'keep user CSS' "$XDG_CONFIG_HOME/gtk-3.0/gtk.css"
 grep -q 'anush matugen (managed)' "$XDG_CONFIG_HOME/gtk-3.0/gtk.css"
 grep -q '^gtk-theme-name=adw-gtk3$' "$XDG_CONFIG_HOME/gtk-3.0/settings.ini"
@@ -130,7 +158,7 @@ for key in ("active_colors", "disabled_colors", "inactive_colors"):
 PY
 test -f "$XDG_DATA_HOME/color-schemes/AnushMatugen.colors"
 
-MATUGEN_FAIL=1 "$repo/shell/scripts/generate-wallpaper-theme" \
+MATUGEN_FAIL=1 "$repo/shell/scripts/theme/generate-wallpaper-theme" \
     "$tmp/wallpaper.png" dark
 python3 - "$ANUSH_STATE_DIR/shell-state.json" <<'PY'
 import json, sys

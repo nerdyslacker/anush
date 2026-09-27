@@ -245,9 +245,11 @@ Singleton {
     function applyExternalAccent(name) {
         const selected = accent
         Quickshell.execDetached([
-            root.scriptsDir + "/apply-accent",
+            root.scriptsDir + "/theme/apply-accent",
             selected.toString(),
-            Wm.msgPath
+            Wm.msgPath,
+            root.foreground.toString(),
+            root.secondary.toString()
         ])
         AppearanceService.applyAccent(selected.toString())
     }
@@ -271,7 +273,7 @@ Singleton {
         cornerRadius = Math.max(0, Math.round(Number(value) || 0))
         ShellState.updateSection("theme", { cornerRadius: cornerRadius })
         Quickshell.execDetached([
-            root.scriptsDir + "/apply-corner-radius",
+            root.scriptsDir + "/theme/apply-corner-radius",
             String(cornerRadius),
             Wm.msgPath
         ])
@@ -283,7 +285,7 @@ Singleton {
             return
         applicationThemeProcess.running = false
         applicationThemeProcess.command = [
-            root.scriptsDir + "/apply-application-theme", target
+            root.scriptsDir + "/theme/apply-application-theme", target
         ]
         applicationThemeStatus = "Applying " + target.toUpperCase() + " theme…"
         applicationThemeProcess.running = true
@@ -297,7 +299,7 @@ Singleton {
             return
         wallpaperPresetProcess.running = false
         wallpaperPresetProcess.command = [
-            root.scriptsDir + "/save-wallpaper-preset",
+            root.scriptsDir + "/theme/save-wallpaper-preset",
             ShellState.filePath,
             root.configDir + "/themes/presets",
             title
@@ -326,14 +328,14 @@ Singleton {
         const palette = ShellState.state.theme.palette
         if (wallpaperThemeEnabled && palette?.image) {
             Quickshell.execDetached([
-                root.scriptsDir + "/generate-wallpaper-theme",
+                root.scriptsDir + "/theme/generate-wallpaper-theme",
                 String(palette.image), next,
                 "--wm-msg", Wm.msgPath
             ])
         } else if (!wallpaperThemeEnabled
                 && activePreset?.generatorDefault === true) {
             Quickshell.execDetached([
-                root.scriptsDir + "/generate-wallpaper-theme",
+                root.scriptsDir + "/theme/generate-wallpaper-theme",
                 "--default", next, accent.toString(),
                 "--wm-msg", Wm.msgPath
             ])
@@ -381,7 +383,7 @@ Singleton {
             const image = String(wallpaperPath ?? "")
             if (image !== "") {
                 Quickshell.execDetached([
-                    root.scriptsDir + "/generate-wallpaper-theme",
+                    root.scriptsDir + "/theme/generate-wallpaper-theme",
                     image, mode,
                     "--wm-msg", Wm.msgPath
                 ])
@@ -398,7 +400,7 @@ Singleton {
             })
             if (activePreset?.generatorDefault === true) {
                 Quickshell.execDetached([
-                    root.scriptsDir + "/generate-wallpaper-theme",
+                    root.scriptsDir + "/theme/generate-wallpaper-theme",
                     "--default", mode, accent.toString(),
                     "--wm-msg", Wm.msgPath
                 ])
@@ -567,7 +569,7 @@ Singleton {
                 && !wallpaperPaletteRefreshAttempted) {
             wallpaperPaletteRefreshAttempted = true
             Quickshell.execDetached([
-                root.scriptsDir + "/generate-wallpaper-theme",
+                root.scriptsDir + "/theme/generate-wallpaper-theme",
                 String(palette.image), mode,
                 "--wm-msg", Wm.msgPath
             ])
@@ -578,7 +580,7 @@ Singleton {
     Process {
         id: presetLoader
         running: true
-        command: [root.scriptsDir + "/load-theme-presets",
+        command: [root.scriptsDir + "/theme/load-theme-presets",
             root.configDir + "/themes/presets"]
         stdout: StdioCollector {
             onStreamFinished: {

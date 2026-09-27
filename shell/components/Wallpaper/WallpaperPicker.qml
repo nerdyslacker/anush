@@ -102,7 +102,7 @@ Popout {
         if (path === "")
             return
         Quickshell.execDetached([
-            Theme.scriptsDir + "/wallpaper-theme",
+            Theme.scriptsDir + "/theme/wallpaper-theme",
             path,
             Theme.wallpaperThemeEnabled ? "true" : "false",
             Theme.mode,

@@ -145,7 +145,7 @@ Singleton {
     Process {
         id: migration
         running: true
-        command: [root.scriptsDir + "/migrate-state", root.filePath, root.bundledStatePath, root.legacyStateDir]
+        command: [root.scriptsDir + "/state/migrate-state", root.filePath, root.bundledStatePath, root.legacyStateDir]
         onExited: exitCode => {
             if (exitCode !== 0)
                 console.warn("shell state migration exited with", exitCode);

@@ -32,7 +32,7 @@ Optional desktop integrations:
   matching folder colors to the selected anush accent. The official
   `papirus-folders` helper is preferred, with a built-in fallback for writable
   user-installed Papirus themes;
-- Picom, Dunst, Feh, and Kitty for the supplied desktop configuration;
+- Picom, Dunst, Feh, Kitty, and Fastfetch for the supplied desktop configuration;
 - Clipmenu and Xdotool for clipboard history and pasting;
 - `setxkbmap` and `xkb-switch` for keyboard layouts;
 - renCal for calendar events;
@@ -64,7 +64,7 @@ printf '%s\n' 'repository=https://github.com/lazylinuxos/lazy-repo/releases/late
   | sudo tee /etc/xbps.d/99-repository-lazy.conf
 ```
 ```sh
-sudo xbps-install -S quickshell picom dunst feh kitty xss-lock \
+sudo xbps-install -S quickshell picom dunst feh kitty fastfetch xss-lock \
   betterlockscreen udiskie lxqt-policykit NetworkManager bluez blueman pavucontrol \
   curl flameshot brightnessctl xrandr python3 python3-gobject iw iproute2 dnsmasq polkit \
   hostapd create_ap iptables renCal xterm xinput xdotool xcolor \
@@ -79,6 +79,13 @@ system or user Kitty configuration. `anushctl start` also exports that location
 to applications launched by the shell. Its selection, URL, active-tab, border,
 and primary ANSI colors follow the current anush accent. The focused skarwm
 window border is updated in the live skarwm configuration at the same time.
+
+`anushctl start` seeds the Anush Fastfetch configuration when it is missing and
+makes Fastfetch's standard
+`${XDG_CONFIG_HOME:-$HOME/.config}/fastfetch/config.jsonc` path point to
+`config/fastfetch/config.jsonc`. An existing regular config is preserved once
+as `config.jsonc.pre-anush`. Fastfetch's keys, title, separator, and divider
+follow the active anush theme.
 
 ## Install and launch
 
@@ -136,6 +143,8 @@ anushctl install skarwm
 
 See [`docs/anushctl.md`](docs/anushctl.md) for the full command tree, exit
 codes, config paths, and protocol notes.
+See [`docs/widgets/`](docs/widgets/README.md) for a short guide to every bar
+widget and its mouse actions.
 
 There is deliberately no anush session executable or display-manager entry.
 The active WM decides how to start the shell. For skarwm, copy the supplied
@@ -166,7 +175,7 @@ built-in windows.
 config/                 external application and WM integration examples
 shell/common/           shared QML types and state management
 shell/components/       QML grouped by feature
-shell/scripts/          shell helper programs
+shell/scripts/          feature-grouped shell helper programs
 shell/states/           default state document
 shell/shell.qml         Quickshell entry point
 ```

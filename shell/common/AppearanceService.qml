@@ -42,10 +42,10 @@ Singleton {
         if (_ensured) return
         _ensured = true
         if (iconTheme !== "")
-            Quickshell.execDetached([ShellState.scriptsDir + "/apply-icon-theme",
+            Quickshell.execDetached([ShellState.scriptsDir + "/theme/apply-icon-theme",
                 "--set", iconTheme, currentAccent])
         if (cursorTheme !== "")
-            Quickshell.execDetached([ShellState.scriptsDir + "/apply-cursor-theme",
+            Quickshell.execDetached([ShellState.scriptsDir + "/theme/apply-cursor-theme",
                 "--set", cursorTheme])
     }
 
@@ -54,7 +54,7 @@ Singleton {
         if (selected === "") return
         iconTheme = selected
         ShellState.updateSection("theme", { iconTheme: selected })
-        Quickshell.execDetached([ShellState.scriptsDir + "/apply-icon-theme",
+        Quickshell.execDetached([ShellState.scriptsDir + "/theme/apply-icon-theme",
             "--set", selected, currentAccent])
     }
 
@@ -63,20 +63,20 @@ Singleton {
         if (selected === "") return
         cursorTheme = selected
         ShellState.updateSection("theme", { cursorTheme: selected })
-        Quickshell.execDetached([ShellState.scriptsDir + "/apply-cursor-theme",
+        Quickshell.execDetached([ShellState.scriptsDir + "/theme/apply-cursor-theme",
             "--set", selected])
     }
 
     function applyAccent(accent) {
         currentAccent = String(accent ?? "")
         if (iconTheme !== "")
-            Quickshell.execDetached([ShellState.scriptsDir + "/apply-icon-theme",
+            Quickshell.execDetached([ShellState.scriptsDir + "/theme/apply-icon-theme",
                 "--accent", iconTheme, currentAccent])
     }
 
     Process {
         id: iconLister
-        command: [ShellState.scriptsDir + "/apply-icon-theme", "--list"]
+        command: [ShellState.scriptsDir + "/theme/apply-icon-theme", "--list"]
         stdout: SplitParser {
             onRead: line => {
                 const value = line.trim()
@@ -97,7 +97,7 @@ Singleton {
 
     Process {
         id: cursorLister
-        command: [ShellState.scriptsDir + "/apply-cursor-theme", "--list"]
+        command: [ShellState.scriptsDir + "/theme/apply-cursor-theme", "--list"]
         stdout: SplitParser {
             onRead: line => {
                 const value = line.trim()
@@ -118,7 +118,7 @@ Singleton {
 
     Process {
         id: iconCurrent
-        command: [ShellState.scriptsDir + "/apply-icon-theme", "--current"]
+        command: [ShellState.scriptsDir + "/theme/apply-icon-theme", "--current"]
         stdout: StdioCollector {
             onStreamFinished: {
                 const value = text.trim()
@@ -130,7 +130,7 @@ Singleton {
 
     Process {
         id: cursorCurrent
-        command: [ShellState.scriptsDir + "/apply-cursor-theme", "--current"]
+        command: [ShellState.scriptsDir + "/theme/apply-cursor-theme", "--current"]
         stdout: StdioCollector {
             onStreamFinished: {
                 const value = text.trim()

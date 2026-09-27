@@ -3,7 +3,7 @@
 set -eu
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-helper="$repo/shell/scripts/apply-icon-theme"
+helper="$repo/shell/scripts/theme/apply-icon-theme"
 tmp=$(mktemp -d /tmp/anush-icon-theme-test.XXXXXX)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 

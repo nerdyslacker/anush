@@ -3,7 +3,7 @@
 # Manage the anush Quickshell instance from any working directory.
 set -eu
 
-shell_dir=$(dirname "$(dirname "$(readlink -f "$0")")")
+shell_dir=$(dirname "$(dirname "$(dirname "$(readlink -f "$0")")")")
 
 case "${1:-restart}" in
     restart|reload)

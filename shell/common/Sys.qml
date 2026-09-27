@@ -105,7 +105,7 @@ Singleton {
         batteryChargeLimitError = ""
         chargeLimitProc.running = false
         chargeLimitProc.command = [
-            ShellState.scriptsDir + "/set-charge-threshold", String(limit)
+            ShellState.scriptsDir + "/battery/set-charge-threshold", String(limit)
         ]
         chargeLimitProc.running = true
     }

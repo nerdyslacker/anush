@@ -15,7 +15,7 @@ import "../.."
 Singleton {
     id: root
 
-    readonly property string helperPath: ShellState.scriptsDir + "/hotspot-control"
+    readonly property string helperPath: ShellState.scriptsDir + "/hotspot/hotspot-control"
     property bool available: false
     property bool supported: false
     property string supportReason: "Checking hotspot support…"

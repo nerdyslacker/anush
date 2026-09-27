@@ -20,6 +20,10 @@ detected installation so package updates reach an existing user directory.
 The user-owned `config/` directory is preserved. Setting `ANUSH_ROOT`
 explicitly selects a checkout or custom tree and disables this refresh.
 
+Starting the shell also activates Anush's themed Fastfetch configuration at
+Fastfetch's standard XDG path. Before creating the symlink, an existing config
+is retained as `config.jsonc.pre-anush`.
+
 ## Runtime commands
 
 ```sh

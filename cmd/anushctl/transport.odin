@@ -35,21 +35,80 @@ configure_icon_theme_environment :: proc() {
     _ = os.set_env("QS_ICON_THEME", state.theme.iconTheme)
 }
 
+ensure_fastfetch_config :: proc(config_dir: string) {
+    source := fmt.aprintf("%s/fastfetch/config.jsonc", config_dir)
+    defer delete(source)
+    if !os.exists(source) { return }
+
+    base := config_home()
+    if base == "" { return }
+    defer delete(base)
+    directory := fmt.aprintf("%s/fastfetch", base)
+    defer delete(directory)
+    target := fmt.aprintf("%s/config.jsonc", directory)
+    defer delete(target)
+
+    if os.exists(target) && os.are_paths_identical(target, source) { return }
+
+    if !os.exists(directory) {
+        if err := os.make_directory_all(directory); err != nil {
+            fmt.eprintln("anushctl: cannot create Fastfetch config directory:", err)
+            return
+        }
+    }
+
+    moved_existing := false
+    backup := fmt.aprintf("%s/config.jsonc.pre-anush", directory)
+    defer delete(backup)
+    link_target, link_err := os.read_link(target, context.temp_allocator)
+    if link_err == nil && link_target == source { return }
+    target_present := os.exists(target) || link_err == nil
+    managed_link := link_err == nil && os.exists(backup)
+    if managed_link {
+        if err := os.remove(target); err != nil {
+            fmt.eprintln("anushctl: cannot update Fastfetch config link:", err)
+            return
+        }
+    } else if target_present {
+        if os.exists(backup) {
+            fmt.eprintln("anushctl: Fastfetch config backup already exists at", backup,
+                "; leaving", target, "unchanged")
+            return
+        }
+        if err := os.rename(target, backup); err != nil {
+            fmt.eprintln("anushctl: cannot preserve existing Fastfetch config:", err)
+            return
+        }
+        moved_existing = true
+    }
+
+    if err := os.symlink(source, target); err != nil {
+        fmt.eprintln("anushctl: cannot activate Anush Fastfetch config:", err)
+        if managed_link {
+            _ = os.symlink(link_target, target)
+        } else if moved_existing {
+            _ = os.rename(backup, target)
+        }
+        return
+    }
+}
+
 configure_shell_environment :: proc(root: string) {
     configure_icon_theme_environment()
 
     config_buf: [4096]u8
-    if configured := os.get_env_buf(
-            config_buf[:], "ANUSH_CONFIG_DIR"); configured != "" {
-        kitty_config := fmt.aprintf("%s/kitty", configured)
-        defer delete(kitty_config)
-        _ = os.set_env("KITTY_CONFIG_DIRECTORY", kitty_config)
-        return
+    configured := os.get_env_buf(config_buf[:], "ANUSH_CONFIG_DIR")
+    config_dir := strings.clone(configured)
+    if configured == "" {
+        delete(config_dir)
+        config_dir = fmt.aprintf("%s/config", root)
     }
+    defer delete(config_dir)
 
-    kitty_config := fmt.aprintf("%s/config/kitty", root)
+    kitty_config := fmt.aprintf("%s/kitty", config_dir)
     defer delete(kitty_config)
     _ = os.set_env("KITTY_CONFIG_DIRECTORY", kitty_config)
+    ensure_fastfetch_config(config_dir)
 }
 
 shell_root :: proc() -> string {
@@ -184,6 +243,20 @@ refresh_managed_files :: proc(target, source: string) -> bool {
             return false
         }
     }
+
+    // Fastfetch's config is user-writable because theme changes recolor it.
+    // Seed it for installations created before Fastfetch integration, but do
+    // not replace a copy that already carries the user's active palette.
+    source_fastfetch := fmt.aprintf("%s/config/fastfetch", source)
+    defer delete(source_fastfetch)
+    target_fastfetch := fmt.aprintf("%s/config/fastfetch", target)
+    defer delete(target_fastfetch)
+    if os.exists(source_fastfetch) && !os.exists(target_fastfetch) {
+        if err := os.copy_directory_all(target_fastfetch, source_fastfetch); err != nil {
+            fmt.eprintln("anushctl: cannot seed Fastfetch config:", err)
+            return false
+        }
+    }
     return true
 }
 
@@ -297,7 +370,7 @@ run_clipboard_daemon :: proc() -> int {
     root, ready := prepare_shell_root()
     if !ready { return EXIT_RUNTIME }
     defer delete(root)
-    helper := fmt.aprintf("%s/shell/scripts/clipboard-history", root)
+    helper := fmt.aprintf("%s/shell/scripts/clipboard/clipboard-history", root)
     defer delete(helper)
     if !os.exists(helper) {
         fmt.eprintln("anushctl: clipboard helper is missing from", root)

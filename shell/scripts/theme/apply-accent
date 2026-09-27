@@ -5,16 +5,42 @@ set -u
 
 accent=${1:-}
 wm_message=${2:-}
+foreground=${3:-$accent}
+secondary=${4:-$accent}
 case $accent in
     \#*) ;;
     *) exit 2 ;;
 esac
-case ${accent#\#} in
-    *[!0-9A-Fa-f]*|'') exit 2 ;;
-esac
-[ "${#accent}" -eq 7 ] || exit 2
 
-config_dir=${ANUSH_CONFIG_DIR:-$(CDPATH= cd "$(dirname "$0")/../../config" && pwd)}
+valid_color() {
+    color=$1
+    case $color in
+        \#??????) ;;
+        *) return 1 ;;
+    esac
+    case ${color#\#} in
+        *[!0-9A-Fa-f]*) return 1 ;;
+    esac
+}
+
+valid_color "$accent" || exit 2
+valid_color "$foreground" || exit 2
+valid_color "$secondary" || exit 2
+
+hex_to_sgr() {
+    color=${1#\#}
+    red=$(printf '%d' "0x${color%????}")
+    rest=${color#??}
+    green=$(printf '%d' "0x${rest%??}")
+    blue=$(printf '%d' "0x${rest#??}")
+    printf '38;2;%s;%s;%s' "$red" "$green" "$blue"
+}
+
+accent_sgr=$(hex_to_sgr "$accent")
+foreground_sgr=$(hex_to_sgr "$foreground")
+secondary_sgr=$(hex_to_sgr "$secondary")
+
+config_dir=${ANUSH_CONFIG_DIR:-$(CDPATH= cd "$(dirname "$0")/../../../config" && pwd)}
 
 rewrite() {
     file=$1
@@ -42,6 +68,9 @@ rewrite "$config_dir/dunst/dunstrc" \
 
 rewrite "$config_dir/skarwm/config.rc" \
     "/^[[:space:]]*sel_outer_border[[:space:]]*:/ s/#[0-9A-Fa-f]{6}/$accent/"
+
+rewrite "$config_dir/fastfetch/config.jsonc" \
+    "/THEME: fastfetch_primary/ s|38;2;[0-9]+;[0-9]+;[0-9]+|$accent_sgr|; /THEME: fastfetch_foreground/ s|38;2;[0-9]+;[0-9]+;[0-9]+|$foreground_sgr|; /THEME: fastfetch_secondary/ s|38;2;[0-9]+;[0-9]+;[0-9]+|$secondary_sgr|"
 
 # skarwm reads its live configuration outside the anush data directory. Keep
 # that copy in sync as well, respecting the same environment lookup order used

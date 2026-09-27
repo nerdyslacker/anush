@@ -12,6 +12,7 @@ PanelWindow {
     property bool windowActive: false
     property bool drawerShown: false
     property bool syncing: false
+    property int focusAttempts: 0
     readonly property bool shouldShow: NotepadState.opened
         && NotepadState.matchesScreen(modelData)
     readonly property bool barOnScreen: BarVisibility.showOnScreen(modelData)
@@ -63,9 +64,17 @@ PanelWindow {
     }
 
     function focusEditor() {
+        if (!visible || !shouldShow)
+            return
         if (root.contentItem && root.contentItem.window)
             root.contentItem.window.requestActivate()
         editor.forceActiveFocus()
+    }
+
+    function beginEditorFocus() {
+        focusAttempts = 0
+        Qt.callLater(() => root.focusEditor())
+        focusRetry.restart()
     }
 
     function scrollTabs(delta) {
@@ -95,15 +104,21 @@ PanelWindow {
             Qt.callLater(() => {
                 root.drawerShown = true
                 root.syncEditor()
-                root.focusEditor()
+                root.beginEditorFocus()
             })
         } else if (windowActive) {
+            focusRetry.stop()
             drawerShown = false
             closeWindow.restart()
         }
     }
 
-    onVisibleChanged: if (visible && shouldShow) Qt.callLater(() => root.focusEditor())
+    onVisibleChanged: {
+        if (visible && shouldShow)
+            root.beginEditorFocus()
+        else
+            focusRetry.stop()
+    }
 
     Connections {
         target: NotepadState
@@ -117,6 +132,18 @@ PanelWindow {
         id: closeWindow
         interval: 230
         onTriggered: if (!root.shouldShow) root.windowActive = false
+    }
+
+    Timer {
+        id: focusRetry
+        interval: 50
+        repeat: true
+        onTriggered: {
+            root.focusAttempts++
+            root.focusEditor()
+            if (root.focusAttempts >= 5)
+                stop()
+        }
     }
 
     Shortcut {

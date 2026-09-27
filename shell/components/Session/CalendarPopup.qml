@@ -125,7 +125,7 @@ Popout {
 
     Process {
         id: eventQuery
-        command: [Theme.scriptsDir + "/calendar-events"]
+        command: [Theme.scriptsDir + "/calendar/calendar-events"]
         stdout: StdioCollector {
             onStreamFinished: root.parseEvents(text)
         }

@@ -7,9 +7,11 @@ binary="$repo/build/anushctl"
 tmp=$(mktemp -d /tmp/anushctl-test.XXXXXX)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 
-mkdir -p "$tmp/bin" "$tmp/root/shell/scripts" "$tmp/root/config" \
-    "$tmp/config/skarwm"
+mkdir -p "$tmp/bin" "$tmp/root/shell/scripts" "$tmp/root/config/fastfetch" \
+    "$tmp/config/skarwm" "$tmp/config/fastfetch"
 touch "$tmp/root/shell/shell.qml"
+printf '%s\n' 'anush fastfetch' >"$tmp/root/config/fastfetch/config.jsonc"
+printf '%s\n' 'personal fastfetch' >"$tmp/config/fastfetch/config.jsonc"
 mkdir -p "$tmp/root/config/wallpaper"
 touch "$tmp/root/config/wallpaper/hadrut_srcery.jpeg"
 cat >"$tmp/bin/qs" <<'EOF'
@@ -37,12 +39,13 @@ cat >"$tmp/bin/feh" <<'EOF'
 #!/bin/sh
 printf 'feh %s\n' "$*" >>"$FAKE_HELPER_LOG"
 EOF
-cat >"$tmp/root/shell/scripts/clipboard-history" <<'EOF'
+mkdir -p "$tmp/root/shell/scripts/clipboard"
+cat >"$tmp/root/shell/scripts/clipboard/clipboard-history" <<'EOF'
 #!/bin/sh
 printf 'clipboard-history %s\n' "$*" >>"$FAKE_HELPER_LOG"
 EOF
 chmod +x "$tmp/bin/betterlockscreen" "$tmp/bin/feh" \
-    "$tmp/root/shell/scripts/clipboard-history"
+    "$tmp/root/shell/scripts/clipboard/clipboard-history"
 
 export PATH="$tmp/bin:$PATH"
 export ANUSH_ROOT="$tmp/root"
@@ -70,6 +73,10 @@ assert_contains() {
 }
 
 $binary start
+[ "$(readlink "$XDG_CONFIG_HOME/fastfetch/config.jsonc")" = \
+    "$ANUSH_ROOT/config/fastfetch/config.jsonc" ]
+[ "$(cat "$XDG_CONFIG_HOME/fastfetch/config.jsonc.pre-anush")" = \
+    "personal fastfetch" ]
 assert_contains "$(tail -n 1 "$FAKE_QS_THEME_LOG")" "Test-Icons"
 assert_contains "$(tail -n 1 "$FAKE_QS_KITTY_LOG")" \
     "$ANUSH_ROOT/config/kitty"
@@ -124,10 +131,11 @@ set -e
 
 # A first start discovers the system data tree and atomically seeds the user
 # directory without an external initializer.
-mkdir -p "$tmp/system/shell/scripts" "$tmp/system/config/themes/presets" \
+mkdir -p "$tmp/system/shell/scripts/shell" "$tmp/system/config/themes/presets" \
     "$tmp/system/config/matugen"
 touch "$tmp/system/shell/shell.qml"
 printf '%s\n' '#!/bin/sh' >"$tmp/system/shell/scripts/new-helper"
+printf '%s\n' '#!/bin/sh' >"$tmp/system/shell/scripts/shell/bar"
 printf '%s\n' 'seeded' >"$tmp/system/config/first-run-marker"
 printf '%s\n' 'preset v1' >"$tmp/system/config/themes/presets/test.json"
 printf '%s\n' 'matugen v1' >"$tmp/system/config/matugen/config.toml"
@@ -137,6 +145,7 @@ export XDG_CONFIG_HOME="$tmp/first-config"
 $binary start
 [ -f "$XDG_CONFIG_HOME/anush/config/first-run-marker" ]
 [ -x "$XDG_CONFIG_HOME/anush/shell/scripts/new-helper" ]
+[ -x "$XDG_CONFIG_HOME/anush/shell/scripts/shell/bar" ]
 [ "$(cat "$XDG_CONFIG_HOME/anush/config/themes/presets/test.json")" = "preset v1" ]
 [ "$(cat "$XDG_CONFIG_HOME/anush/config/matugen/config.toml")" = "matugen v1" ]
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" \
@@ -150,9 +159,15 @@ printf '%s\n' '#!/bin/sh' >"$tmp/system/shell/scripts/refreshed-helper"
 printf '%s\n' 'preset v2' >"$tmp/system/config/themes/presets/test.json"
 printf '%s\n' 'matugen v2' >"$tmp/system/config/matugen/config.toml"
 printf '%s\n' 'user setting' >"$XDG_CONFIG_HOME/anush/config/user-setting"
+# Older installations have a regular file at this path. The grouped helper
+# deliberately uses scripts/shell/bar so refreshing never has to replace that
+# file with a directory.
+printf '%s\n' '#!/bin/sh' >"$XDG_CONFIG_HOME/anush/shell/scripts/bar"
 $binary start
 [ -f "$XDG_CONFIG_HOME/anush/shell/update-marker" ]
 [ -x "$XDG_CONFIG_HOME/anush/shell/scripts/refreshed-helper" ]
+[ -f "$XDG_CONFIG_HOME/anush/shell/scripts/bar" ]
+[ -x "$XDG_CONFIG_HOME/anush/shell/scripts/shell/bar" ]
 [ "$(cat "$XDG_CONFIG_HOME/anush/config/themes/presets/test.json")" = "preset v2" ]
 [ "$(cat "$XDG_CONFIG_HOME/anush/config/matugen/config.toml")" = "matugen v2" ]
 grep -q 'user setting' "$XDG_CONFIG_HOME/anush/config/user-setting"

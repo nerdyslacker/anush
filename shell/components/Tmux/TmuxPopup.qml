@@ -8,6 +8,7 @@ Popout {
 
     property string renameTarget: ""
     property string pendingKill: ""
+    property int focusAttempts: 0
 
     cardWidth: 480
     cardHeight: 500
@@ -17,8 +18,11 @@ Popout {
         if (visible) {
             PopupCoordinator.requestOpen("tmux", root)
             TmuxService.refresh()
-            Qt.callLater(() => sessionInput.forceActiveFocus())
+            focusAttempts = 0
+            Qt.callLater(() => root.focusSessionInput())
+            focusRetry.restart()
         } else {
+            focusRetry.stop()
             renameTarget = ""
             pendingKill = ""
             sessionInput.text = ""
@@ -43,12 +47,34 @@ Popout {
         }
     }
 
+    function focusSessionInput() {
+        if (!visible)
+            return
+        if (_backingWindow)
+            _backingWindow.requestActivate()
+        sessionInput.forceActiveFocus()
+    }
+
     function beginRename(name) {
         pendingKill = ""
         renameTarget = name
         sessionInput.text = name
+        focusAttempts = 0
+        root.focusSessionInput()
         sessionInput.selectAll()
-        sessionInput.forceActiveFocus()
+        focusRetry.restart()
+    }
+
+    Timer {
+        id: focusRetry
+        interval: 50
+        repeat: true
+        onTriggered: {
+            root.focusAttempts++
+            root.focusSessionInput()
+            if (root.focusAttempts >= 4)
+                stop()
+        }
     }
 
     component ActionButton: Rectangle {

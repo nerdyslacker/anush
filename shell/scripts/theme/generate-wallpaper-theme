@@ -117,7 +117,7 @@ def palette_from_matugen(image, mode):
     executable = shutil.which("matugen")
     if not executable:
         return None
-    root = Path(__file__).resolve().parent.parent.parent
+    root = Path(__file__).resolve().parent.parent.parent.parent
     config = Path(os.environ.get(
         "ANUSH_CONFIG_DIR", root / "config")) / "matugen/config.toml"
     command = [executable, "image", image, "--json", "hex", "-m", mode,
@@ -351,6 +351,29 @@ def atomic_write(path, text):
     temporary.replace(path)
 
 
+def fastfetch_sgr(color):
+    value = color.lstrip("#")
+    return "38;2;{};{};{}".format(
+        int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16))
+
+
+def apply_fastfetch_colors(path, semantic):
+    if not path.is_file() or not os.access(path, os.W_OK):
+        return
+    config = path.read_text()
+    colors = {
+        "fastfetch_primary": fastfetch_sgr(semantic["primary"]),
+        "fastfetch_foreground": fastfetch_sgr(semantic["foreground"]),
+        "fastfetch_secondary": fastfetch_sgr(semantic["secondary"]),
+    }
+    for marker, color in colors.items():
+        config = re.sub(
+            rf'(^[^\n]*?)38;2;[0-9]+;[0-9]+;[0-9]+'
+            rf'([^\n]*THEME: {marker}[^\n]*$)',
+            rf'\g<1>{color}\g<2>', config, flags=re.MULTILINE)
+    atomic_write(path, config)
+
+
 def apply_files(image, semantic, ansi, config_dir, state_file, mode,
                 preserve_primary=False, generator="anush", material=None,
                 mode_ready=False, shell_generator=None):
@@ -405,6 +428,7 @@ mark3_background {semantic['secondary']}
 """ + "".join(f"color{index} {semantic['primary'] if index in (4, 12) else color}\n"
                 for index, color in enumerate(ansi))
     atomic_write(config_dir / "kitty/current-theme.conf", kitty)
+    apply_fastfetch_colors(config_dir / "fastfetch/config.jsonc", semantic)
 
     dunst_path = config_dir / "dunst/dunstrc"
     if dunst_path.is_file() and os.access(dunst_path, os.W_OK):
@@ -470,7 +494,7 @@ def main():
         wm_message = arguments[option_index + 1]
         del arguments[option_index:option_index + 2]
 
-    root = Path(__file__).resolve().parent.parent.parent
+    root = Path(__file__).resolve().parent.parent.parent.parent
     config_dir = Path(os.environ.get("ANUSH_CONFIG_DIR", root / "config"))
     default_state = Path(os.environ.get(
         "XDG_STATE_HOME", os.path.expanduser("~/.local/state"))) / "anush"

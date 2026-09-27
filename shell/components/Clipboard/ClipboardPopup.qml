@@ -159,7 +159,7 @@ Popout {
     Process {
         id: pasteProcess
         command: ["sh", "-c",
-            "'" + Theme.scriptsDir + "/clipboard-history' select \"$ANUSH_CLIPBOARD_ROW\" || exit; "
+            "'" + Theme.scriptsDir + "/clipboard/clipboard-history' select \"$ANUSH_CLIPBOARD_ROW\" || exit; "
             + "if [ -n \"$ANUSH_CLIPBOARD_TARGET\" ]; then "
             + "xdotool windowactivate \"$ANUSH_CLIPBOARD_TARGET\" 2>/dev/null; fi; "
             + "xdotool key --clearmodifiers ctrl+v"]

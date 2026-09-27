@@ -10,7 +10,7 @@ import "../.."
 Singleton {
     id: root
 
-    readonly property string backendPath: Theme.scriptsDir + "/display-config"
+    readonly property string backendPath: Theme.scriptsDir + "/displays/display-config"
     property string backend: ""
     property bool supportsMirroring: false
     property bool supportsPrimary: false

@@ -32,7 +32,7 @@ Singleton {
     }
     readonly property string legacyFilePath: configuredFile === ""
         ? dataRoot + "/notes.md" : ""
-    readonly property string helperPath: ShellState.scriptsDir + "/notepad-storage"
+    readonly property string helperPath: ShellState.scriptsDir + "/notepad/notepad-storage"
 
     // Keep a stable first tab visible while the backing directory is listed
     // and, on first run, note-1.md is created.
