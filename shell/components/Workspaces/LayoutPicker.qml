@@ -478,6 +478,27 @@ Popout {
 
         SectionLabel { text: "Desktop" }
 
+        Item {
+            width: parent.width
+            height: 30
+
+            Text {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                text: "window decorations"
+                color: Theme.foreground
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize
+            }
+
+            SettingSwitch {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                checked: Wm.decorationsEnabled
+                onToggled: Wm.setDecorationsEnabled(!Wm.decorationsEnabled)
+            }
+        }
+
         TweakSlider {
             label: "window gap"
             from: 0

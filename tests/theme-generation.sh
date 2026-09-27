@@ -79,6 +79,33 @@ for marker, role in {
 PY
 grep -q '^sel_outer_border  : #507395$' \
     "$XDG_CONFIG_HOME/skarwm/config.rc"
+grep -q '^decoration_color_source : explicit$' \
+    "$XDG_CONFIG_HOME/skarwm/config.rc"
+python3 - "$ANUSH_STATE_DIR/shell-state.json" \
+    "$XDG_CONFIG_HOME/skarwm/config.rc" <<'PY'
+import json, re, sys
+palette = json.load(open(sys.argv[1]))["theme"]["palette"]
+config = open(sys.argv[2]).read()
+expected = {
+    "decoration_accent": palette["semantic"]["primary"],
+    "decoration_active_foreground": palette["semantic"]["primary"],
+    "decoration_inactive_foreground": palette["semantic"]["primary"],
+    "decoration_active_border": palette["semantic"]["primary"],
+    "decoration_inactive_border": palette["semantic"]["primary"],
+}
+def blend(first, second, amount):
+    left = tuple(int(first[index:index + 2], 16) for index in (1, 3, 5))
+    right = tuple(int(second[index:index + 2], 16) for index in (1, 3, 5))
+    mixed = (round(a * (1 - amount) + b * amount)
+             for a, b in zip(left, right))
+    return "#" + "".join(f"{channel:02x}" for channel in mixed)
+expected["decoration_active_background"] = blend(
+    palette["semantic"]["background"], palette["semantic"]["foreground"], 0.14)
+expected["decoration_inactive_background"] = blend(
+    palette["semantic"]["background"], palette["semantic"]["foreground"], 0.07)
+for key, value in expected.items():
+    assert re.search(rf"(?m)^{key}\s*:\s*{re.escape(value)}$", config), (key, value)
+PY
 
 "$repo/shell/scripts/theme/save-wallpaper-preset" \
     "$ANUSH_STATE_DIR/shell-state.json" \
@@ -103,8 +130,17 @@ if "$repo/shell/scripts/theme/save-wallpaper-preset" \
 fi
 grep -qi 'already exists' "$tmp/duplicate.err"
 
+# A WM started with `-c` exports this exact path. It must win over the normal
+# XDG location for both palette updates and the enable switch.
+export SKARWM_CONFIG="$tmp/active-skarwm.rc"
+cp "$XDG_CONFIG_HOME/skarwm/config.rc" "$SKARWM_CONFIG"
+normal_border_before=$(sed -nE \
+    's/^[[:space:]]*norm_outer_border[[:space:]]*:[[:space:]]*(#[0-9A-Fa-f]{6}).*/\1/p' \
+    "$SKARWM_CONFIG")
+
 ANUSH_ACCENT_NO_RELOAD=1 "$repo/shell/scripts/theme/apply-accent" \
-    '#6574a8' '' '#fce8c3' '#68a8e4'
+    '#6574a8' '' '#fce8c3' '#68a8e4' \
+    '#333333' '#292929' '#6574a8' '#6574a8' '#6574a8' '#6574a8' true
 grep -q '^selection_background #6574a8$' \
     "$ANUSH_CONFIG_DIR/kitty/current-theme.conf"
 grep -q '^url_color #6574a8$' "$ANUSH_CONFIG_DIR/kitty/current-theme.conf"
@@ -120,7 +156,42 @@ grep 'THEME: fastfetch_secondary' \
     "$ANUSH_CONFIG_DIR/fastfetch/config.jsonc" | \
     grep -q '38;2;104;168;228'
 grep -q '^sel_outer_border  : #6574a8$' \
-    "$XDG_CONFIG_HOME/skarwm/config.rc"
+    "$SKARWM_CONFIG"
+grep -q '^decoration_accent : #6574a8$' \
+    "$SKARWM_CONFIG"
+grep -q '^decoration_active_background : #333333$' \
+    "$SKARWM_CONFIG"
+grep -q '^decoration_inactive_background : #292929$' \
+    "$SKARWM_CONFIG"
+grep -q '^decoration_active_foreground : #6574a8$' \
+    "$SKARWM_CONFIG"
+grep -q '^decoration_inactive_foreground : #6574a8$' \
+    "$SKARWM_CONFIG"
+grep -q '^decoration_active_border : #6574a8$' \
+    "$SKARWM_CONFIG"
+grep -q '^decoration_inactive_border : #6574a8$' \
+    "$SKARWM_CONFIG"
+grep -qi "^[[:space:]]*norm_outer_border[[:space:]]*:[[:space:]]*$normal_border_before$" \
+    "$SKARWM_CONFIG"
+grep -q '^decorations_enabled : true$' \
+    "$SKARWM_CONFIG"
+
+# The persistent switch updates both the Anush template and a pre-existing
+# live config, including installations whose file predates the setting.
+sed -i '/^[[:space:]]*decorations_enabled[[:space:]]*:/d' \
+    "$SKARWM_CONFIG"
+ANUSH_DECORATION_NO_RELOAD=1 \
+    "$repo/shell/scripts/theme/apply-window-decorations" true ''
+grep -q '^decorations_enabled : true$' \
+    "$ANUSH_CONFIG_DIR/skarwm/config.rc"
+grep -q '^decorations_enabled : true$' \
+    "$SKARWM_CONFIG"
+ANUSH_DECORATION_NO_RELOAD=1 \
+    "$repo/shell/scripts/theme/apply-window-decorations" false ''
+grep -q '^decorations_enabled : false$' \
+    "$ANUSH_CONFIG_DIR/skarwm/config.rc"
+grep -q '^decorations_enabled : false$' \
+    "$SKARWM_CONFIG"
 
 "$repo/shell/scripts/theme/apply-application-theme" gtk
 "$repo/shell/scripts/theme/apply-application-theme" qt

@@ -49,6 +49,8 @@ Singleton {
     readonly property int layoutIndex: focusedWindow?.floating === true ? 2
         : focusedWindow?.column_layout === "tabbed" ? 1 : 0
     property int gaps: 8
+    property bool decorationsEnabled: false
+    property bool decorationStateLoaded: false
 
     function workspaceAt(index, outputName) {
         const id = index + 1
@@ -268,6 +270,15 @@ Singleton {
         gaps = next
         ShellState.updateSection("windowManager", { gap: next })
     }
+    function setDecorationsEnabled(enabled) {
+        const next = enabled === true
+        decorationsEnabled = next
+        ShellState.updateSection("windowManager", { decorations: next })
+        Quickshell.execDetached([
+            ShellState.scriptsDir + "/theme/apply-window-decorations",
+            next ? "true" : "false", msgPath
+        ])
+    }
     function toggleScratchpad(register) {
         Quickshell.execDetached([msgPath, "scratchpad", "toggle", String(register)])
     }
@@ -278,21 +289,35 @@ Singleton {
         ])
     }
 
-    function loadGap() {
+    function loadWindowManagerState() {
         const saved = Number(ShellState.state.windowManager.gap)
         if (!isNaN(saved)) {
             root.gaps = Math.min(40, Math.max(0, Math.round(saved)))
             restoreGap.restart()
         }
+        const nextDecorations =
+            ShellState.state.windowManager.decorations === true
+        if (!root.decorationStateLoaded) {
+            root.decorationsEnabled = nextDecorations
+            root.decorationStateLoaded = true
+        } else if (root.decorationsEnabled !== nextDecorations) {
+            root.decorationsEnabled = nextDecorations
+            Quickshell.execDetached([
+                ShellState.scriptsDir + "/theme/apply-window-decorations",
+                nextDecorations ? "true" : "false", root.msgPath
+            ])
+        }
     }
 
     Connections {
         target: ShellState
-        function onStateChanged() { root.loadGap() }
-        function onReadyChanged() { if (ShellState.ready) root.loadGap() }
+        function onStateChanged() { root.loadWindowManagerState() }
+        function onReadyChanged() {
+            if (ShellState.ready) root.loadWindowManagerState()
+        }
     }
 
-    Component.onCompleted: if (ShellState.ready) loadGap()
+    Component.onCompleted: if (ShellState.ready) loadWindowManagerState()
 
     Timer {
         id: restoreGap
@@ -300,4 +325,5 @@ Singleton {
         onTriggered: Quickshell.execDetached(
             [root.msgPath, "gaps", String(root.gaps)])
     }
+
 }

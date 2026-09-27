@@ -7,6 +7,13 @@ accent=${1:-}
 wm_message=${2:-}
 foreground=${3:-$accent}
 secondary=${4:-$accent}
+decoration_active_background=${5:-$accent}
+decoration_inactive_background=${6:-$foreground}
+decoration_active_foreground=${7:-$foreground}
+decoration_inactive_foreground=${8:-$foreground}
+decoration_active_border=${9:-$accent}
+decoration_inactive_border=${10:-$secondary}
+decorations_enabled=${11:-}
 case $accent in
     \#*) ;;
     *) exit 2 ;;
@@ -26,6 +33,16 @@ valid_color() {
 valid_color "$accent" || exit 2
 valid_color "$foreground" || exit 2
 valid_color "$secondary" || exit 2
+valid_color "$decoration_active_background" || exit 2
+valid_color "$decoration_inactive_background" || exit 2
+valid_color "$decoration_active_foreground" || exit 2
+valid_color "$decoration_inactive_foreground" || exit 2
+valid_color "$decoration_active_border" || exit 2
+valid_color "$decoration_inactive_border" || exit 2
+case $decorations_enabled in
+    true|false|'') ;;
+    *) exit 2 ;;
+esac
 
 hex_to_sgr() {
     color=${1#\#}
@@ -57,6 +74,39 @@ rewrite() {
     fi
 }
 
+rewrite_key() {
+    file=$1
+    key=$2
+    value=$3
+    [ -f "$file" ] && [ -w "$file" ] || return 0
+
+    temporary=$(mktemp "${file}.accent.XXXXXX") || return 1
+    if grep -Eq "^[[:space:]]*${key}[[:space:]]*:" "$file"; then
+        sed -E "s|^[[:space:]]*${key}[[:space:]]*:.*$|${key} : ${value}|" \
+            "$file" > "$temporary" || { rm -f "$temporary"; return 1; }
+    else
+        sed '$a\
+'"${key} : ${value}" "$file" > "$temporary" \
+            || { rm -f "$temporary"; return 1; }
+    fi
+    chmod 644 "$temporary"
+    mv "$temporary" "$file"
+}
+
+rewrite_decoration_palette() {
+    file=$1
+    [ -z "$decorations_enabled" ] \
+        || rewrite_key "$file" decorations_enabled "$decorations_enabled"
+    rewrite_key "$file" decoration_color_source explicit
+    rewrite_key "$file" decoration_accent "$accent"
+    rewrite_key "$file" decoration_active_background "$decoration_active_background"
+    rewrite_key "$file" decoration_inactive_background "$decoration_inactive_background"
+    rewrite_key "$file" decoration_active_foreground "$decoration_active_foreground"
+    rewrite_key "$file" decoration_inactive_foreground "$decoration_inactive_foreground"
+    rewrite_key "$file" decoration_active_border "$decoration_active_border"
+    rewrite_key "$file" decoration_inactive_border "$decoration_inactive_border"
+}
+
 rewrite "$config_dir/rofi/colors.rasi" \
     "/^[[:space:]]*(accent|border|prompt-fg):/ s/#[0-9A-Fa-f]{6}/$accent/"
 
@@ -68,6 +118,7 @@ rewrite "$config_dir/dunst/dunstrc" \
 
 rewrite "$config_dir/skarwm/config.rc" \
     "/^[[:space:]]*sel_outer_border[[:space:]]*:/ s/#[0-9A-Fa-f]{6}/$accent/"
+rewrite_decoration_palette "$config_dir/skarwm/config.rc"
 
 rewrite "$config_dir/fastfetch/config.jsonc" \
     "/THEME: fastfetch_primary/ s|38;2;[0-9]+;[0-9]+;[0-9]+|$accent_sgr|; /THEME: fastfetch_foreground/ s|38;2;[0-9]+;[0-9]+;[0-9]+|$foreground_sgr|; /THEME: fastfetch_secondary/ s|38;2;[0-9]+;[0-9]+;[0-9]+|$secondary_sgr|"
@@ -87,6 +138,7 @@ fi
 if [ "$wm_config" != "$config_dir/skarwm/config.rc" ]; then
     rewrite "$wm_config" \
         "/^[[:space:]]*sel_outer_border[[:space:]]*:/ s/#[0-9A-Fa-f]{6}/$accent/"
+    rewrite_decoration_palette "$wm_config"
 fi
 
 # Rofi reads its theme for every invocation. Reload existing Kitty and Dunst

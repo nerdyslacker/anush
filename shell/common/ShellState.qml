@@ -99,7 +99,8 @@ Singleton {
                 mode: "dark"
             },
             windowManager: {
-                gap: 8
+                gap: 8,
+                decorations: false
             },
             desktop: {
                 nightLight: false,

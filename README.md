@@ -80,7 +80,7 @@ to applications launched by the shell. Its selection, URL, active-tab, border,
 and primary ANSI colors follow the current anush accent. The focused skarwm
 window border is updated in the live skarwm configuration at the same time.
 
-`anushctl start` seeds the Anush Fastfetch configuration when it is missing and
+`anushctl start` seeds the anush Fastfetch configuration when it is missing and
 makes Fastfetch's standard
 `${XDG_CONFIG_HOME:-$HOME/.config}/fastfetch/config.jsonc` path point to
 `config/fastfetch/config.jsonc`. An existing regular config is preserved once
@@ -249,6 +249,20 @@ Committing the corner-radius slider also updates `corner_radius` in
 `config/skarwm/config.rc` atomically and requests a skarwm configuration reload.
 Set `ANUSH_CONFIG_DIR` when anush's writable configuration lives somewhere
 other than its installed `config/` directory.
+
+The same popup includes a persistent **Window decorations** switch. It updates
+both anush's skarwm template and the live skarwm configuration, then reloads
+the WM. Decoration backgrounds, text, controls, and borders follow the active
+theme's surface and foreground roles; both active and inactive frame outlines
+follow the active accent. Preset, mode, wallpaper-palette, and accent changes
+update those colors automatically.
+Current skarwm builds export the resolved `-c` configuration path to anush, so
+the popup also works in nested/development sessions that do not use the normal
+`$XDG_CONFIG_HOME/skarwm/config.rc` location.
+Decorations use the same surfaces as bar widgets by default: inactive
+titlebars use the idle widget background and the focused titlebar uses its
+brighter hover background. Titles, window buttons, and frame outlines use the
+active accent.
 
 The layout/appearance popup includes selectable palette cards for Srcery,
 Catppuccin, Gruvbox, Nord, and Everforest in dark and light variants, plus the

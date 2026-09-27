@@ -1,0 +1,55 @@
+#!/bin/sh
+
+# Persist Anush's decoration switch in both its skarwm template and the live
+# skarwm configuration, then make the change visible immediately.
+set -u
+
+enabled=${1:-}
+wm_message=${2:-}
+case $enabled in
+    true|false) ;;
+    *) exit 2 ;;
+esac
+
+config_dir=${ANUSH_CONFIG_DIR:-$(CDPATH= cd "$(dirname "$0")/../../../config" && pwd)}
+
+rewrite_enabled() {
+    file=$1
+    [ -f "$file" ] && [ -w "$file" ] || return 0
+
+    temporary=$(mktemp "${file}.decorations.XXXXXX") || return 1
+    if grep -Eq '^[[:space:]]*decorations_enabled[[:space:]]*:' "$file"; then
+        sed -E "s|^[[:space:]]*decorations_enabled[[:space:]]*:.*$|decorations_enabled : $enabled|" \
+            "$file" > "$temporary" || { rm -f "$temporary"; return 1; }
+    else
+        sed '$a\
+decorations_enabled : '"$enabled" "$file" > "$temporary" \
+            || { rm -f "$temporary"; return 1; }
+    fi
+    chmod 644 "$temporary"
+    mv "$temporary" "$file"
+}
+
+template_config=$config_dir/skarwm/config.rc
+rewrite_enabled "$template_config"
+
+if [ -n "${SKARWM_CONFIG:-}" ]; then
+    live_config=$SKARWM_CONFIG
+elif [ -n "${XDG_CONFIG_HOME:-}" ]; then
+    live_config=$XDG_CONFIG_HOME/skarwm/config.rc
+elif [ -n "${HOME:-}" ]; then
+    live_config=$HOME/.config/skarwm/config.rc
+else
+    live_config=
+fi
+if [ -n "$live_config" ] && [ "$live_config" != "$template_config" ]; then
+    rewrite_enabled "$live_config"
+fi
+
+if [ "${ANUSH_DECORATION_NO_RELOAD:-0}" != 1 ]; then
+    message=$(command -v "$wm_message" 2>/dev/null || true)
+    if [ -z "$message" ]; then
+        message=$(command -v skarwm-msg 2>/dev/null || true)
+    fi
+    [ -z "$message" ] || "$message" reload >/dev/null 2>&1 || true
+fi

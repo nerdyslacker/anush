@@ -25,10 +25,26 @@ border_width : 2
 # windows and bars remain square.
 corner_radius : 0
 
+# Optional skarwm-owned titlebars and resize frames. Anush keeps this explicit
+# palette synchronized with the selected theme and accent.
+decorations_enabled : false
+decoration_titlebar_height : 20
+decoration_border_width : 1
+decoration_resize_hit_width : 4
+decoration_show_title : true
+decoration_color_source : explicit
+decoration_accent : #659cbe
+decoration_active_background : #39434a
+decoration_inactive_background : #2c3940
+decoration_active_foreground : #659cbe
+decoration_inactive_foreground : #659cbe
+decoration_active_border : #659cbe
+decoration_inactive_border : #659cbe
+
 # Window border colours as #RRGGBB. The normal colour remains accepted for
 # config compatibility; unfocused windows currently have no border.
-norm_outer_border : #706b5c
-sel_outer_border  : #f4a974
+norm_outer_border : #5c6870
+sel_outer_border  : #659cbe
 
 # True (default): moving the pointer over a window focuses it.
 focus_follows_mouse : true

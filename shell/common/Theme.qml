@@ -34,6 +34,7 @@ Singleton {
     property string applicationThemeStatus: ""
     property string wallpaperPresetStatus: ""
     property bool wallpaperPaletteRefreshAttempted: false
+    property bool externalAppearanceInitialized: false
     readonly property var activePreset: presetForId(presetId)
     readonly property bool matugenThemeGenerated:
         wallpaperThemeEnabled
@@ -244,12 +245,24 @@ Singleton {
 
     function applyExternalAccent(name) {
         const selected = accent
+        // Match bar modules while keeping focus legible: the focused
+        // titlebar uses their hover surface and inactive windows use idle.
+        const decorationBackground = barSurface(0.14)
+        const decorationInactiveBackground = barSurface(0.07)
         Quickshell.execDetached([
             root.scriptsDir + "/theme/apply-accent",
             selected.toString(),
             Wm.msgPath,
             root.foreground.toString(),
-            root.secondary.toString()
+            root.secondary.toString(),
+            decorationBackground.toString(),
+            decorationInactiveBackground.toString(),
+            selected.toString(),
+            selected.toString(),
+            root.activeBorder.toString(),
+            root.activeBorder.toString(),
+            ShellState.state.windowManager.decorations === true
+                ? "true" : "false"
         ])
         AppearanceService.applyAccent(selected.toString())
     }
@@ -562,7 +575,11 @@ Singleton {
         }
         wallpaperThemeEnabled = theme.wallpaperEnabled === true
         cornerRadius = Math.max(0, Math.round(Number(theme.cornerRadius) || 0))
+        const firstExternalSync = !externalAppearanceInitialized
+        externalAppearanceInitialized = true
         applyActivePalette()
+        if (firstExternalSync && !wallpaperThemeEnabled)
+            applyExternalAccent(accentName)
         const palette = theme.palette
         if (wallpaperThemeEnabled && palette?.image
                 && palette?.generator !== "matugen"
