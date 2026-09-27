@@ -1,0 +1,22 @@
+#!/bin/sh
+
+set -eu
+
+if [ "$#" -eq 0 ]; then
+    printf '%s\n' 'Usage: hotspot-run-root COMMAND [ARGUMENT ...]' >&2
+    exit 2
+fi
+
+# Quickshell has no terminal in which sudo can ask for a password. Use sudo
+# only when it is already authorized (cached or configured passwordless), then
+# fall back to the desktop PolicyKit agent for interactive authentication.
+if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+    exec sudo -n -- "$@"
+fi
+
+if command -v pkexec >/dev/null 2>&1; then
+    exec pkexec "$@"
+fi
+
+printf '%s\n' 'Root access requires passwordless/cached sudo or pkexec.' >&2
+exit 1

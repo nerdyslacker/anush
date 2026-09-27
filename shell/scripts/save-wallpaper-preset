@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Save the active wallpaper palette as a reusable Anush theme preset."""
+"""Save the active wallpaper palette as a reusable anush theme preset."""
 
 import json
 import os

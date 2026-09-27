@@ -28,7 +28,7 @@ printf '%s\n' '/* keep user CSS */' >"$XDG_CONFIG_HOME/gtk-3.0/gtk.css"
 cat >"$tmp/bin/matugen" <<'EOF'
 #!/bin/sh
 if [ "${MATUGEN_FAIL:-0}" -eq 1 ]; then
-    printf '%s\n' 'simulated Matugen failure' >&2
+    printf '%s\n' 'simulated matugen failure' >&2
     exit 1
 fi
 cat <<'JSON'
@@ -97,7 +97,7 @@ grep -q '^sel_outer_border  : #6574a8$' \
 "$repo/shell/scripts/apply-application-theme" gtk
 "$repo/shell/scripts/apply-application-theme" qt
 grep -q 'keep user CSS' "$XDG_CONFIG_HOME/gtk-3.0/gtk.css"
-grep -q 'Anush Matugen (managed)' "$XDG_CONFIG_HOME/gtk-3.0/gtk.css"
+grep -q 'anush matugen (managed)' "$XDG_CONFIG_HOME/gtk-3.0/gtk.css"
 grep -q '^gtk-theme-name=adw-gtk3$' "$XDG_CONFIG_HOME/gtk-3.0/settings.ini"
 grep -q 'color_scheme_path=.*/anush-matugen.conf' \
     "$XDG_CONFIG_HOME/qt6ct/qt6ct.conf"

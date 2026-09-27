@@ -41,7 +41,7 @@ focus_follows_mouse : true
 
 # bind: run a shell command. Combo = modifier tokens + one key.
 bind : mod + Return : "kitty --config ${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/anush/config}/kitty/kitty.conf"
-# >>> Anush shell (managed by anushctl) >>>
+# >>> anush shell (managed by anushctl) >>>
 bind : mod + a : "anushctl launcher toggle"
 bind : mod + v : "anushctl clipboard toggle"
 # Keep the generated Shift variant from arming tab placement for this
@@ -52,7 +52,7 @@ autostart : "anushctl start"
 autostart : "anushctl wallpaper restore"
 autostart : "anushctl clipboard daemon"
 autostart : "xss-lock -- anushctl lock"
-# <<< Anush shell (managed by anushctl) <<<
+# <<< anush shell (managed by anushctl) <<<
 
 call : Alt + Tab : overview_next
 call : Alt + Shift + Tab : overview_prev
@@ -61,7 +61,7 @@ call : Alt + Shift + Tab : overview_prev
 # puts its next window in that tab group. An explicit shifted binding overrides
 # this generated behavior.
 
-# Start the Anush desktop environment components.
+# Start the anush desktop environment components.
 # autostart: run once at startup (not re-run on reload).
 autostart : "lxqt-policykit-agent"
 autostart : "dunst -config ${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/anush/config}/dunst/dunstrc"

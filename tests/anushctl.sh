@@ -169,7 +169,7 @@ autostart : "xss-lock -- betterlockscreen -l"
 EOF
 $binary install skarwm
 $binary install skarwm
-[ "$(grep -c '>>> Anush shell' "$XDG_CONFIG_HOME/skarwm/config.rc")" -eq 1 ]
+[ "$(grep -c '>>> anush shell' "$XDG_CONFIG_HOME/skarwm/config.rc")" -eq 1 ]
 grep -q 'user skarwm config' "$XDG_CONFIG_HOME/skarwm/config.rc"
 grep -q 'autostart : "anushctl wallpaper restore"' "$XDG_CONFIG_HOME/skarwm/config.rc"
 grep -q 'autostart : "anushctl clipboard daemon"' "$XDG_CONFIG_HOME/skarwm/config.rc"
@@ -179,12 +179,12 @@ grep -q 'autostart : "xss-lock -- anushctl lock"' "$XDG_CONFIG_HOME/skarwm/confi
 
 $binary remove skarwm
 grep -q 'user skarwm config' "$XDG_CONFIG_HOME/skarwm/config.rc"
-! grep -q 'Anush shell' "$XDG_CONFIG_HOME/skarwm/config.rc"
+! grep -q 'anush shell' "$XDG_CONFIG_HOME/skarwm/config.rc"
 
-# The bundled full Skarwm configuration carries the same managed marker, so
+# The bundled full skarwm configuration carries the same managed marker, so
 # installing after copying it does not duplicate bindings or startup commands.
 cp "$repo/config/skarwm/config.rc" "$XDG_CONFIG_HOME/skarwm/config.rc"
 $binary install skarwm
-[ "$(grep -c '>>> Anush shell' "$XDG_CONFIG_HOME/skarwm/config.rc")" -eq 1 ]
+[ "$(grep -c '>>> anush shell' "$XDG_CONFIG_HOME/skarwm/config.rc")" -eq 1 ]
 
 printf '%s\n' 'anushctl tests passed'

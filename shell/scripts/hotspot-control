@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NetworkManager-backed hotspot control for the Anush shell.
+"""NetworkManager-backed hotspot control for the anush shell.
 
 Secrets arrive on stdin and are written through libnm, never process argv.
 Normal status output never contains the hotspot password.
@@ -10,27 +10,35 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import selectors
 import secrets
 import shutil
 import socket
 import string
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any, Callable
 
-PROFILE_ID = "Anush Hotspot"
+PROFILE_ID = "anush Hotspot"
 PROFILE_MARKER = "anush.hotspot"
 PROBE_ADDRESS = "1.1.1.1"
+LIMIT_HELPER_NAME = "anush-hotspot-limit-enforcer"
+CREATE_AP_HELPER_NAME = "anush-hotspot-create-ap-helper"
+ROOT_RUNNER_NAME = "hotspot-run-root"
 
 
 class HotspotError(RuntimeError):
     pass
 
 
-def run(command: list[str], timeout: int = 15) -> subprocess.CompletedProcess[str]:
+def run(
+    command: list[str], timeout: int = 15, input_text: str | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        command, capture_output=True, text=True, timeout=timeout, check=False
+        command, input=input_text, capture_output=True, text=True,
+        timeout=timeout, check=False
     )
 
 
@@ -43,7 +51,7 @@ def command_error(proc: subprocess.CompletedProcess[str], fallback: str) -> str:
 
 def default_ssid() -> str:
     host = socket.gethostname().split(".", 1)[0].strip()
-    return f"{host or 'Anush'} Hotspot"
+    return f"{host or 'anush'} Hotspot"
 
 
 def generated_password() -> str:
@@ -64,8 +72,10 @@ def validate_ssid(value: Any) -> str:
 
 def validate_password(value: Any) -> str:
     password = str(value or "")
+    if not password:
+        return ""
     if not 8 <= len(password) <= 63:
-        raise HotspotError("Password must contain 8–63 printable ASCII characters.")
+        raise HotspotError("Password must be empty or contain 8–63 printable ASCII characters.")
     if any(ord(char) < 32 or ord(char) > 126 for char in password):
         raise HotspotError("Password must contain only printable ASCII characters.")
     return password
@@ -133,6 +143,7 @@ def connection_kind(active: Any, NM: Any) -> str:
 
 def active_upstreams(client: Any, NM: Any, default_device: str) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
+    represented_devices: set[str] = set()
     for active in client.get_active_connections():
         if active.get_id() == PROFILE_ID:
             continue
@@ -140,6 +151,8 @@ def active_upstreams(client: Any, NM: Any, default_device: str) -> list[dict[str
         if not kind:
             continue
         device = active_device_name(active)
+        if device:
+            represented_devices.add(device)
         usable = bool(device and device == default_device)
         reason = ""
         if not usable:
@@ -153,6 +166,35 @@ def active_upstreams(client: Any, NM: Any, default_device: str) -> list[dict[str
                 "device": device,
                 "label": f"{label} · {active.get_id()}",
                 "usable": usable,
+                "reason": reason,
+            }
+        )
+
+    # Keep disconnected physical Ethernet visible as an explanation, without
+    # pretending it can currently provide Internet. Loopback and container
+    # bridges are intentionally not upstream choices.
+    for device in client.get_devices():
+        if device.get_device_type() != NM.DeviceType.ETHERNET:
+            continue
+        interface = str(device.get_iface() or "")
+        if not interface or interface in represented_devices:
+            continue
+        state = device.get_state()
+        reason = (
+            "Cable disconnected"
+            if state == NM.DeviceState.DISCONNECTED
+            else "Device unavailable"
+            if state in {NM.DeviceState.UNAVAILABLE, NM.DeviceState.UNMANAGED}
+            else "No active Internet connection"
+        )
+        result.append(
+            {
+                "uuid": f"unavailable:{interface}",
+                "name": interface,
+                "type": "ethernet",
+                "device": interface,
+                "label": f"Ethernet/LAN · {interface}",
+                "usable": False,
                 "reason": reason,
             }
         )
@@ -296,13 +338,10 @@ def selected_ap_device(
     else:
         candidate = capable[0]
     if upstream.get("type") == "wifi" and candidate["name"] == upstream.get("device"):
-        detail = "The radio reports station + AP concurrency, but"
         if not candidate["concurrentApStation"]:
-            detail = "The radio lacks station + AP concurrency and"
-        raise HotspotError(
-            f"{detail} NetworkManager cannot safely place both connections on one interface. "
-            "Select a second Wi-Fi adapter."
-        )
+            raise HotspotError(
+                "The selected radio lacks station + AP concurrency. Select a second Wi-Fi adapter."
+            )
     if upstream.get("type") == "vpn" and candidate["connected"]:
         raise HotspotError(
             "The VPN may depend on this active Wi-Fi adapter. Disconnect Wi-Fi for an "
@@ -322,6 +361,11 @@ def read_profile(profile: Any, NM: Any | None = None) -> dict[str, Any]:
             "wifiDevice": "",
             "upstreamUuid": "",
             "upstreamType": "",
+            "maxClients": 0,
+            "connectionInterface": "",
+            "backend": "networkmanager",
+            "createApPid": 0,
+            "createApInterface": "",
         }
     connection = profile.get_setting_connection()
     wireless = profile.get_setting_wireless()
@@ -342,9 +386,17 @@ def read_profile(profile: Any, NM: Any | None = None) -> dict[str, Any]:
         "ssid": ssid,
         "band": "2.4" if band_value == "bg" else "5" if band_value == "a" else "auto",
         "channel": int(wireless.get_channel() or 0) if wireless else 0,
-        "wifiDevice": str(connection.get_interface_name() or ""),
+        "wifiDevice": str(
+            (user.get_data("anush.base-interface") if user else "")
+            or connection.get_interface_name() or ""
+        ),
+        "connectionInterface": str(connection.get_interface_name() or ""),
+        "backend": str(user.get_data("anush.backend") or "networkmanager") if user else "networkmanager",
+        "createApPid": int(user.get_data("anush.create-ap-pid") or 0) if user else 0,
+        "createApInterface": str(user.get_data("anush.create-ap-interface") or "") if user else "",
         "upstreamUuid": str(user.get_data("anush.upstream-uuid") or "") if user else "",
         "upstreamType": str(user.get_data("anush.upstream-type") or "") if user else "",
+        "maxClients": int(user.get_data("anush.max-clients") or 0) if user else 0,
     }
 
 
@@ -354,6 +406,16 @@ def associated_clients(interface: str) -> list[dict[str, Any]]:
     proc = run(["iw", "dev", interface, "station", "dump"])
     if proc.returncode != 0:
         return []
+    leases: dict[str, dict[str, str]] = {}
+    for directory in Path("/tmp").glob("create_ap.*.conf.*"):
+        try:
+            if (directory / "wifi_iface").read_text().strip() != interface:
+                continue
+            leases.update(parse_dnsmasq_leases(
+                (directory / "dnsmasq.leases").read_text(errors="replace")
+            ))
+        except OSError:
+            continue
     neighbors: dict[str, str] = {}
     if shutil.which("ip"):
         neighbor_proc = run(["ip", "-j", "neigh", "show", "dev", interface])
@@ -376,8 +438,9 @@ def associated_clients(interface: str) -> list[dict[str, Any]]:
             current = {
                 "id": mac,
                 "macAddress": mac,
-                "ipAddress": neighbors.get(mac, ""),
-                "hostname": "",
+                "ipAddress": leases.get(mac, {}).get("ipAddress")
+                    or neighbors.get(mac, ""),
+                "hostname": leases.get(mac, {}).get("hostname", ""),
                 "connectedSince": 0,
                 "signal": 0,
             }
@@ -392,21 +455,195 @@ def associated_clients(interface: str) -> list[dict[str, Any]]:
             current["signal"] = int(signal.group(1))
     if current:
         clients.append(current)
+    unresolved = [
+        client["ipAddress"] for client in clients
+        if client["ipAddress"] and not client["hostname"]
+    ]
+    hostnames = resolve_hostnames(unresolved)
+    for client in clients:
+        if not client["hostname"]:
+            client["hostname"] = hostnames.get(client["ipAddress"], "")
     return clients
+
+
+def parse_dnsmasq_leases(value: str) -> dict[str, dict[str, str]]:
+    leases: dict[str, dict[str, str]] = {}
+    for line in value.splitlines():
+        fields = line.split()
+        if len(fields) < 4 or not re.fullmatch(r"[0-9a-fA-F:]{17}", fields[1]):
+            continue
+        mac = fields[1].lower()
+        leases[mac] = {
+            "ipAddress": fields[2],
+            "hostname": "" if fields[3] in {"*", "-"} else fields[3],
+        }
+    return leases
+
+
+def resolve_hostnames(addresses: list[str]) -> dict[str, str]:
+    if not addresses or not shutil.which("getent"):
+        return {}
+    try:
+        result = run(["getent", "hosts", *dict.fromkeys(addresses)], timeout=3)
+    except subprocess.TimeoutExpired:
+        return {}
+    resolved: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) < 2 or fields[0] == fields[1]:
+            continue
+        resolved[fields[0]] = fields[1].removesuffix(".")
+    return resolved
 
 
 def dependency_status() -> dict[str, bool]:
     return {
         name: shutil.which(name) is not None
-        for name in ("nmcli", "iw", "ip", "dnsmasq", "hostapd", "create_ap")
+        for name in (
+            "nmcli", "iw", "ip", "iptables", "pkexec", "dnsmasq",
+            "hostapd", "create_ap",
+        )
     }
+
+
+def script_path(name: str) -> str:
+    candidate = Path(__file__).resolve().with_name(name)
+    return str(candidate) if candidate.is_file() and candidate.stat().st_mode & 0o111 else ""
+
+
+def root_runner_path() -> str:
+    return script_path(ROOT_RUNNER_NAME)
+
+
+def limit_helper_path() -> str:
+    installed = Path("/usr/libexec") / LIMIT_HELPER_NAME
+    if installed.is_file() and installed.stat().st_mode & 0o111:
+        return str(installed)
+    return script_path("hotspot-limit-enforcer")
+
+
+def create_ap_helper_path() -> str:
+    installed = Path("/usr/libexec") / CREATE_AP_HELPER_NAME
+    if installed.is_file() and installed.stat().st_mode & 0o111:
+        return str(installed)
+    return script_path("hotspot-create-ap-helper")
+
+
+def create_ap_available() -> bool:
+    return not create_ap_missing()
+
+
+def create_ap_missing() -> list[str]:
+    missing = [
+        name for name in
+        ("create_ap", "hostapd", "dnsmasq", "iptables", "iw", "ip")
+        if not shutil.which(name)
+    ]
+    if not create_ap_helper_path():
+        missing.append("anush create_ap helper")
+    if not root_runner_path():
+        missing.append("anush root runner")
+    if not shutil.which("sudo") and not shutil.which("pkexec"):
+        missing.append("sudo or pkexec")
+    return missing
+
+
+def create_ap_instance(pid: int) -> dict[str, Any] | None:
+    if pid <= 0 or not Path("/proc", str(pid)).exists():
+        return None
+    for directory in Path("/tmp").glob("create_ap.*.conf.*"):
+        try:
+            found_pid = int((directory / "pid").read_text().strip())
+            interface = (directory / "wifi_iface").read_text().strip()
+        except (OSError, ValueError):
+            continue
+        if found_pid == pid:
+            return {"pid": pid, "interface": interface, "directory": str(directory)}
+    return None
+
+
+def start_create_ap(
+    wifi: str, upstream: str, ssid: str, password: str, band: str, channel: int
+) -> dict[str, Any]:
+    helper = create_ap_helper_path()
+    if not create_ap_available() or not helper:
+        raise HotspotError("Missing hotspot requirements: " + ", ".join(create_ap_missing()))
+    proc = subprocess.Popen(
+        [root_runner_path(), helper, "start", wifi, upstream, band, str(channel)],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, bufsize=1,
+    )
+    if proc.stdin is None or proc.stdout is None or proc.stderr is None:
+        proc.terminate()
+        raise HotspotError("Could not open the create_ap control pipes.")
+    proc.stdin.write(f"{ssid}\n{password}\n")
+    proc.stdin.close()
+    selector = selectors.DefaultSelector()
+    selector.register(proc.stdout, selectors.EVENT_READ, "stdout")
+    selector.register(proc.stderr, selectors.EVENT_READ, "stderr")
+    errors: list[str] = []
+    deadline = time.monotonic() + 55
+    result: dict[str, Any] | None = None
+    try:
+        while time.monotonic() < deadline:
+            if proc.poll() is not None:
+                errors.extend(proc.stderr.read().splitlines())
+                break
+            for key, _mask in selector.select(max(0, deadline - time.monotonic())):
+                line = key.fileobj.readline()
+                if not line:
+                    continue
+                if key.data == "stderr":
+                    errors.append(line.strip())
+                    continue
+                try:
+                    candidate = json.loads(line)
+                    if int(candidate["pid"]) > 0 and candidate["apInterface"]:
+                        result = candidate
+                        break
+                except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                    errors.append(line.strip())
+            if result is not None:
+                break
+    finally:
+        selector.close()
+    if result is None:
+        if proc.poll() is None:
+            proc.terminate()
+        message = "\n".join(line for line in errors if line)
+        raise HotspotError(message or "create_ap could not start the hotspot.")
+    # The privileged helper intentionally remains alive as create_ap's
+    # supervisor. Closing our pipe ends lets this short-lived controller exit
+    # while pkexec keeps ownership until a later stop request.
+    proc.stdout.close()
+    proc.stderr.close()
+    try:
+        if int(result["pid"]) <= 0 or not result["apInterface"]:
+            raise ValueError
+        return result
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise HotspotError("create_ap returned an invalid activation result.") from exc
+
+
+def stop_create_ap(pid: int) -> None:
+    helper = create_ap_helper_path()
+    if not helper:
+        raise HotspotError("anush's create_ap helper is unavailable.")
+    proc = run([root_runner_path(), helper, "stop", str(pid)], timeout=25)
+    if proc.returncode != 0:
+        raise HotspotError(command_error(proc, "Could not stop the create_ap hotspot."))
 
 
 def build_status(enforce_vpn: bool = True) -> dict[str, Any]:
     NM, _GLib, client = load_nm()
     profile = find_profile(client, NM)
     profile_data = read_profile(profile, NM)
-    active = active_for_uuid(client, profile_data["uuid"]) if profile else None
+    nm_active = active_for_uuid(client, profile_data["uuid"]) if profile else None
+    create_instance = (
+        create_ap_instance(profile_data["createApPid"])
+        if profile_data["backend"] == "create_ap" else None
+    )
+    active = bool(nm_active or create_instance)
     default_device = route_device()
     upstreams = active_upstreams(client, NM, default_device)
     selected_upstream = next(
@@ -419,14 +656,24 @@ def build_status(enforce_vpn: bool = True) -> dict[str, Any]:
         and (not selected_upstream or not selected_upstream["usable"])
     )
     if vpn_safety_stop and enforce_vpn:
-        proc = run(["nmcli", "-w", "10", "connection", "down", "uuid", profile_data["uuid"]])
-        if proc.returncode == 0:
-            active = None
+        try:
+            if create_instance:
+                stop_create_ap(profile_data["createApPid"])
+                stopped = True
+            else:
+                proc = run(["nmcli", "-w", "10", "connection", "down", "uuid", profile_data["uuid"]])
+                stopped = proc.returncode == 0
+        except HotspotError:
+            stopped = False
+        if stopped:
+            active = False
             error = "VPN upstream was lost; the hotspot was stopped to prevent an unprotected fallback."
         else:
-            error = command_error(proc, "VPN was lost and the hotspot could not be stopped safely.")
+            error = "VPN was lost and the hotspot could not be stopped safely."
 
     devices = wifi_devices(client, NM)
+    if create_instance:
+        devices = [item for item in devices if item["name"] != create_instance["interface"]]
     ap_interfaces = {item["name"] for item in devices if item["apSupported"]}
     for upstream in upstreams:
         if not upstream["usable"]:
@@ -445,13 +692,16 @@ def build_status(enforce_vpn: bool = True) -> dict[str, Any]:
             radio = next(
                 (item for item in devices if item["name"] == upstream["device"]), None
             )
-            upstream["usable"] = False
-            upstream["reason"] = (
-                "Hardware reports station + AP concurrency, but this NetworkManager "
-                "backend cannot safely create the required virtual AP interface; use a second adapter."
-                if radio and radio["concurrentApStation"]
-                else "A second AP-capable Wi-Fi adapter is required."
+            concurrent_usable = bool(
+                radio and radio["concurrentApStation"] and create_ap_available()
             )
+            if not concurrent_usable:
+                upstream["usable"] = False
+                upstream["reason"] = (
+                    "Missing hotspot requirements: " + ", ".join(create_ap_missing())
+                    if radio and radio["concurrentApStation"]
+                    else "A second AP-capable Wi-Fi adapter is required."
+                )
     selected_device = next(
         (item for item in devices if item["name"] == profile_data["wifiDevice"]), None
     )
@@ -471,18 +721,31 @@ def build_status(enforce_vpn: bool = True) -> dict[str, Any]:
         if profile_data["band"] == "5"
         else []
     )
-    clients = associated_clients(profile_data["wifiDevice"]) if active else []
+    ap_interface = (
+        str(create_instance["interface"])
+        if create_instance else active_device_name(nm_active)
+        if nm_active else profile_data["connectionInterface"]
+    )
+    clients = associated_clients(ap_interface) if active else []
     upstream_lost = bool(active and (not selected_upstream or not selected_upstream["usable"]))
+    dependencies = dependency_status()
+    limiter = limit_helper_path()
+    runner = root_runner_path()
+    elevation_available = bool(shutil.which("sudo") or shutil.which("pkexec"))
+    limit_supported = bool(dependencies["iw"] and limiter and runner and elevation_available)
     return {
         "available": True,
         "supported": bool(capable),
         "supportReason": "" if capable else "No Wi-Fi adapter reports AP mode support.",
-        "active": bool(active),
+        "active": active,
         "profileExists": profile_data["exists"],
         "ssid": profile_data["ssid"],
         "band": profile_data["band"],
         "channel": profile_data["channel"],
         "wifiDevice": profile_data["wifiDevice"],
+        "apInterface": ap_interface,
+        "backend": profile_data["backend"],
+        "createApPid": profile_data["createApPid"],
         "wifiDevices": devices,
         "upstreams": upstreams,
         "upstreamUuid": profile_data["upstreamUuid"],
@@ -503,12 +766,14 @@ def build_status(enforce_vpn: bool = True) -> dict[str, Any]:
         "channels": channels,
         "clients": clients,
         "clientCount": len(clients),
-        "clientLimitSupported": False,
-        "clientLimitReason": (
-            "NetworkManager does not expose a reliable maximum-station setting; "
-            "hostapd max_num_sta is unavailable through this backend."
+        "maxClients": profile_data["maxClients"],
+        "clientLimitSupported": limit_supported,
+        "clientLimitHelper": limiter,
+        "clientLimitRootRunner": runner,
+        "clientLimitReason": "" if limit_supported else (
+            "Client limits require iw, sudo or pkexec, and anush's hotspot scripts."
         ),
-        "dependencies": dependency_status(),
+        "dependencies": dependencies,
         "error": error,
     }
 
@@ -521,11 +786,21 @@ def wait_for_async(
     loop = GLib.MainLoop()
     state: dict[str, Any] = {}
 
+    def timed_out() -> bool:
+        state["error"] = HotspotError("NetworkManager did not answer within 30 seconds.")
+        loop.quit()
+        return GLib.SOURCE_REMOVE
+
+    timeout_source = GLib.timeout_add_seconds(30, timed_out)
+
     def callback(_source: Any, result: Any, _user_data: Any = None) -> None:
+        if "error" in state:
+            return
         try:
             state["value"] = finish(result)
         except Exception as exc:  # noqa: BLE001
             state["error"] = exc
+        GLib.source_remove(timeout_source)
         loop.quit()
 
     start(callback)
@@ -563,14 +838,32 @@ def configure_profile(config: dict[str, Any], activate: bool) -> dict[str, Any]:
         before_status["wifiDevices"], upstream,
         str(config.get("wifiDevice") or before_status.get("wifiDevice") or ""),
     )
+    concurrent_wifi = bool(
+        upstream.get("type") == "wifi" and wifi["name"] == upstream.get("device")
+    )
     # CLI `on` with no payload activates the saved profile as-is. Avoid a
     # no-op profile commit because remote settings intentionally omit secrets,
     # and committing that object could discard the saved PSK.
     if profile and not config and activate:
+        if concurrent_wifi:
+            password = profile_password(profile, NM)
+            result = start_create_ap(
+                wifi["name"], str(upstream["device"]), before_status["ssid"],
+                password, before_status["band"], int(before_status["channel"]),
+            )
+            user = setting(profile, NM.SettingUser)
+            user.set_data("anush.backend", "create_ap")
+            user.set_data("anush.create-ap-pid", str(result["pid"]))
+            user.set_data("anush.create-ap-interface", str(result["apInterface"]))
+            if not profile.commit_changes(True, None):
+                stop_create_ap(int(result["pid"]))
+                raise HotspotError("Could not save the active create_ap state.")
+            return build_status()
         up = run(
             [
                 "nmcli", "-w", "35", "connection", "up", "uuid",
-                profile.get_uuid(), "ifname", wifi["name"],
+                profile.get_uuid(), "ifname",
+                wifi["name"],
             ],
             timeout=40,
         )
@@ -579,10 +872,12 @@ def configure_profile(config: dict[str, Any], activate: bool) -> dict[str, Any]:
         return build_status()
 
     ssid = validate_ssid(config.get("ssid") or before_status["ssid"])
-    password_value = config.get("password")
-    if password_value in (None, "") and not profile:
-        password_value = generated_password()
-    password = validate_password(password_value) if password_value not in (None, "") else ""
+    if "password" in config:
+        password = validate_password(config["password"])
+    elif profile:
+        password = profile_password(profile, NM)
+    else:
+        password = generated_password()
     band = str(config.get("band") or before_status.get("band") or "auto")
     if band not in {"auto", "2.4", "5"}:
         raise HotspotError("Unsupported hotspot band.")
@@ -592,6 +887,18 @@ def configure_profile(config: dict[str, Any], activate: bool) -> dict[str, Any]:
     channel = int(config.get("channel") or 0)
     if channel and (band == "auto" or channel not in available_channels):
         raise HotspotError("The selected channel is unavailable for this adapter and band.")
+    max_clients_value = (
+        config["maxClients"] if "maxClients" in config else before_status.get("maxClients", 0)
+    )
+    started_pid = 0
+    try:
+        max_clients = int(max_clients_value or 0)
+    except (TypeError, ValueError) as exc:
+        raise HotspotError("Maximum connected devices must be a number.") from exc
+    if not 0 <= max_clients <= 128:
+        raise HotspotError("Maximum connected devices must be between 1 and 128, or Unlimited.")
+    if max_clients and not before_status["clientLimitSupported"]:
+        raise HotspotError(before_status["clientLimitReason"])
     if upstream.get("type") == "wifi" and wifi["name"] == upstream.get("device"):
         station_band, station_channel = current_wifi_channel(wifi["name"])
         if band != "auto" and station_band and band != station_band:
@@ -604,14 +911,15 @@ def configure_profile(config: dict[str, Any], activate: bool) -> dict[str, Any]:
             )
 
     snapshot = NM.SimpleConnection.new_clone(profile) if profile else None
-    was_active = bool(profile and active_for_uuid(client, profile.get_uuid()))
+    was_active = bool(before_status["active"])
     connection = profile if profile else NM.SimpleConnection.new()
     con = setting(connection, NM.SettingConnection)
     if not profile:
         con.set_property(NM.SETTING_CONNECTION_ID, PROFILE_ID)
         con.set_property(NM.SETTING_CONNECTION_UUID, NM.utils_uuid_generate())
         con.set_property(NM.SETTING_CONNECTION_TYPE, NM.SETTING_WIRELESS_SETTING_NAME)
-    con.set_property(NM.SETTING_CONNECTION_INTERFACE_NAME, wifi["name"])
+    target_interface = wifi["name"]
+    con.set_property(NM.SETTING_CONNECTION_INTERFACE_NAME, target_interface)
     con.set_property(NM.SETTING_CONNECTION_AUTOCONNECT, False)
 
     wireless = setting(connection, NM.SettingWireless)
@@ -620,13 +928,15 @@ def configure_profile(config: dict[str, Any], activate: bool) -> dict[str, Any]:
     wireless.set_property(NM.SETTING_WIRELESS_BAND, "bg" if band == "2.4" else "a" if band == "5" else None)
     wireless.set_property(NM.SETTING_WIRELESS_CHANNEL, channel)
 
-    security = setting(connection, NM.SettingWirelessSecurity)
-    security.set_property(NM.SETTING_WIRELESS_SECURITY_KEY_MGMT, "wpa-psk")
-    security.set_property("proto", ["rsn"])
-    security.set_property("pairwise", ["ccmp"])
-    security.set_property("group", ["ccmp"])
     if password:
+        security = setting(connection, NM.SettingWirelessSecurity)
+        security.set_property(NM.SETTING_WIRELESS_SECURITY_KEY_MGMT, "wpa-psk")
+        security.set_property("proto", ["rsn"])
+        security.set_property("pairwise", ["ccmp"])
+        security.set_property("group", ["ccmp"])
         security.set_property(NM.SETTING_WIRELESS_SECURITY_PSK, password)
+    else:
+        connection.remove_setting(NM.SettingWirelessSecurity)
 
     ip4 = setting(connection, NM.SettingIP4Config)
     ip4.set_property(NM.SETTING_IP_CONFIG_METHOD, NM.SETTING_IP4_CONFIG_METHOD_SHARED)
@@ -636,6 +946,11 @@ def configure_profile(config: dict[str, Any], activate: bool) -> dict[str, Any]:
     user.set_data(PROFILE_MARKER, "true")
     user.set_data("anush.upstream-uuid", upstream["uuid"])
     user.set_data("anush.upstream-type", upstream["type"])
+    user.set_data("anush.max-clients", str(max_clients))
+    user.set_data("anush.base-interface", wifi["name"])
+    user.set_data("anush.backend", "create_ap" if concurrent_wifi else "networkmanager")
+    user.set_data("anush.create-ap-pid", "0")
+    user.set_data("anush.create-ap-interface", "")
 
     try:
         if profile:
@@ -651,29 +966,38 @@ def configure_profile(config: dict[str, Any], activate: bool) -> dict[str, Any]:
             )
         if was_active or activate:
             if was_active:
-                run(["nmcli", "-w", "10", "connection", "down", "uuid", profile.get_uuid()])
-            up = run(
-                [
-                    "nmcli",
-                    "-w",
-                    "35",
-                    "connection",
-                    "up",
-                    "uuid",
-                    profile.get_uuid(),
-                    "ifname",
-                    wifi["name"],
-                ],
-                timeout=40,
-            )
-            if up.returncode != 0:
-                raise HotspotError(command_error(up, "Hotspot activation failed."))
+                if before_status.get("backend") == "create_ap":
+                    stop_create_ap(int(before_status.get("createApPid") or 0))
+                else:
+                    run(["nmcli", "-w", "10", "connection", "down", "uuid", profile.get_uuid()])
+            if concurrent_wifi:
+                started = start_create_ap(
+                    wifi["name"], str(upstream["device"]), ssid,
+                    password, band, channel,
+                )
+                started_pid = int(started["pid"])
+                user = setting(profile, NM.SettingUser)
+                user.set_data("anush.create-ap-pid", str(started["pid"]))
+                user.set_data("anush.create-ap-interface", str(started["apInterface"]))
+                profile.commit_changes(True, None)
+            else:
+                up = run(
+                    ["nmcli", "-w", "35", "connection", "up", "uuid",
+                     profile.get_uuid(), "ifname", target_interface], timeout=40,
+                )
+                if up.returncode != 0:
+                    raise HotspotError(command_error(up, "Hotspot activation failed."))
     except Exception as exc:  # noqa: BLE001
+        if started_pid:
+            try:
+                stop_create_ap(started_pid)
+            except HotspotError:
+                pass
         if snapshot and profile:
             try:
                 profile.replace_settings_from_connection(snapshot)
                 profile.commit_changes(True, None)
-                if was_active:
+                if was_active and before_status.get("backend") != "create_ap":
                     run(["nmcli", "-w", "35", "connection", "up", "uuid", profile.get_uuid()])
             except Exception:  # noqa: BLE001
                 pass
@@ -696,10 +1020,37 @@ def deactivate() -> dict[str, Any]:
     profile = find_profile(client, NM)
     if not profile:
         return build_status()
+    data = read_profile(profile, NM)
+    if data["backend"] == "create_ap":
+        instance = create_ap_instance(data["createApPid"])
+        if instance:
+            stop_create_ap(data["createApPid"])
+        user = setting(profile, NM.SettingUser)
+        user.set_data("anush.create-ap-pid", "0")
+        user.set_data("anush.create-ap-interface", "")
+        profile.commit_changes(True, None)
+        return build_status()
     proc = run(["nmcli", "-w", "15", "connection", "down", "uuid", profile.get_uuid()])
     if proc.returncode != 0 and "not active" not in (proc.stderr or "").lower():
         raise HotspotError(command_error(proc, "Could not stop the hotspot."))
     return build_status()
+
+
+def profile_password(profile: Any, NM: Any) -> str:
+    if not profile.get_setting(NM.SettingWirelessSecurity):
+        return ""
+    try:
+        raw = profile.get_secrets(NM.SETTING_WIRELESS_SECURITY_SETTING_NAME, None)
+        unpacked = raw.unpack() if raw else {}
+        values = unpacked.get(NM.SETTING_WIRELESS_SECURITY_SETTING_NAME, {})
+        password = str(values.get(NM.SETTING_WIRELESS_SECURITY_PSK) or "")
+        if not password:
+            raise HotspotError("The protected hotspot profile has no readable password.")
+        return validate_password(password)
+    except HotspotError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HotspotError(f"Could not read the NetworkManager hotspot secret: {exc}") from exc
 
 
 def credentials() -> dict[str, str]:
@@ -707,20 +1058,19 @@ def credentials() -> dict[str, str]:
     profile = find_profile(client, NM)
     if not profile:
         return {"ssid": default_ssid(), "password": generated_password()}
-    password = ""
-    try:
-        raw = profile.get_secrets(NM.SETTING_WIRELESS_SECURITY_SETTING_NAME, None)
-        unpacked = raw.unpack() if raw else {}
-        values = unpacked.get(NM.SETTING_WIRELESS_SECURITY_SETTING_NAME, {})
-        password = str(values.get(NM.SETTING_WIRELESS_SECURITY_PSK) or "")
-    except Exception as exc:  # noqa: BLE001
-        raise HotspotError(f"Could not read the NetworkManager hotspot secret: {exc}") from exc
+    password = profile_password(profile, NM)
     return {"ssid": read_profile(profile, NM)["ssid"], "password": password}
 
 
 def read_payload() -> dict[str, Any]:
+    # Quickshell keeps the Process stdin pipe open for the process lifetime.
+    # Each request is one newline-delimited JSON object, so waiting for EOF
+    # here deadlocks both Save and Enable against the still-running process.
+    raw = sys.stdin.readline()
+    if not raw:
+        raise HotspotError("Hotspot settings were not provided.")
     try:
-        value = json.load(sys.stdin)
+        value = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise HotspotError("Hotspot settings were not valid JSON.") from exc
     if not isinstance(value, dict):
@@ -731,6 +1081,13 @@ def read_payload() -> dict[str, Any]:
 def self_test() -> dict[str, Any]:
     assert validate_ssid("Café") == "Café"
     assert validate_password("correct-horse") == "correct-horse"
+    assert validate_password("") == ""
+    leases = parse_dnsmasq_leases(
+        "1 aa:bb:cc:dd:ee:ff 192.168.12.10 phone 01:aa\n"
+        "2 11:22:33:44:55:66 192.168.12.11 * 01:11\n"
+    )
+    assert leases["aa:bb:cc:dd:ee:ff"]["hostname"] == "phone"
+    assert leases["11:22:33:44:55:66"]["hostname"] == ""
     for invalid in ("", "x" * 33):
         try:
             validate_ssid(invalid)

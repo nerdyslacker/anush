@@ -172,7 +172,7 @@ refresh_managed_files :: proc(target, source: string) -> bool {
         }
     }
 
-    // Matugen integration is also managed application data. Keep it current
+    // matugen integration is also managed application data. Keep it current
     // without replacing the rest of the user's config directory.
     source_matugen := fmt.aprintf("%s/config/matugen", source)
     defer delete(source_matugen)
@@ -180,7 +180,7 @@ refresh_managed_files :: proc(target, source: string) -> bool {
         target_matugen := fmt.aprintf("%s/config/matugen", target)
         defer delete(target_matugen)
         if err := os.copy_directory_all(target_matugen, source_matugen); err != nil {
-            fmt.eprintln("anushctl: cannot refresh managed Matugen config:", err)
+            fmt.eprintln("anushctl: cannot refresh managed matugen config:", err)
             return false
         }
     }
@@ -209,14 +209,14 @@ prepare_shell_root :: proc() -> (string, bool) {
         return target, true
     }
     if os.exists(target) {
-        fmt.eprintln("anushctl:", target, "exists but is not a complete Anush installation")
+        fmt.eprintln("anushctl:", target, "exists but is not a complete anush installation")
         delete(target)
         return "", false
     }
 
     source := system_root()
     if source == "" || !root_is_complete(source) {
-        fmt.eprintln("anushctl: could not find Anush data; set ANUSH_SYSTEM_DIR")
+        fmt.eprintln("anushctl: could not find anush data; set ANUSH_SYSTEM_DIR")
         delete(target)
         if source != "" { delete(source) }
         return "", false
@@ -260,7 +260,7 @@ prepare_shell_root :: proc() -> (string, bool) {
         return "", false
     }
 
-    fmt.println("Initialized Anush at", target)
+    fmt.println("Initialized anush at", target)
     return target, true
 }
 
@@ -334,7 +334,7 @@ restore_wallpaper :: proc() -> int {
 ipc_call :: proc(target, function: string, call_args: []string) -> int {
     root := shell_root()
     if root == "" {
-        fmt.eprintln("anushctl: cannot resolve the Anush shell directory")
+        fmt.eprintln("anushctl: cannot resolve the anush shell directory")
         return EXIT_RUNTIME
     }
     defer delete(root)
@@ -352,7 +352,7 @@ ipc_call :: proc(target, function: string, call_args: []string) -> int {
     if !started { return EXIT_RUNTIME }
     if code != 0 {
         if len(err_out) > 0 { fmt.eprint(string(err_out)) }
-        fmt.eprintln("anushctl: Anush shell is not running or did not accept the command")
+        fmt.eprintln("anushctl: anush shell is not running or did not accept the command")
         return EXIT_NOT_RUNNING
     }
     if len(out) > 0 { fmt.print(string(out)) }
@@ -373,7 +373,7 @@ restart_shell :: proc() -> int {
     if !started { return EXIT_RUNTIME }
     if kill_code != 0 {
         if len(kill_err) > 0 { fmt.eprint(string(kill_err)) }
-        fmt.eprintln("anushctl: Anush shell is not running")
+        fmt.eprintln("anushctl: anush shell is not running")
         return EXIT_NOT_RUNNING
     }
 
@@ -381,7 +381,7 @@ restart_shell :: proc() -> int {
     // necessarily removed its IPC registration. Launching immediately with
     // --no-duplicate can therefore succeed without creating a replacement.
     if !wait_for_shell(shell_dir, false, 30) {
-        fmt.eprintln("anushctl: timed out waiting for Anush to stop")
+        fmt.eprintln("anushctl: timed out waiting for anush to stop")
         return EXIT_RUNTIME
     }
 
@@ -392,14 +392,14 @@ restart_shell :: proc() -> int {
     defer delete(err_out)
     if !launched || code != 0 {
         if len(err_out) > 0 { fmt.eprint(string(err_out)) }
-        fmt.eprintln("anushctl: failed to relaunch Anush")
+        fmt.eprintln("anushctl: failed to relaunch anush")
         return EXIT_RUNTIME
     }
     if !wait_for_shell(shell_dir, true, 50) {
-        fmt.eprintln("anushctl: Anush was launched but did not become ready")
+        fmt.eprintln("anushctl: anush was launched but did not become ready")
         return EXIT_RUNTIME
     }
-    fmt.println("Anush restarted.")
+    fmt.println("anush restarted.")
     return EXIT_OK
 }
 
@@ -435,12 +435,12 @@ launch_shell :: proc() -> int {
         stderr = os.stderr,
     })
     if err != nil {
-        fmt.eprintln("anushctl: failed to launch Anush:", err)
+        fmt.eprintln("anushctl: failed to launch anush:", err)
         return EXIT_RUNTIME
     }
     state, wait_err := os.process_wait(process)
     if wait_err != nil {
-        fmt.eprintln("anushctl: failed while waiting for Anush:", wait_err)
+        fmt.eprintln("anushctl: failed while waiting for anush:", wait_err)
         return EXIT_RUNTIME
     }
     return state.exit_code

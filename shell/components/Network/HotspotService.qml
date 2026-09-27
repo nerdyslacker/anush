@@ -26,6 +26,7 @@ Singleton {
     property string band: "auto"
     property int channel: 0
     property string wifiDevice: ""
+    property string apInterface: ""
     property var wifiDevices: []
     property var upstreams: []
     property string upstreamUuid: ""
@@ -37,7 +38,10 @@ Singleton {
     property var channels: []
     property var clients: []
     property int clientCount: 0
+    property int maxClients: 0
     property bool clientLimitSupported: false
+    property string clientLimitHelper: ""
+    property string clientLimitRootRunner: ""
     property string clientLimitReason: ""
     property var dependencies: ({})
     property bool busy: false
@@ -48,6 +52,9 @@ Singleton {
     property string _actionPayload: ""
     property var _statusErrors: []
     property var _actionErrors: []
+    property bool _actionTimedOut: false
+    property var _limitErrors: []
+    property bool _limitStopping: false
 
     signal popupRequested(string action)
 
@@ -78,6 +85,7 @@ Singleton {
         if (value.band !== undefined) band = String(value.band)
         if (value.channel !== undefined) channel = Number(value.channel) || 0
         if (value.wifiDevice !== undefined) wifiDevice = String(value.wifiDevice)
+        if (value.apInterface !== undefined) apInterface = String(value.apInterface)
         if (Array.isArray(value.wifiDevices)) wifiDevices = value.wifiDevices
         if (Array.isArray(value.upstreams)) upstreams = value.upstreams
         if (value.upstreamUuid !== undefined) upstreamUuid = String(value.upstreamUuid)
@@ -90,8 +98,13 @@ Singleton {
         if (Array.isArray(value.channels)) channels = value.channels
         if (Array.isArray(value.clients)) clients = value.clients
         if (value.clientCount !== undefined) clientCount = Number(value.clientCount) || 0
+        if (value.maxClients !== undefined) maxClients = Number(value.maxClients) || 0
         if (value.clientLimitSupported !== undefined)
             clientLimitSupported = value.clientLimitSupported === true
+        if (value.clientLimitHelper !== undefined)
+            clientLimitHelper = String(value.clientLimitHelper)
+        if (value.clientLimitRootRunner !== undefined)
+            clientLimitRootRunner = String(value.clientLimitRootRunner)
         if (value.clientLimitReason !== undefined)
             clientLimitReason = String(value.clientLimitReason)
         if (value.dependencies && typeof value.dependencies === "object")
@@ -135,9 +148,11 @@ Singleton {
         message = name === "off" ? "Stopping hotspot…"
             : name === "on" ? "Starting hotspot…" : "Saving hotspot settings…"
         _actionErrors = []
+        _actionTimedOut = false
         _actionPayload = payload === undefined ? "" : JSON.stringify(payload) + "\n"
         actionProcess.command = ["python3", helperPath, name]
         actionProcess.running = true
+        actionTimeout.restart()
     }
 
     function applyConfiguration(configuration, activate) {
@@ -147,6 +162,32 @@ Singleton {
     function turnOn() { runAction("on", {}) }
     function turnOff() { runAction("off") }
     function toggle() { active ? turnOff() : turnOn() }
+
+    function limitShouldRun() {
+        return active && maxClients > 0 && clientLimitSupported
+            && clientLimitHelper !== "" && clientLimitRootRunner !== ""
+            && apInterface !== ""
+    }
+
+    function syncLimitEnforcer() {
+        limitRestart.stop()
+        if (limitProcess.running) {
+            _limitStopping = true
+            limitProcess.running = false
+            return
+        }
+        if (!_limitStopping && limitShouldRun()) {
+            limitRestart.restart()
+        }
+    }
+
+    onActiveChanged: syncLimitEnforcer()
+    onMaxClientsChanged: syncLimitEnforcer()
+    onClientLimitSupportedChanged: syncLimitEnforcer()
+    onClientLimitHelperChanged: syncLimitEnforcer()
+    onClientLimitRootRunnerChanged: syncLimitEnforcer()
+    onWifiDeviceChanged: syncLimitEnforcer()
+    onApInterfaceChanged: syncLimitEnforcer()
 
     Process {
         id: statusProcess
@@ -201,6 +242,11 @@ Singleton {
             root._actionPayload = ""
         }
         onExited: code => {
+            actionTimeout.stop()
+            if (root._actionTimedOut) {
+                root._actionTimedOut = false
+                return
+            }
             const fallback = root._actionErrors.length
                 ? root._actionErrors[root._actionErrors.length - 1]
                 : "Hotspot action failed"
@@ -214,6 +260,34 @@ Singleton {
             if (root.popupActive)
                 root.refreshCredentials()
             clearMessage.restart()
+        }
+    }
+
+    // NetworkManager's wpa_supplicant profile API does not expose a station
+    // cap. One elevated watcher removes stations above the saved limit through
+    // nl80211 while this hotspot is active, avoiding repeated authentication.
+    Process {
+        id: limitProcess
+        stdout: StdioCollector { waitForEnd: true }
+        stderr: SplitParser {
+            onRead: line => {
+                const value = line.trim()
+                if (value !== "") root._limitErrors.push(value)
+            }
+        }
+        onExited: code => {
+            if (root._limitStopping) {
+                root._limitStopping = false
+                if (root.limitShouldRun()) limitRestart.restart()
+                return
+            }
+            if (code !== 0 && root.limitShouldRun()) {
+                root.error = root._limitErrors.length
+                    ? root._limitErrors[root._limitErrors.length - 1]
+                    : "Could not enforce the hotspot client limit."
+            } else if (root.limitShouldRun()) {
+                limitRestart.restart()
+            }
         }
     }
 
@@ -232,6 +306,34 @@ Singleton {
         id: refreshDebounce
         interval: 300
         onTriggered: root.refresh()
+    }
+
+    Timer {
+        id: actionTimeout
+        interval: 75000
+        onTriggered: {
+            if (!actionProcess.running) return
+            root._actionTimedOut = true
+            actionProcess.running = false
+            root.busy = false
+            root.action = ""
+            root.message = ""
+            root.error = "Hotspot action timed out. Check NetworkManager and the polkit agent."
+            refreshDebounce.restart()
+        }
+    }
+
+    Timer {
+        id: limitRestart
+        interval: 2000
+        onTriggered: {
+            if (!root.limitShouldRun() || limitProcess.running) return
+            root._limitErrors = []
+            limitProcess.command = [root.clientLimitRootRunner,
+                root.clientLimitHelper, "--watch", root.apInterface,
+                String(root.maxClients)]
+            limitProcess.running = true
+        }
     }
 
     Timer {

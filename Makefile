@@ -2,6 +2,7 @@ PREFIX ?= /usr
 ODIN ?= odin
 DATADIR ?= $(PREFIX)/share
 BINDIR ?= $(PREFIX)/bin
+LIBEXECDIR ?= $(PREFIX)/libexec
 ANUSH_DIR ?= $(DATADIR)/anush
 
 CONFIG_FILES := $(shell find config -type f ! -name .gitkeep)
@@ -29,6 +30,14 @@ install: build/anushctl
 
 	install -Dm755 build/anushctl \
 		"$(DESTDIR)$(BINDIR)/anushctl"
+	install -Dm755 shell/scripts/hotspot-limit-enforcer \
+		"$(DESTDIR)$(LIBEXECDIR)/anush-hotspot-limit-enforcer"
+	install -Dm755 shell/scripts/hotspot-create-ap-helper \
+		"$(DESTDIR)$(LIBEXECDIR)/anush-hotspot-create-ap-helper"
+	install -Dm644 packaging/org.anush.hotspot-limit.policy \
+		"$(DESTDIR)$(DATADIR)/polkit-1/actions/org.anush.hotspot-limit.policy"
+	install -Dm644 packaging/org.anush.hotspot-create-ap.policy \
+		"$(DESTDIR)$(DATADIR)/polkit-1/actions/org.anush.hotspot-create-ap.policy"
 
 	@printf 'Installed anush to %s\n' "$(DESTDIR)$(ANUSH_DIR)"
 

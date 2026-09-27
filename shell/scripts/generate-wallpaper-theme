@@ -81,7 +81,7 @@ def valid_hex(value):
 
 
 def matugen_colors(payload, mode):
-    """Normalize both scheme-first and role-first Matugen JSON layouts."""
+    """Normalize both scheme-first and role-first matugen JSON layouts."""
     colors = payload.get("colors", {}) if isinstance(payload, dict) else {}
     if not isinstance(colors, dict):
         return None
@@ -129,7 +129,7 @@ def palette_from_matugen(image, mode):
         if process.returncode != 0:
             detail = process.stderr.strip().splitlines()
             message = detail[-1] if detail else f"exit {process.returncode}"
-            print(f"generate-wallpaper-theme: Matugen failed ({message}); "
+            print(f"generate-wallpaper-theme: matugen failed ({message}); "
                   "using built-in generator", file=sys.stderr)
             return None
         output = process.stdout.strip()
@@ -141,7 +141,7 @@ def palette_from_matugen(image, mode):
             raise ValueError("palette is missing required Material roles")
     except (OSError, subprocess.SubprocessError, json.JSONDecodeError,
             ValueError) as error:
-        print(f"generate-wallpaper-theme: cannot use Matugen ({error}); "
+        print(f"generate-wallpaper-theme: cannot use matugen ({error}); "
               "using built-in generator", file=sys.stderr)
         return None
 
@@ -506,7 +506,7 @@ def main():
             try:
                 # The existing extractor follows the wallpaper's complete
                 # palette more closely than a one-seed Material scheme. Keep
-                # it for the shell while retaining Matugen roles for GTK/Qt.
+                # it for the shell while retaining matugen roles for GTK/Qt.
                 semantic, ansi = palette_from(image)
                 mode_ready = False
                 shell_generator = "anush"

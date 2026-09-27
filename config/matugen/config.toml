@@ -1,14 +1,14 @@
-# Anush consumes Matugen's JSON output itself. Keep wallpaper setting and
+# anush consumes matugen's JSON output itself. Keep wallpaper setting and
 # application templates disabled so generating a shell palette has no hidden
 # effects on the user's desktop configuration.
 
 [config.wallpaper]
-# Matugen currently requires a command even when wallpaper setting is disabled.
+# matugen currently requires a command even when wallpaper setting is disabled.
 # Generation also uses --dry-run, so this command is never executed.
 command = "true"
 arguments = []
 set = false
 
-# Keep an explicit empty table for Matugen 4.x, which requires the templates
-# field even when Anush consumes JSON directly and has no Matugen templates.
+# Keep an explicit empty table for matugen 4.x, which requires the templates
+# field even when anush consumes JSON directly and has no matugen templates.
 [templates]

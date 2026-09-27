@@ -4,10 +4,10 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
-SKARWM_BEGIN :: "# >>> Anush shell (managed by anushctl) >>>"
-SKARWM_END   :: "# <<< Anush shell (managed by anushctl) <<<"
+SKARWM_BEGIN :: "# >>> anush shell (managed by anushctl) >>>"
+SKARWM_END   :: "# <<< anush shell (managed by anushctl) <<<"
 
-SKARWM_BLOCK :: `# >>> Anush shell (managed by anushctl) >>>
+SKARWM_BLOCK :: `# >>> anush shell (managed by anushctl) >>>
 bind : mod + a : "anushctl launcher toggle"
 bind : mod + v : "anushctl clipboard toggle"
 bind : mod + Shift + v : "anushctl clipboard toggle"
@@ -16,7 +16,7 @@ autostart : "anushctl start"
 autostart : "anushctl wallpaper restore"
 autostart : "anushctl clipboard daemon"
 autostart : "xss-lock -- anushctl lock"
-# <<< Anush shell (managed by anushctl) <<<
+# <<< anush shell (managed by anushctl) <<<
 `
 
 LEGACY_SKARWM_AUTOSTARTS := [5]string{
@@ -101,7 +101,7 @@ upsert_managed_block :: proc(path, begin, end, block: string) -> int {
         fmt.eprintln("anushctl: cannot write", path, ":", err)
         return EXIT_RUNTIME
     }
-    fmt.println("Installed Anush integration in", path)
+    fmt.println("Installed anush integration in", path)
     return EXIT_OK
 }
 
@@ -111,7 +111,7 @@ remove_managed_block :: proc(path, begin, end: string) -> int {
     defer if len(current) > 0 { delete(transmute([]byte)current) }
     start := strings.index(current, begin)
     if start < 0 {
-        fmt.println("No Anush integration found in", path)
+        fmt.println("No anush integration found in", path)
         return EXIT_OK
     }
     finish_relative := strings.index(current[start:], end)
@@ -129,7 +129,7 @@ remove_managed_block :: proc(path, begin, end: string) -> int {
         fmt.eprintln("anushctl: cannot write", path, ":", err)
         return EXIT_RUNTIME
     }
-    fmt.println("Removed Anush integration from", path)
+    fmt.println("Removed anush integration from", path)
     return EXIT_OK
 }
 

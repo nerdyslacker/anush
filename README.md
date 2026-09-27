@@ -29,7 +29,7 @@ Required:
 Optional desktop integrations:
 
 - Any freedesktop icon and XCursor themes; Papirus additionally supports
-  matching folder colors to the selected Anush accent. The official
+  matching folder colors to the selected anush accent. The official
   `papirus-folders` helper is preferred, with a built-in fallback for writable
   user-installed Papirus themes;
 - Picom, Dunst, Feh, and Kitty for the supplied desktop configuration;
@@ -39,17 +39,18 @@ Optional desktop integrations:
 - NetworkManager, its command-line/editor tools, BlueZ, Blueman, `pactl`, and
   Pavucontrol for network, Bluetooth, and audio controls;
 - for the Wi-Fi hotspot popup: NetworkManager/libnm GIR bindings for PyGObject,
-  `iw`, `iproute2`, `dnsmasq`, `hostapd`, and `create_ap`; NetworkManager owns
-  the active AP/DHCP/NAT path, while `hostapd` and `create_ap` are compatibility
-  tools rather than commands invoked by Anush;
+  `iw`, `iproute2`, `iptables`, `dnsmasq`, polkit/`pkexec`, `hostapd`, and
+  `create_ap`; NetworkManager owns second-adapter hotspots. Same-radio sharing
+  uses `create_ap`, hostapd, dnsmasq, and scoped iptables rules, while the
+  installed narrow helper uses `iw` to enforce the selected station limit;
 - Easy Effects for optional audio-effect bypass and preset controls;
 - tmux for the optional bar session manager;
 - brightnessctl, powerprofilesctl, redshift, xset, and xrandr for hardware and
   power controls;
 - curl, xcolor, xdg-open, flameshot, xinput, notify-send, and xterm for individual
   widget actions;
-- Matugen for Material You wallpaper themes; ImageMagick remains the automatic
-  fallback when Matugen is unavailable or cannot generate a valid palette;
+- matugen for Material You wallpaper themes; ImageMagick remains the automatic
+  fallback when matugen is unavailable or cannot generate a valid palette;
 - `adw-gtk-theme` (`adw-gtk3`) for applying generated colors consistently to
   GTK applications, and Qt5ct or Qt6ct for Qt applications;
 - lxqt-policykit-agent, xss-lock, Betterlockscreen, and Udiskie for the supplied
@@ -65,27 +66,39 @@ printf '%s\n' 'repository=https://github.com/lazylinuxos/lazy-repo/releases/late
 ```sh
 sudo xbps-install -S quickshell picom dunst feh kitty xss-lock \
   betterlockscreen udiskie lxqt-policykit NetworkManager bluez blueman pavucontrol \
-  curl flameshot brightnessctl xrandr python3 python3-gobject iw iproute2 dnsmasq \
-  hostapd create_ap renCal xterm xinput xdotool xcolor \
+  curl flameshot brightnessctl xrandr python3 python3-gobject iw iproute2 dnsmasq polkit \
+  hostapd create_ap iptables renCal xterm xinput xdotool xcolor \
   clipmenu xkb-switch setxkbmap ImageMagick matugen adw-gtk-theme
 ```
 
 Package availability depends on the enabled Void repositories; the Nerd Font may need separate installation.
 
-Every Kitty launch provided by Anush passes
+Every Kitty launch provided by anush passes
 `config/kitty/kitty.conf` explicitly, so it does not depend on a separate
 system or user Kitty configuration. `anushctl start` also exports that location
 to applications launched by the shell. Its selection, URL, active-tab, border,
-and primary ANSI colors follow the current Anush accent. The focused Skarwm
-window border is updated in the live Skarwm configuration at the same time.
+and primary ANSI colors follow the current anush accent. The focused skarwm
+window border is updated in the live skarwm configuration at the same time.
 
 ## Install and launch
 
 Install the program and data under the configured system prefix:
 
 ```sh
-make install
+sudo make install
 ```
+
+Hotspot actions can also run directly from a source checkout. anush uses
+cached/passwordless `sudo` when available and otherwise opens a PolicyKit
+authentication dialog through `pkexec`. Installing anush keeps the preferred
+root-owned, narrowly authorized hotspot helpers under `/usr/libexec`, avoiding
+authentication prompts for an active desktop session.
+
+The system install is required for hotspot station limits and same-radio
+Wi-Fi sharing: it installs the root-owned `create_ap` controller, limit helper,
+and matching polkit
+policies. Running those helpers directly from a writable source checkout is
+intentionally unsupported.
 
 On the first `anushctl start`, the CLI detects the installed data and seeds
 `${XDG_CONFIG_HOME:-$HOME/.config}/anush` itself. No separate initialization
@@ -99,7 +112,7 @@ anushctl start
 ```
 
 The install also provides the Odin-based `anushctl` management utility. It
-uses Anush's typed Quickshell IPC endpoints for runtime control:
+uses anush's typed Quickshell IPC endpoints for runtime control:
 
 ```sh
 anushctl status
@@ -194,10 +207,13 @@ normal mixer remains available when Easy Effects is absent.
 
 The Network widget opens the existing Network/VPN popup with a left click and
 the Wi-Fi Hotspot popup with a right click; middle click opens the full
-NetworkManager editor. Hotspot settings live in NetworkManager, including its
-secret store, rather than Anush state. AP/channel capabilities and associated
-stations come from `iw`, and NetworkManager shared IPv4 provides DHCP/NAT.
-Wi-Fi upstream sharing currently requires a second AP-capable adapter.
+NetworkManager editor. Hotspot settings and secrets live in NetworkManager,
+rather than anush state. AP/channel capabilities and associated stations come
+from `iw`. NetworkManager provides sharing for a separate AP adapter;
+same-radio sharing is owned by `create_ap` so NetworkManager cannot fight the
+virtual AP.
+The optional numeric device limit is enforced by the installed polkit helper for the
+life of the hotspot.
 
 The optional tmux bar widget shows the number of running sessions. Its popup
 can create and attach sessions in `$TERMINAL`, Kitty, Foot, Alacritty, WezTerm,
@@ -251,11 +267,11 @@ background hue into a light surface and enforce readable contrast for text and
 accent roles. Bundled presets use the exact named colors from their upstream
 palette documents rather than generated lightening or darkening.
 
-Wallpaper themes combine the wallpaper-faithful Anush/ImageMagick palette for
-the shell with Matugen's fidelity Material roles for application integration.
-The Anush generator is also used automatically if Matugen is missing, exits
+Wallpaper themes combine the wallpaper-faithful anush/ImageMagick palette for
+the shell with matugen's fidelity Material roles for application integration.
+The anush generator is also used automatically if matugen is missing, exits
 unsuccessfully, or returns incomplete data. When
-the active wallpaper palette came from Matugen, the layout popup exposes
+the active wallpaper palette came from matugen, the layout popup exposes
 explicit **Apply GTK Themes** and **Apply Qt Themes** actions. Applying the GTK
 theme expects `adw-gtk-theme` (the installed theme is normally named
 `adw-gtk3`) and updates application CSS in a managed block without discarding

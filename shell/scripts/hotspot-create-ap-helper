@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""Narrow privileged controller for anush's create_ap backend."""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+NAME = re.compile(r"[A-Za-z0-9_.:-]{1,15}")
+
+
+def fail(message: str) -> "None":
+    print(message, file=sys.stderr)
+    raise SystemExit(1)
+
+
+def instances() -> dict[int, tuple[str, str]]:
+    result: dict[int, tuple[str, str]] = {}
+    for directory in Path("/tmp").glob("create_ap.*.conf.*"):
+        try:
+            pid = int((directory / "pid").read_text().strip())
+            ap_interface = (directory / "wifi_iface").read_text().strip()
+        except (OSError, ValueError):
+            continue
+        if Path("/proc", str(pid)).exists():
+            name = directory.name
+            base = name[len("create_ap."):].split(".conf.", 1)[0]
+            result[pid] = (base, ap_interface)
+    return result
+
+
+def access_point_ready(interface: str) -> bool:
+    iw = shutil.which("iw")
+    if not iw:
+        return False
+    result = subprocess.run(
+        [iw, "dev", interface, "info"], capture_output=True, text=True,
+        timeout=3, check=False,
+    )
+    return result.returncode == 0 and re.search(
+        r"(?m)^\s*type\s+AP\s*$", result.stdout
+    ) is not None
+
+
+def iw_compatibility_path() -> tuple[str, dict[str, str]]:
+    """Hide iw's fractional MHz suffix from older create_ap releases."""
+    real_iw = shutil.which("iw") or fail("iw is not installed.")
+    directory = tempfile.mkdtemp(prefix="anush-create-ap-bin-", dir="/tmp")
+    wrapper = Path(directory, "iw")
+    wrapper.write_text(
+        "#!/usr/bin/env python3\n"
+        "import re, subprocess, sys\n"
+        f"result = subprocess.run([{json.dumps(real_iw)}, *sys.argv[1:]], "
+        "capture_output=True)\n"
+        "output = re.sub(rb'(?m)^(\\s*freq:\\s*[0-9]+)\\.0(\\s*)$', "
+        "rb'\\1\\2', result.stdout)\n"
+        "output = re.sub(rb'([0-9]+)\\.0(?=\\s*MHz)', rb'\\1', output)\n"
+        "sys.stdout.buffer.write(output)\n"
+        "sys.stderr.buffer.write(result.stderr)\n"
+        "raise SystemExit(result.returncode)\n"
+    )
+    wrapper.chmod(0o700)
+    environment = os.environ.copy()
+    environment["PATH"] = f"{directory}:{environment.get('PATH', '')}"
+    return directory, environment
+
+
+def run_start(create_ap: str, argv: list[str]) -> int:
+    if len(argv) != 4:
+        fail("Invalid create_ap start request.")
+    wifi, upstream, band, channel_text = argv
+    if not NAME.fullmatch(wifi) or not NAME.fullmatch(upstream):
+        fail("Invalid hotspot interface.")
+    if not Path("/sys/class/net", wifi, "wireless").is_dir():
+        fail("The selected hotspot interface is not Wi-Fi.")
+    if not Path("/sys/class/net", upstream).exists():
+        fail("The selected Internet interface is unavailable.")
+    if band not in {"auto", "2.4", "5"}:
+        fail("Invalid hotspot band.")
+    try:
+        channel = int(channel_text)
+    except ValueError:
+        fail("Invalid hotspot channel.")
+    if not 0 <= channel <= 196:
+        fail("Invalid hotspot channel.")
+
+    payload = sys.stdin.read()
+    lines = payload.splitlines()
+    if len(lines) != 2:
+        fail("SSID and password were not provided.")
+    before = set(instances())
+    candidate_pid = 0
+    succeeded = False
+    process: subprocess.Popen[str] | None = None
+    compatibility_dir = ""
+    log = tempfile.NamedTemporaryFile(
+        prefix="anush-create-ap-", suffix=".log", dir="/tmp", delete=False
+    )
+    log_path = log.name
+    os.chmod(log_path, 0o600)
+    command = [create_ap, "-w", "2"]
+    if band != "auto":
+        command.extend(["--freq-band", band])
+    if channel:
+        command.extend(["-c", str(channel)])
+    command.extend([wifi, upstream])
+    try:
+        compatibility_dir, environment = iw_compatibility_path()
+        # Older create_ap releases send daemon output to /dev/null and lack
+        # --logfile. Detach their normal foreground mode ourselves so startup
+        # remains observable and the resulting process still survives pkexec.
+        process = subprocess.Popen(
+            command, stdin=subprocess.PIPE, stdout=log,
+            stderr=subprocess.STDOUT, text=True, start_new_session=True,
+            env=environment,
+        )
+        log.close()
+        if process.stdin is None:
+            fail("Could not provide create_ap settings.")
+        process.stdin.write(payload)
+        process.stdin.close()
+        deadline = time.monotonic() + 40
+        last_log = ""
+        while time.monotonic() < deadline:
+            current = instances()
+            new = [pid for pid in current if pid not in before and current[pid][0] == wifi]
+            try:
+                last_log = Path(log_path).read_text(errors="replace")
+            except OSError:
+                pass
+            if new:
+                pid = new[0]
+                candidate_pid = pid
+                base, ap_interface = current[pid]
+                if access_point_ready(ap_interface):
+                    succeeded = True
+                    print(json.dumps({"pid": pid, "baseInterface": base,
+                                      "apInterface": ap_interface}), flush=True)
+                    # Keep the authorized pkexec process alive as the owner of
+                    # the detached AP. Some PolicyKit sessions terminate root
+                    # descendants when the authorized command exits.
+                    process.wait()
+                    return 0
+            if process.poll() is not None or (
+                not new and ("ERROR:" in last_log or "Doing cleanup" in last_log)
+            ):
+                break
+            time.sleep(0.25)
+        message = "\n".join(last_log.strip().splitlines()[-12:])
+        fail(message or "create_ap did not enable the access point.")
+    finally:
+        if candidate_pid and not succeeded:
+            subprocess.run(
+                [create_ap, "--stop", str(candidate_pid)],
+                capture_output=True, text=True, timeout=20, check=False,
+            )
+        elif process is not None and process.poll() is None and not succeeded:
+            process.terminate()
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+        if not log.closed:
+            log.close()
+        try:
+            os.unlink(log_path)
+        except OSError:
+            pass
+        if compatibility_dir:
+            shutil.rmtree(compatibility_dir, ignore_errors=True)
+
+
+def run_stop(create_ap: str, value: str) -> int:
+    try:
+        pid = int(value)
+    except ValueError:
+        fail("Invalid create_ap process ID.")
+    if pid not in instances():
+        return 0
+    stopped = subprocess.run(
+        [create_ap, "--stop", str(pid)], capture_output=True, text=True,
+        timeout=20, check=False,
+    )
+    if stopped.returncode != 0:
+        fail((stopped.stderr or stopped.stdout).strip() or "Could not stop create_ap.")
+    return 0
+
+
+def main() -> int:
+    if os.geteuid() != 0:
+        fail("The create_ap helper must run with root privileges.")
+    create_ap = shutil.which("create_ap") or fail("create_ap is not installed.")
+    if len(sys.argv) < 3:
+        fail("Expected start or stop action.")
+    if sys.argv[1] == "start":
+        return run_start(create_ap, sys.argv[2:])
+    if sys.argv[1] == "stop" and len(sys.argv) == 3:
+        return run_stop(create_ap, sys.argv[2])
+    fail("Unsupported create_ap action.")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

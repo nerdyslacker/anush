@@ -65,7 +65,7 @@ grep -qi '#b8817d' "$overlay/48x48/places/inode-directory.svg"
 ! grep -q '^papirus-folders ' "$ICON_HELPER_LOG"
 [ "$("$helper" --current)" = "Papirus" ]
 
-# Every Matugen accent, including arbitrary custom colors, is written exactly
+# Every matugen accent, including arbitrary custom colors, is written exactly
 # into the generated SVG rather than quantized to Papirus's stock palette.
 for accent in '#b8817d' '#6db869' '#bbb169' '#6d7eb7' '#bb6bb7' \
         '#6db8b7' '#654321'; do
@@ -79,7 +79,7 @@ done
 mkdir -p "$XDG_DATA_HOME/icons/Anush-Papirus"
 cat >"$XDG_DATA_HOME/icons/Anush-Papirus/index.theme" <<'EOF'
 [Icon Theme]
-Name=Anush Papirus
+Name=anush Papirus
 Inherits=Fairy
 Directories=
 EOF

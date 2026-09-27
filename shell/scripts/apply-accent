@@ -43,7 +43,7 @@ rewrite "$config_dir/dunst/dunstrc" \
 rewrite "$config_dir/skarwm/config.rc" \
     "/^[[:space:]]*sel_outer_border[[:space:]]*:/ s/#[0-9A-Fa-f]{6}/$accent/"
 
-# Skarwm reads its live configuration outside the Anush data directory. Keep
+# skarwm reads its live configuration outside the anush data directory. Keep
 # that copy in sync as well, respecting the same environment lookup order used
 # by the window manager.
 if [ -n "${SKARWM_CONFIG:-}" ]; then

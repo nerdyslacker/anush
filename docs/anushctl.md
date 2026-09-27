@@ -1,18 +1,18 @@
 # `anushctl`
 
-`anushctl` is the supported command-line interface for the running Anush shell.
+`anushctl` is the supported command-line interface for the running anush shell.
 It is written in Odin and delegates runtime operations to typed Quickshell IPC
 handlers. It does not expose a raw command or shell-execution endpoint.
 
-Start Anush with:
+Start anush with:
 
 ```sh
 anushctl start
 ```
 
-On first start, the CLI locates the installed Anush data, copies it atomically
+On first start, the CLI locates the installed anush data, copies it atomically
 to the user directory, launches `qs --no-duplicate`, and remains attached for
-the lifetime of the shell. This makes it suitable for a Skarwm `autostart`
+the lifetime of the shell. This makes it suitable for a skarwm `autostart`
 entry without a separate initialization script.
 
 On later starts, managed `shell/` and `assets/` files are refreshed from the
@@ -55,7 +55,7 @@ Quickshell's native hard reload and keeps the process instance. `restart` waits
 for the old instance to stop, launches its replacement, and verifies that its
 IPC endpoint is ready. `lock` invokes Betterlockscreen and
 returns its exit status. The `daemon` and `restore` commands provide stable
-Skarwm autostart entry points for Anush-owned clipboard and wallpaper behavior.
+skarwm autostart entry points for anush-owned clipboard and wallpaper behavior.
 
 The writable user directory is `$ANUSH_ROOT` when set, otherwise
 `$XDG_CONFIG_HOME/anush` or `$HOME/.config/anush`. For first-run seeding, the

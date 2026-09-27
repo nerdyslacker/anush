@@ -759,7 +759,7 @@ Popout {
                 ? Theme.applicationThemeStatus
                 : Theme.matugenThemeGenerated
                     ? "Install adw-gtk-theme (adw-gtk3) for GTK theming. Qt applications need Qt5ct or Qt6ct."
-                    : "Generate a wallpaper palette with Matugen to enable application themes."
+                    : "Generate a wallpaper palette with matugen to enable application themes."
             color: Theme.foregroundMuted
             font.family: Theme.fontFamily
             font.pixelSize: Math.max(8, Theme.fontSize - 2)

@@ -11,11 +11,11 @@ import shutil
 import subprocess
 import sys
 
-# Older Anush versions selected this generated overlay during every accent
+# Older anush versions selected this generated overlay during every accent
 # change. Keep the name only so existing installations can migrate away from
 # it; no new overlay is created or selected.
 LEGACY_OVERLAY_NAME = "Anush-Papirus"
-MANAGED_OVERLAY_PREFIX = "Anush-"
+MANAGED_OVERLAY_PREFIX = "anush-"
 MANAGED_OVERLAY_SUFFIX = "-Folders"
 
 def run(*command: str) -> None:
@@ -205,8 +205,8 @@ Type=Fixed
 """)
     sections_text = "\n".join(sections)
     index = f"""[Icon Theme]
-Name=Anush {theme} folder colours
-Comment=Accent-coloured folders managed by Anush
+Name=anush {theme} folder colours
+Comment=Accent-coloured folders managed by anush
 Inherits={theme}
 Directories={','.join(directories)}
 
@@ -315,7 +315,7 @@ def main() -> int:
         if not theme_path(selected):
             return 1
         applied = recolour_folders(selected, sys.argv[3])
-        # Re-applying the chosen theme also repairs old Anush overlay settings
+        # Re-applying the chosen theme also repairs old anush overlay settings
         # and tells running desktop settings daemons to invalidate icon caches.
         configure_desktops(applied, theme_path(applied))
         return 0

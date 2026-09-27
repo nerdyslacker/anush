@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Load and validate Anush theme preset JSON files."""
+"""Load and validate anush theme preset JSON files."""
 
 from __future__ import annotations
 

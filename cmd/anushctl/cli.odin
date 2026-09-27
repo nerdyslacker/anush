@@ -12,12 +12,12 @@ EXIT_USAGE       :: 2
 EXIT_NOT_RUNNING :: 3
 
 usage :: proc() {
-    fmt.println(`anushctl - control the Anush desktop shell
+    fmt.println(`anushctl - control the anush desktop shell
 
 Usage: anushctl COMMAND [ARGUMENTS]
 
 Runtime commands:
-  start                          Launch Anush
+  start                          Launch anush
   status                         Show shell and protocol status
   reload                         Hard-reload the running shell configuration
   restart                        Stop and relaunch the shell
@@ -34,7 +34,7 @@ Runtime commands:
   theme mode light|dark          Change the shell colour mode
 
 Compositor integration:
-  install skarwm                 Add Anush startup and key bindings
+  install skarwm                 Add anush startup and key bindings
   remove skarwm                  Remove the managed integration block
 
 Other:

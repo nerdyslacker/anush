@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""XRandR backend for Anush's normalized display configuration service."""
+"""XRandR backend for anush's normalized display configuration service."""
 
 import json
 import os

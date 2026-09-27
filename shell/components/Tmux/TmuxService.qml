@@ -106,7 +106,7 @@ Singleton {
             "elif command -v wezterm >/dev/null 2>&1; then exec wezterm start -- \"$@\"; " +
             "elif command -v xterm >/dev/null 2>&1; then exec xterm -e \"$@\"; " +
             "else command -v notify-send >/dev/null 2>&1 && " +
-            "notify-send -u critical 'Anush tmux' 'No supported terminal was found.'; exit 127; fi"
+            "notify-send -u critical 'anush tmux' 'No supported terminal was found.'; exit 127; fi"
         Quickshell.execDetached(["sh", "-c", script, "anush-tmux"].concat(arguments))
     }
 

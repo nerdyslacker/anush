@@ -8,7 +8,8 @@ Popout {
     id: root
 
     cardWidth: 470
-    cardHeight: 680
+    cardHeight: 680 + Math.max(0,
+        Math.min(HotspotService.clients.length, 3) - 1) * 50
 
     property bool dirty: false
     property bool syncing: false
@@ -19,6 +20,7 @@ Popout {
     property string draftWifiDevice: ""
     property string draftBand: "auto"
     property int draftChannel: 0
+    property int draftMaxClients: 0
 
     readonly property var upstreamOptions: HotspotService.upstreams
     readonly property var wifiOptions: HotspotService.wifiDevices.filter(item =>
@@ -56,6 +58,7 @@ Popout {
             : wifiOptions.length ? wifiOptions[0].value : ""
         draftBand = HotspotService.band
         draftChannel = HotspotService.channel
+        draftMaxClients = HotspotService.maxClients
         syncing = false
     }
 
@@ -71,7 +74,8 @@ Popout {
             upstreamUuid: draftUpstreamUuid,
             wifiDevice: draftWifiDevice,
             band: draftBand,
-            channel: draftChannel
+            channel: draftChannel,
+            maxClients: draftMaxClients
         }
     }
 
@@ -110,6 +114,7 @@ Popout {
         function onWifiDevicesChanged() { root.syncFromService() }
         function onBandChanged() { root.syncFromService() }
         function onChannelChanged() { root.syncFromService() }
+        function onMaxClientsChanged() { root.syncFromService() }
         function onPopupRequested(action) {
             if (!ShellActions.ownsFocusedOutput(root.anchorItem)) return
             if (action === "open") root.visible = true
@@ -151,6 +156,8 @@ Popout {
         id: field
         property alias text: input.text
         property alias echoMode: input.echoMode
+        property alias validator: input.validator
+        property alias inputMethodHints: input.inputMethodHints
         property string placeholder: ""
         signal edited()
         height: 34
@@ -322,7 +329,8 @@ Popout {
 
         Flickable {
             width: parent.width
-            height: parent.height - y
+            height: Math.max(120, parent.height - y
+                - deviceSection.height - parent.spacing)
             contentWidth: width
             contentHeight: form.implicitHeight
             clip: true
@@ -362,7 +370,7 @@ Popout {
                 Text {
                     width: parent.width
                     visible: root.upstreamOptions.length === 0
-                    text: "Connect Ethernet, Wi-Fi, or a VPN before starting the hotspot."
+                    text: "Connect an Internet-routed Ethernet, Wi-Fi, or VPN source before starting the hotspot."
                     color: Theme.disabled
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize - 1
@@ -402,7 +410,7 @@ Popout {
                         text: root.draftPassword
                         echoMode: root.passwordVisible
                             ? TextInput.Normal : TextInput.Password
-                        placeholder: "Password (8–63 ASCII characters)"
+                        placeholder: "Leave empty for an open network"
                         enabled: !HotspotService.busy
                         onEdited: {
                             root.draftPassword = text
@@ -431,6 +439,18 @@ Popout {
                             onClicked: root.passwordVisible = !root.passwordVisible
                         }
                     }
+                }
+
+                Text {
+                    width: parent.width
+                    text: root.draftPassword === ""
+                        ? "Open network — anyone nearby can connect without a password."
+                        : "Protected network — password must contain 8–63 ASCII characters."
+                    color: root.draftPassword === ""
+                        ? Theme.brightOrange : Theme.disabled
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize - 2
+                    wrapMode: Text.WordWrap
                 }
 
                 SectionTitle { title: "Wireless" }
@@ -514,24 +534,53 @@ Popout {
 
                 SectionTitle { title: "Limits" }
 
-                Rectangle {
+                Row {
                     width: parent.width
-                    height: limitText.implicitHeight + 18
-                    radius: Theme.radiusSmall
-                    color: Theme.gray2
+                    height: 34
+                    spacing: 10
                     Text {
-                        id: limitText
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.top: parent.top
-                        anchors.margins: 9
-                        text: "Maximum connected devices: unavailable\n"
-                            + HotspotService.clientLimitReason
-                        color: Theme.disabled
+                        width: 120
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Device limit"
+                        color: Theme.fg
                         font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize - 1
-                        wrapMode: Text.WordWrap
+                        font.pixelSize: Theme.fontSize
                     }
+                    FormField {
+                        width: parent.width - 130
+                        text: root.draftMaxClients > 0
+                            ? String(root.draftMaxClients) : ""
+                        placeholder: "Unlimited"
+                        validator: IntValidator { bottom: 1; top: 128 }
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        enabled: HotspotService.clientLimitSupported
+                            && !HotspotService.busy
+                        onEdited: {
+                            root.draftMaxClients = text === ""
+                                ? 0 : Number(text)
+                            root.markDirty()
+                        }
+                    }
+                }
+
+                Text {
+                    width: parent.width
+                    visible: HotspotService.clientLimitSupported
+                    text: "Enter 1–128 devices, or leave empty for unlimited."
+                    color: Theme.disabled
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize - 2
+                    wrapMode: Text.WordWrap
+                }
+
+                Text {
+                    width: parent.width
+                    visible: !HotspotService.clientLimitSupported
+                    text: HotspotService.clientLimitReason
+                    color: Theme.disabled
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize - 1
+                    wrapMode: Text.WordWrap
                 }
 
                 Rectangle {
@@ -571,66 +620,103 @@ Popout {
                     wrapMode: Text.WordWrap
                 }
 
-                SectionTitle {
-                    title: "Connected devices (" + HotspotService.clientCount + ")"
-                }
+            }
+        }
 
-                Text {
-                    width: parent.width
-                    visible: !HotspotService.active
-                        || HotspotService.clients.length === 0
-                    text: HotspotService.active
-                        ? "No associated stations."
-                        : "Start the hotspot to see associated stations."
-                    color: Theme.disabled
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize - 1
-                }
+        Column {
+            id: deviceSection
+            width: parent.width
+            spacing: 8
 
-                Repeater {
-                    model: HotspotService.clients
-                    Rectangle {
-                        id: clientRow
-                        required property var modelData
-                        width: form.width
-                        height: 44
-                        radius: Theme.radiusSmall
+            SectionTitle {
+                title: "Connected devices (" + HotspotService.clientCount + ")"
+            }
+
+            Text {
+                width: parent.width
+                visible: !HotspotService.active
+                    || HotspotService.clients.length === 0
+                text: HotspotService.active
+                    ? "No associated stations."
+                    : "Start the hotspot to see associated stations."
+                color: Theme.disabled
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize - 1
+            }
+
+            ListView {
+                id: clientList
+                width: parent.width
+                height: {
+                    const visibleRows = Math.min(count, 3)
+                    return visibleRows * 44
+                        + Math.max(0, visibleRows - 1) * spacing
+                }
+                model: HotspotService.clients
+                spacing: 6
+                clip: true
+                interactive: count > 3
+                boundsBehavior: Flickable.StopAtBounds
+                reuseItems: true
+
+                Controls.ScrollBar.vertical: Controls.ScrollBar {
+                    id: clientScrollBar
+                    width: 8
+                    policy: clientList.count > 3
+                        ? Controls.ScrollBar.AsNeeded
+                        : Controls.ScrollBar.AlwaysOff
+                    interactive: true
+
+                    background: Rectangle {
                         color: Theme.gray2
-                        Column {
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.margins: 9
-                            spacing: 2
-                            Text {
-                                width: parent.width
-                                text: clientRow.modelData.hostname || "Associated device"
-                                color: Theme.fg
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontSize
-                                elide: Text.ElideRight
-                            }
-                            Text {
-                                width: parent.width
-                                text: (clientRow.modelData.ipAddress || "IP not observed")
-                                    + " · " + clientRow.modelData.macAddress
-                                color: Theme.disabled
-                                font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontSize - 2
-                                elide: Text.ElideRight
-                            }
-                        }
+                        border.width: 1
+                        border.color: Theme.gray5
+                        radius: Math.min(width / 2, Theme.radiusSmall)
+                    }
+
+                    contentItem: Rectangle {
+                        implicitWidth: 6
+                        implicitHeight: 28
+                        color: clientScrollBar.pressed ? Theme.brightOrange
+                            : clientScrollBar.hovered ? Theme.orange : Theme.gray6
+                        radius: Math.min(width / 2, Theme.radiusSmall)
+                        Behavior on color { ColorAnimation { duration: 100 } }
                     }
                 }
 
-                Text {
-                    width: parent.width
-                    text: "Device membership is verified with iw station data; IP addresses "
-                        + "are best-effort neighbor-cache observations."
-                    color: Theme.disabled
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize - 2
-                    wrapMode: Text.WordWrap
+                delegate: Rectangle {
+                    id: clientRow
+                    required property var modelData
+                    width: clientList.width - (clientList.count > 3 ? 10 : 0)
+                    height: 44
+                    radius: Theme.radiusSmall
+                    color: Theme.gray2
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.margins: 9
+                        spacing: 2
+                        Text {
+                            width: parent.width
+                            text: clientRow.modelData.hostname
+                                || clientRow.modelData.ipAddress
+                                || clientRow.modelData.macAddress
+                            color: Theme.fg
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            width: parent.width
+                            text: (clientRow.modelData.ipAddress || "IP not observed")
+                                + " · " + clientRow.modelData.macAddress
+                            color: Theme.disabled
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize - 2
+                            elide: Text.ElideRight
+                        }
+                    }
                 }
             }
         }

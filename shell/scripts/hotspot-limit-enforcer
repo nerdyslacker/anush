@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""Keep an anush NetworkManager hotspot at or below its station limit.
+
+This deliberately small privileged helper can only remove excess stations
+from an active connection named ``anush Hotspot``. NetworkManager's
+wpa_supplicant backend has no per-profile maximum-station property, so the
+worker enforces the saved cap with the kernel's nl80211 station operation.
+"""
+
+from __future__ import annotations
+
+import ctypes
+import os
+import re
+import signal
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+PROFILE_ID = "anush Hotspot"
+MAC_PATTERN = re.compile(r"^Station\s+([0-9a-fA-F:]{17})", re.MULTILINE)
+
+
+def exit_with_parent() -> None:
+    """Do not leave a root watcher behind if its sudo/pkexec parent exits."""
+    try:
+        libc = ctypes.CDLL(None)
+        libc.prctl(1, signal.SIGTERM, 0, 0, 0)  # PR_SET_PDEATHSIG
+    except (AttributeError, OSError):
+        pass
+
+
+def fail(message: str) -> "None":
+    print(message, file=sys.stderr, flush=True)
+    raise SystemExit(1)
+
+
+def command(argv: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        argv,
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+        env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"},
+    )
+
+
+def connection_name(nmcli: str, interface: str) -> str:
+    result = command([nmcli, "-g", "GENERAL.CONNECTION", "device", "show", interface])
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def create_ap_owns(interface: str) -> bool:
+    for directory in Path("/tmp").glob("create_ap.*.conf.*"):
+        try:
+            pid = int((directory / "pid").read_text().strip())
+            wifi = (directory / "wifi_iface").read_text().strip()
+        except (OSError, ValueError):
+            continue
+        if wifi == interface and os.path.isdir(f"/proc/{pid}"):
+            return True
+    return False
+
+
+def owns_hotspot(nmcli: str, interface: str) -> bool:
+    return connection_name(nmcli, interface) == PROFILE_ID or create_ap_owns(interface)
+
+
+def station_macs(iw: str, interface: str) -> list[str]:
+    result = command([iw, "dev", interface, "station", "dump"])
+    if result.returncode != 0:
+        fail((result.stderr or result.stdout).strip() or "Could not read hotspot stations.")
+    return [match.group(1).lower() for match in MAC_PATTERN.finditer(result.stdout)]
+
+
+def enforce(iw: str, interface: str, limit: int) -> None:
+    stations = station_macs(iw, interface)
+    for mac in stations[limit:]:
+        result = command([iw, "dev", interface, "station", "del", mac])
+        if result.returncode != 0:
+            fail((result.stderr or result.stdout).strip() or "Could not remove excess station.")
+
+
+def main() -> int:
+    if os.geteuid() != 0:
+        fail("The hotspot limit enforcer must run with root privileges.")
+    exit_with_parent()
+    watch = len(sys.argv) == 4 and sys.argv[1] == "--watch"
+    if (watch and len(sys.argv) != 4) or (not watch and len(sys.argv) != 3):
+        fail("Usage: anush-hotspot-limit-enforcer [--watch] INTERFACE MAX_CLIENTS")
+    offset = 2 if watch else 1
+    interface = sys.argv[offset]
+    if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,15}", interface):
+        fail("Invalid Wi-Fi interface.")
+    try:
+        limit = int(sys.argv[offset + 1])
+    except ValueError:
+        fail("Invalid maximum-client limit.")
+    if not 1 <= limit <= 128:
+        fail("Maximum-client limit must be between 1 and 128.")
+
+    iw = shutil.which("iw") or fail("iw is required for client-limit enforcement.")
+    nmcli = shutil.which("nmcli") or fail("nmcli is required for client-limit enforcement.")
+    if not os.path.isdir(f"/sys/class/net/{interface}/wireless"):
+        fail("The selected interface is not a Wi-Fi interface.")
+    if not owns_hotspot(nmcli, interface):
+        fail("The selected interface is not running the anush hotspot.")
+
+    if not watch:
+        enforce(iw, interface, limit)
+        return 0
+
+    while owns_hotspot(nmcli, interface):
+        enforce(iw, interface, limit)
+        time.sleep(2)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

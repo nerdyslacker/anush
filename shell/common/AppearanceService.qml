@@ -6,7 +6,7 @@ import Quickshell
 import Quickshell.Io
 
 // Discovers desktop themes and applies explicit user choices. An empty saved
-// value means Anush leaves the pre-existing desktop setting alone.
+// value means anush leaves the pre-existing desktop setting alone.
 Singleton {
     id: root
 
