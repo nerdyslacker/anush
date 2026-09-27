@@ -54,7 +54,8 @@ Singleton {
                 units: "c"
             },
             launcher: {
-                icon: ""
+                icon: "",
+                favorites: []
             },
             wallpaper: {
                 directory: ""

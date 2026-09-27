@@ -12,6 +12,8 @@ Singleton {
 
     readonly property string defaultGlyph: "󰀻"
     property string icon: ""
+    property var favorites: []
+    property bool favoritesDirty: false
     signal centeredRequested()
 
     function resolveIcon(value) {
@@ -46,8 +48,44 @@ Singleton {
 
     function resetIcon() { setIcon("") }
 
+    function isFavorite(id) {
+        const value = String(id ?? "")
+        return value !== "" && favorites.indexOf(value) !== -1
+    }
+
+    function toggleFavorite(id) {
+        const value = String(id ?? "")
+        if (value === "")
+            return
+        const next = favorites.slice()
+        const index = next.indexOf(value)
+        if (index === -1)
+            next.push(value)
+        else
+            next.splice(index, 1)
+        favorites = next
+        favoritesDirty = true
+    }
+
+    function saveFavorites() {
+        if (!favoritesDirty)
+            return
+        const saved = favorites.slice()
+        favoritesDirty = false
+        ShellState.updateSection("launcher", { favorites: saved })
+    }
+
     function loadState() {
         icon = String(ShellState.state.launcher.icon ?? "").trim()
+        // An unrelated shell-state update must not replace favorites that were
+        // changed while the launcher is still open but not yet persisted.
+        if (favoritesDirty)
+            return
+        const saved = ShellState.state.launcher.favorites
+        favorites = Array.isArray(saved)
+            ? saved.map(value => String(value)).filter((value, index, values) =>
+                value !== "" && values.indexOf(value) === index)
+            : []
     }
 
     IpcHandler {
