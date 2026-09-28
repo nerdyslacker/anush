@@ -559,7 +559,7 @@ BarModule {
                     { icon: "󰚰", label: "Check updates",
                       run: () => root.run(["sh", "-c",
                           "if command -v kitty >/dev/null 2>&1; then " +
-                          "config=${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/anush/config}; " +
+                          "config=${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/skarwm/anush}; " +
                           "exec kitty --config \"$config/kitty/kitty.conf\" --hold sh -c 'xbps-install -Mun'; " +
                           "else exec xterm -hold -e sh -c 'xbps-install -Mun'; fi"]) },
                     { icon: "󰌌", label: "Keybindings",

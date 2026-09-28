@@ -23,7 +23,24 @@ Singleton {
         return String(Quickshell.env("HOME") ?? "") + "/.local/state/anush";
     }
     readonly property string scriptsDir: shellDir + "/scripts"
-    readonly property string bundledStatePath: shellDir + "/states/shell-state.json"
+    readonly property string installedConfigPath: {
+        const configured = String(Quickshell.env("ANUSH_DEFAULT_CONFIG") ?? "");
+        return configured !== ""
+            ? configured : shellDir + "/../config/defaults.json";
+    }
+    readonly property string userConfigPath: {
+        const configured = String(Quickshell.env("ANUSH_USER_CONFIG") ?? "");
+        if (configured !== "")
+            return configured;
+        const configDir = String(Quickshell.env("ANUSH_CONFIG_DIR") ?? "");
+        if (configDir !== "")
+            return configDir.replace(/\/$/, "") + "/config.json";
+        const xdg = String(Quickshell.env("XDG_CONFIG_HOME") ?? "");
+        if (xdg !== "")
+            return xdg + "/skarwm/anush/config.json";
+        return String(Quickshell.env("HOME") ?? "")
+            + "/.config/skarwm/anush/config.json";
+    }
     readonly property string legacyStateDir: {
         const configured = String(Quickshell.env("SKARWM_STATE_DIR") ?? "");
         return configured !== "" ? configured : String(Quickshell.env("HOME") ?? "") + "/.config/skarwm";
@@ -93,7 +110,7 @@ Singleton {
                 preset: "srcery-dark",
                 iconTheme: "",
                 cursorTheme: "",
-                wallpaperEnabled: false,
+                wallpaperEnabled: true,
                 palette: null,
                 cornerRadius: 0,
                 mode: "dark"
@@ -109,25 +126,13 @@ Singleton {
         };
     }
 
-    function merged(saved) {
-        const next = defaults();
-        if (!saved || typeof saved !== "object")
-            return next;
-        for (const section in next) {
-            const value = saved[section];
-            if (!value || typeof value !== "object")
-                continue;
-            for (const key in next[section]) {
-                if (value[key] !== undefined)
-                    next[section][key] = value[key];
-            }
-        }
-        // State files from before named presets only recorded light/dark.
-        // Preserve that choice instead of silently reverting light users.
-        if (saved.theme && saved.theme.preset === undefined)
-            next.theme.preset = saved.theme.mode === "light"
-                ? "srcery-light" : "srcery-dark";
-        return next;
+    function reloadEffective() {
+        if (migration.running)
+            return;
+        configLoader.running = false;
+        configLoader.command = [root.scriptsDir + "/config/load-config",
+            root.installedConfigPath, root.userConfigPath, root.filePath];
+        configLoader.running = true;
     }
 
     function updateSection(section, values) {
@@ -146,11 +151,36 @@ Singleton {
     Process {
         id: migration
         running: true
-        command: [root.scriptsDir + "/state/migrate-state", root.filePath, root.bundledStatePath, root.legacyStateDir]
+        command: [root.scriptsDir + "/state/migrate-state", root.filePath,
+            root.installedConfigPath, root.legacyStateDir]
         onExited: exitCode => {
             if (exitCode !== 0)
                 console.warn("shell state migration exited with", exitCode);
-            stateFile.reload();
+            root.reloadEffective();
+        }
+    }
+
+    Process {
+        id: configLoader
+        running: false
+        stdout: StdioCollector { id: configOutput }
+        stderr: StdioCollector { id: configErrors }
+        onExited: exitCode => {
+            const diagnostics = configErrors.text.trim();
+            if (diagnostics !== "")
+                console.warn(diagnostics);
+            if (exitCode !== 0) {
+                root.state = root.defaults();
+                root.ready = true;
+                return;
+            }
+            try {
+                root.state = JSON.parse(configOutput.text);
+            } catch (error) {
+                console.warn("effective shell config:", error);
+                root.state = root.defaults();
+            }
+            root.ready = true;
         }
     }
 
@@ -160,18 +190,16 @@ Singleton {
         watchChanges: true
         atomicWrites: true
         onFileChanged: reload()
-        onLoaded: {
-            try {
-                root.state = root.merged(JSON.parse(text()));
-            } catch (error) {
-                console.warn("shell state:", error);
-            }
-            root.ready = true;
-        }
-        onLoadFailed: if (!migration.running) {
-            root.state = root.defaults();
-            setText(JSON.stringify(root.state, null, 2) + "\n");
-            root.ready = true;
-        }
+        onLoaded: if (!migration.running) root.reloadEffective()
+        onLoadFailed: if (!migration.running) root.reloadEffective()
+    }
+
+    // A user override is optional. Watching it here makes edits take effect
+    // without turning it into a generated or package-managed file.
+    FileView {
+        path: root.userConfigPath
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: if (!migration.running) root.reloadEffective()
     }
 }

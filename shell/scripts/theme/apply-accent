@@ -127,10 +127,6 @@ rewrite "$config_dir/kitty/current-theme.conf" \
 rewrite "$config_dir/dunst/dunstrc" \
     "/THEME: dunst_(frame_(global|low|normal)|highlight_normal)/ s/#[0-9A-Fa-f]{6}/$accent/"
 
-rewrite "$config_dir/skarwm/config.rc" \
-    "/^[[:space:]]*sel_outer_border[[:space:]]*:/ s/#[0-9A-Fa-f]{6}/$accent/"
-rewrite_decoration_palette "$config_dir/skarwm/config.rc"
-
 rewrite "$config_dir/fastfetch/config.jsonc" \
     "/THEME: fastfetch_primary/ s|38;2;[0-9]+;[0-9]+;[0-9]+|$accent_sgr|; /THEME: fastfetch_foreground/ s|38;2;[0-9]+;[0-9]+;[0-9]+|$foreground_sgr|; /THEME: fastfetch_secondary/ s|38;2;[0-9]+;[0-9]+;[0-9]+|$secondary_sgr|"
 
@@ -148,7 +144,7 @@ elif [ -n "${HOME:-}" ]; then
 else
     wm_config=
 fi
-if [ "$wm_config" != "$config_dir/skarwm/config.rc" ]; then
+if [ -n "$wm_config" ]; then
     rewrite "$wm_config" \
         "/^[[:space:]]*sel_outer_border[[:space:]]*:/ s/#[0-9A-Fa-f]{6}/$accent/"
     rewrite_decoration_palette "$wm_config"

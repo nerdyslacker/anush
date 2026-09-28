@@ -46,10 +46,12 @@ clean:
 
 test: build/anushctl
 	./tests/anushctl.sh
+	./tests/config-loading.sh
 	./tests/hotspot-control.sh
 	./tests/icon-theme.sh
 	./tests/launcher-search.sh
 	./tests/phone-control.sh
+	./tests/picom-control.sh
 	./tests/theme-generation.sh
 
 .PHONY: all install clean test

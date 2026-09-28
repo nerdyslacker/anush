@@ -119,7 +119,7 @@ def palette_from_matugen(image, mode):
         return None
     root = Path(__file__).resolve().parent.parent.parent.parent
     config = Path(os.environ.get(
-        "ANUSH_CONFIG_DIR", root / "config")) / "matugen/config.toml"
+        "ANUSH_PACKAGE_CONFIG_DIR", root / "config")) / "matugen/config.toml"
     command = [executable, "image", image, "--json", "hex", "-m", mode,
                "-t", "scheme-fidelity", "--prefer", "saturation",
                "--dry-run", "-c", str(config)]
@@ -351,6 +351,17 @@ def atomic_write(path, text):
     temporary.replace(path)
 
 
+def load_state(state_file):
+    if state_file.is_file():
+        return json.loads(state_file.read_text())
+
+    root = Path(__file__).resolve().parent.parent.parent.parent
+    package_config = Path(os.environ.get(
+        "ANUSH_PACKAGE_CONFIG_DIR", root / "config"))
+    defaults_file = package_config / "defaults.json"
+    return json.loads(defaults_file.read_text())
+
+
 def fastfetch_sgr(color):
     value = color.lstrip("#")
     return "38;2;{};{};{}".format(
@@ -394,7 +405,7 @@ def apply_files(image, semantic, ansi, config_dir, state_file, mode,
         data["shellGenerator"] = shell_generator
     if material:
         data["material"] = material
-    state = json.loads(state_file.read_text())
+    state = load_state(state_file)
     atomic_write(config_dir / "rofi/colors.rasi", f"""/* Generated from wallpaper: {Path(image).name} */
 
 * {{
@@ -456,7 +467,7 @@ mark3_background {semantic['secondary']}
                            rf'\g<1>{color}\2', dunst, flags=re.MULTILINE)
         atomic_write(dunst_path, dunst)
 
-    config_paths = [config_dir / "skarwm/config.rc"]
+    config_paths = []
     if os.environ.get("SKARWM_CONFIG"):
         config_paths.append(Path(os.environ["SKARWM_CONFIG"]))
     elif os.environ.get("XDG_CONFIG_HOME"):

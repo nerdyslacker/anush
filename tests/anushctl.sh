@@ -13,7 +13,7 @@ touch "$tmp/root/shell/shell.qml"
 printf '%s\n' 'anush fastfetch' >"$tmp/root/config/fastfetch/config.jsonc"
 printf '%s\n' 'personal fastfetch' >"$tmp/config/fastfetch/config.jsonc"
 mkdir -p "$tmp/root/config/wallpaper"
-touch "$tmp/root/config/wallpaper/hadrut_srcery.jpeg"
+touch "$tmp/root/config/wallpaper/minimal.png"
 cat >"$tmp/bin/qs" <<'EOF'
 #!/bin/sh
 printf '%s\n' "$*" >>"$FAKE_QS_LOG"
@@ -74,12 +74,14 @@ assert_contains() {
 
 $binary start
 [ "$(readlink "$XDG_CONFIG_HOME/fastfetch/config.jsonc")" = \
-    "$ANUSH_ROOT/config/fastfetch/config.jsonc" ]
+    "$XDG_CONFIG_HOME/skarwm/anush/fastfetch/config.jsonc" ]
+[ "$(cat "$XDG_CONFIG_HOME/skarwm/anush/fastfetch/config.jsonc")" = \
+    "anush fastfetch" ]
 [ "$(cat "$XDG_CONFIG_HOME/fastfetch/config.jsonc.pre-anush")" = \
     "personal fastfetch" ]
 assert_contains "$(tail -n 1 "$FAKE_QS_THEME_LOG")" "Test-Icons"
 assert_contains "$(tail -n 1 "$FAKE_QS_KITTY_LOG")" \
-    "$ANUSH_ROOT/config/kitty"
+    "$XDG_CONFIG_HOME/skarwm/anush/kitty"
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" \
     "--no-duplicate -p $ANUSH_ROOT/shell"
 
@@ -123,7 +125,10 @@ assert_contains "$(tail -n 1 "$FAKE_HELPER_LOG")" 'betterlockscreen -l'
 $binary clipboard daemon
 assert_contains "$(tail -n 1 "$FAKE_HELPER_LOG")" 'clipboard-history daemon'
 $binary wallpaper restore
-assert_contains "$(tail -n 1 "$FAKE_HELPER_LOG")" 'feh --bg-fill'
+assert_contains "$(tail -n 1 "$FAKE_HELPER_LOG")" \
+    'feh --bg-fill'
+assert_contains "$(tail -n 1 "$FAKE_HELPER_LOG")" \
+    '/config/wallpaper/minimal.png'
 
 set +e
 FAKE_QS_EXIT=1 $binary status >/dev/null 2>&1
@@ -131,86 +136,50 @@ code=$?
 set -e
 [ "$code" -eq 3 ] || { printf 'expected not-running exit 3, got %s\n' "$code" >&2; exit 1; }
 
-# A first start discovers the system data tree and atomically seeds the user
-# directory without an external initializer.
-mkdir -p "$tmp/system/shell/scripts/shell" "$tmp/system/assets" \
-    "$tmp/system/config/themes/presets" "$tmp/system/config/matugen"
+# A normal start discovers and runs the package tree directly. Only writable
+# application configuration is seeded under skarwm/anush.
+mkdir -p "$tmp/system/shell/scripts/shell" \
+    "$tmp/system/config/kitty" "$tmp/system/config/picom" \
+    "$tmp/system/config/rofi"
 touch "$tmp/system/shell/shell.qml"
 printf '%s\n' '#!/bin/sh' >"$tmp/system/shell/scripts/new-helper"
 printf '%s\n' '#!/bin/sh' >"$tmp/system/shell/scripts/shell/bar"
-printf '%s\n' 'asset v1' >"$tmp/system/assets/current"
-printf '%s\n' 'seeded' >"$tmp/system/config/first-run-marker"
-printf '%s\n' 'preset v1' >"$tmp/system/config/themes/presets/test.json"
-printf '%s\n' 'matugen v1' >"$tmp/system/config/matugen/config.toml"
+printf '%s\n' 'kitty template' >"$tmp/system/config/kitty/kitty.conf"
+printf '%s\n' 'picom template' >"$tmp/system/config/picom/picom.conf"
+printf '%s\n' 'rofi template' >"$tmp/system/config/rofi/config.rasi"
 unset ANUSH_ROOT
 export ANUSH_SYSTEM_DIR="$tmp/system"
 export XDG_CONFIG_HOME="$tmp/first-config"
 $binary start
-[ -f "$XDG_CONFIG_HOME/anush/config/first-run-marker" ]
-[ -x "$XDG_CONFIG_HOME/anush/shell/scripts/new-helper" ]
-[ -x "$XDG_CONFIG_HOME/anush/shell/scripts/shell/bar" ]
-[ "$(cat "$XDG_CONFIG_HOME/anush/assets/current")" = "asset v1" ]
-[ "$(cat "$XDG_CONFIG_HOME/anush/config/themes/presets/test.json")" = "preset v1" ]
-[ "$(cat "$XDG_CONFIG_HOME/anush/config/matugen/config.toml")" = "matugen v1" ]
+[ ! -e "$XDG_CONFIG_HOME/anush" ]
+[ "$(cat "$XDG_CONFIG_HOME/skarwm/anush/kitty/kitty.conf")" = \
+    "kitty template" ]
+[ "$(cat "$XDG_CONFIG_HOME/skarwm/anush/picom/picom.conf")" = \
+    "picom template" ]
+[ "$(cat "$XDG_CONFIG_HOME/skarwm/anush/rofi/config.rasi")" = \
+    "rofi template" ]
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" \
-    "--no-duplicate -p $XDG_CONFIG_HOME/anush/shell"
+    "--no-duplicate -p $tmp/system/shell"
 assert_contains "$(tail -n 1 "$FAKE_QS_KITTY_LOG")" \
-    "$XDG_CONFIG_HOME/anush/config/kitty"
+    "$XDG_CONFIG_HOME/skarwm/anush/kitty"
 
-# Reload refreshes managed shell files while preserving user config.
-printf '%s\n' 'updated shell' >"$tmp/system/shell/update-marker"
-printf '%s\n' '#!/bin/sh' >"$tmp/system/shell/scripts/refreshed-helper"
-rm "$tmp/system/assets/current"
-printf '%s\n' 'asset v2' >"$tmp/system/assets/replacement"
-printf '%s\n' 'preset v2' >"$tmp/system/config/themes/presets/test.json"
-printf '%s\n' 'matugen v2' >"$tmp/system/config/matugen/config.toml"
-mkdir -p "$tmp/system/config/new-feature"
-printf '%s\n' 'new default' >"$tmp/system/config/new-feature/default.conf"
-printf '%s\n' 'user setting' >"$XDG_CONFIG_HOME/anush/config/user-setting"
-printf '%s\n' 'package default' >"$tmp/system/config/user-setting"
-# Obsolete files in the package-owned shell tree must not survive an update.
-printf '%s\n' '#!/bin/sh' >"$XDG_CONFIG_HOME/anush/shell/scripts/bar"
+# Existing writable config is an override and is not refreshed from package
+# updates. Reload addresses the package-backed shell directly.
+printf '%s\n' 'personal kitty' >"$XDG_CONFIG_HOME/skarwm/anush/kitty/kitty.conf"
+printf '%s\n' 'updated template' >"$tmp/system/config/kitty/kitty.conf"
 $binary reload
-[ -f "$XDG_CONFIG_HOME/anush/shell/update-marker" ]
-[ -x "$XDG_CONFIG_HOME/anush/shell/scripts/refreshed-helper" ]
-[ ! -e "$XDG_CONFIG_HOME/anush/shell/scripts/bar" ]
-[ -x "$XDG_CONFIG_HOME/anush/shell/scripts/shell/bar" ]
-[ ! -e "$XDG_CONFIG_HOME/anush/assets/current" ]
-[ "$(cat "$XDG_CONFIG_HOME/anush/assets/replacement")" = "asset v2" ]
-[ "$(cat "$XDG_CONFIG_HOME/anush/config/themes/presets/test.json")" = "preset v2" ]
-[ "$(cat "$XDG_CONFIG_HOME/anush/config/matugen/config.toml")" = "matugen v2" ]
-[ "$(cat "$XDG_CONFIG_HOME/anush/config/new-feature/default.conf")" = "new default" ]
-[ "$(cat "$XDG_CONFIG_HOME/anush/config/user-setting")" = "user setting" ]
+[ "$(cat "$XDG_CONFIG_HOME/skarwm/anush/kitty/kitty.conf")" = \
+    "personal kitty" ]
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call anush reload'
 
 export ANUSH_ROOT="$tmp/root"
 unset ANUSH_SYSTEM_DIR
 export XDG_CONFIG_HOME="$tmp/config"
 
-printf '%s\n' '# user skarwm config' >"$XDG_CONFIG_HOME/skarwm/config.rc"
-cat >>"$XDG_CONFIG_HOME/skarwm/config.rc" <<'EOF'
-autostart : "if [ -f ~/.fehbg ]; then sh ~/.fehbg; else feh --bg-fill ${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/anush/config}/wallpaper/hadrut_srcery.jpeg; fi"
-autostart : "${ANUSH_ROOT:-${XDG_CONFIG_HOME:-$HOME/.config}/anush}/shell/scripts/clipboard-history daemon"
-autostart : "xss-lock -- betterlockscreen -l"
-EOF
-$binary install skarwm
-$binary install skarwm
-[ "$(grep -c '>>> anush shell' "$XDG_CONFIG_HOME/skarwm/config.rc")" -eq 1 ]
-grep -q 'user skarwm config' "$XDG_CONFIG_HOME/skarwm/config.rc"
-grep -q 'autostart : "anushctl wallpaper restore"' "$XDG_CONFIG_HOME/skarwm/config.rc"
-grep -q 'autostart : "anushctl clipboard daemon"' "$XDG_CONFIG_HOME/skarwm/config.rc"
-grep -q 'autostart : "xss-lock -- anushctl lock"' "$XDG_CONFIG_HOME/skarwm/config.rc"
-! grep -q 'xss-lock -- betterlockscreen' "$XDG_CONFIG_HOME/skarwm/config.rc"
-! grep -q 'shell/scripts/clipboard-history daemon' "$XDG_CONFIG_HOME/skarwm/config.rc"
-
-$binary remove skarwm
-grep -q 'user skarwm config' "$XDG_CONFIG_HOME/skarwm/config.rc"
-! grep -q 'anush shell' "$XDG_CONFIG_HOME/skarwm/config.rc"
-
-# The bundled full skarwm configuration carries the same managed marker, so
-# installing after copying it does not duplicate bindings or startup commands.
-cp "$repo/config/skarwm/config.rc" "$XDG_CONFIG_HOME/skarwm/config.rc"
-$binary install skarwm
-[ "$(grep -c '>>> anush shell' "$XDG_CONFIG_HOME/skarwm/config.rc")" -eq 1 ]
+set +e
+$binary install skarwm >/dev/null 2>&1
+code=$?
+set -e
+[ "$code" -eq 2 ] || { printf 'expected removed install command to exit 2\n' >&2; exit 1; }
 
 printf '%s\n' 'anushctl tests passed'

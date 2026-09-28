@@ -68,6 +68,9 @@ Singleton {
     property int gaps: 8
     property bool decorationsEnabled: false
     property bool decorationStateLoaded: false
+    property bool picomAvailable: false
+    property bool picomEnabled: false
+    property bool picomBusy: false
 
     function workspaceAt(index, outputName) {
         const id = index + 1
@@ -304,6 +307,30 @@ Singleton {
             next ? "true" : "false", msgPath
         ])
     }
+    function acceptPicomStatus(text) {
+        try {
+            const value = JSON.parse(String(text ?? ""))
+            picomAvailable = value.available === true
+            picomEnabled = value.enabled === true
+        } catch (error) {
+            console.warn("picom status:", error)
+        }
+    }
+    function refreshPicomState() {
+        if (picomBusy)
+            return
+        picomStatus.running = false
+        picomStatus.running = true
+    }
+    function setPicomEnabled(enabled) {
+        if (picomBusy)
+            return
+        picomEnabled = enabled === true
+        picomBusy = true
+        picomControl.command = [ShellState.scriptsDir + "/theme/picom-control",
+            picomEnabled ? "enable" : "disable", msgPath]
+        picomControl.running = true
+    }
     function toggleScratchpad(register) {
         Quickshell.execDetached([msgPath, "scratchpad", "toggle", String(register)])
     }
@@ -343,6 +370,34 @@ Singleton {
     }
 
     Component.onCompleted: if (ShellState.ready) loadWindowManagerState()
+
+    Process {
+        id: picomStatus
+        command: [ShellState.scriptsDir + "/theme/picom-control", "status", root.msgPath]
+        running: true
+        stdout: StdioCollector { id: picomStatusOutput }
+        onExited: exitCode => {
+            if (exitCode === 0)
+                root.acceptPicomStatus(picomStatusOutput.text)
+        }
+    }
+
+    Process {
+        id: picomControl
+        running: false
+        stdout: StdioCollector { id: picomControlOutput }
+        stderr: StdioCollector { id: picomControlError }
+        onExited: exitCode => {
+            root.picomBusy = false
+            if (exitCode === 0)
+                root.acceptPicomStatus(picomControlOutput.text)
+            else {
+                const detail = picomControlError.text.trim()
+                console.warn(detail !== "" ? detail : "Could not update Picom")
+                root.refreshPicomState()
+            }
+        }
+    }
 
     Timer {
         id: restoreGap

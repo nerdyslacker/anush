@@ -7,6 +7,17 @@ import "core:path/filepath"
 import "core:strings"
 import "core:time"
 
+config_home :: proc() -> string {
+    xdg_buf: [4096]u8
+    if xdg := os.get_env_buf(xdg_buf[:], "XDG_CONFIG_HOME"); xdg != "" {
+        return strings.clone(xdg)
+    }
+    home_buf: [4096]u8
+    home := os.get_env_buf(home_buf[:], "HOME")
+    if home == "" { return "" }
+    return fmt.aprintf("%s/.config", home)
+}
+
 configure_icon_theme_environment :: proc() {
     state_dir_buf, xdg_state_buf, home_buf: [4096]u8
     state_dir := os.get_env_buf(state_dir_buf[:], "ANUSH_STATE_DIR")
@@ -33,6 +44,33 @@ configure_icon_theme_environment :: proc() {
         return
     }
     _ = os.set_env("QS_ICON_THEME", state.theme.iconTheme)
+}
+
+user_config_dir :: proc() -> string {
+    env_buf: [4096]u8
+    if configured := os.get_env_buf(env_buf[:], "ANUSH_CONFIG_DIR"); configured != "" {
+        return strings.clone(configured)
+    }
+    base := config_home()
+    if base == "" { return "" }
+    defer delete(base)
+    return fmt.aprintf("%s/skarwm/anush", base)
+}
+
+seed_writable_config :: proc(root, target: string) {
+    if target == "" { return }
+    directories := [5]string{"dunst", "fastfetch", "kitty", "picom", "rofi"}
+    for directory in directories {
+        destination := fmt.aprintf("%s/%s", target, directory)
+        defer delete(destination)
+        if os.exists(destination) { continue }
+        source := fmt.aprintf("%s/config/%s", root, directory)
+        defer delete(source)
+        if !os.exists(source) { continue }
+        if err := os.copy_directory_all(destination, source); err != nil {
+            fmt.eprintln("anushctl: cannot seed writable", directory, "config:", err)
+        }
+    }
 }
 
 ensure_fastfetch_config :: proc(config_dir: string) {
@@ -96,14 +134,15 @@ ensure_fastfetch_config :: proc(config_dir: string) {
 configure_shell_environment :: proc(root: string) {
     configure_icon_theme_environment()
 
-    config_buf: [4096]u8
-    configured := os.get_env_buf(config_buf[:], "ANUSH_CONFIG_DIR")
-    config_dir := strings.clone(configured)
-    if configured == "" {
-        delete(config_dir)
-        config_dir = fmt.aprintf("%s/config", root)
-    }
-    defer delete(config_dir)
+    package_config := fmt.aprintf("%s/config", root)
+    defer delete(package_config)
+    _ = os.set_env("ANUSH_PACKAGE_CONFIG_DIR", package_config)
+
+    config_dir := user_config_dir()
+    defer if config_dir != "" { delete(config_dir) }
+    if config_dir == "" { return }
+    seed_writable_config(root, config_dir)
+    _ = os.set_env("ANUSH_CONFIG_DIR", config_dir)
 
     kitty_config := fmt.aprintf("%s/kitty", config_dir)
     defer delete(kitty_config)
@@ -117,10 +156,7 @@ shell_root :: proc() -> string {
         return strings.clone(configured)
     }
 
-    base := config_home()
-    if base == "" { return "" }
-    defer delete(base)
-    return fmt.aprintf("%s/anush", base)
+    return system_root()
 }
 
 root_is_complete :: proc(root: string) -> bool {
@@ -132,34 +168,6 @@ root_is_complete :: proc(root: string) -> bool {
     scripts_dir := fmt.aprintf("%s/shell/scripts", root)
     defer delete(scripts_dir)
     return os.exists(shell_file) && os.exists(config_dir) && os.exists(scripts_dir)
-}
-
-ensure_script_permissions :: proc(root: string) -> bool {
-    scripts_dir := fmt.aprintf("%s/shell/scripts", root)
-    defer delete(scripts_dir)
-    if !os.exists(scripts_dir) { return true }
-
-    script_mode := os.Permissions{
-        .Read_User, .Write_User, .Execute_User,
-        .Read_Group, .Execute_Group,
-        .Read_Other, .Execute_Other,
-    }
-    walker := os.walker_create(scripts_dir)
-    defer os.walker_destroy(&walker)
-    for info in os.walker_walk(&walker) {
-        if info.type != .Regular { continue }
-        if err := os.chmod(info.fullpath, script_mode); err != nil {
-            fmt.eprintln("anushctl: cannot make helper executable:",
-                info.fullpath, ":", err)
-            return false
-        }
-    }
-    if failed_path, err := os.walker_error(&walker); err != nil {
-        fmt.eprintln("anushctl: cannot inspect shell helpers:",
-            failed_path, ":", err)
-        return false
-    }
-    return true
 }
 
 system_root :: proc() -> string {
@@ -190,191 +198,6 @@ system_root :: proc() -> string {
     return ""
 }
 
-// Replace a package-owned directory as one unit. Overlay copies leave files
-// removed by a newer package behind and can expose a partially updated QML
-// tree. Staging beside the target keeps the activation window short and permits
-// rollback when the new tree cannot be installed.
-replace_managed_directory :: proc(target, source, label: string) -> bool {
-    parent := filepath.dir(target)
-    staging, staging_err := os.make_directory_temp(
-        parent, ".anush-refresh-*", context.allocator)
-    if staging_err != nil {
-        fmt.eprintln("anushctl: cannot stage managed", label, ":", staging_err)
-        return false
-    }
-    defer delete(staging)
-
-    if err := os.copy_directory_all(staging, source); err != nil {
-        _ = os.remove_all(staging)
-        fmt.eprintln("anushctl: cannot refresh managed", label, ":", err)
-        return false
-    }
-
-    backup := ""
-    if os.exists(target) {
-        backup_dir, backup_err := os.make_directory_temp(
-            parent, ".anush-previous-*", context.allocator)
-        if backup_err != nil {
-            _ = os.remove_all(staging)
-            fmt.eprintln("anushctl: cannot prepare managed", label,
-                "backup:", backup_err)
-            return false
-        }
-        backup = backup_dir
-        if err := os.remove(backup); err != nil {
-            delete(backup)
-            _ = os.remove_all(staging)
-            fmt.eprintln("anushctl: cannot prepare managed", label,
-                "backup:", err)
-            return false
-        }
-        if err := os.rename(target, backup); err != nil {
-            delete(backup)
-            _ = os.remove_all(staging)
-            fmt.eprintln("anushctl: cannot replace managed", label, ":", err)
-            return false
-        }
-    }
-
-    if err := os.rename(staging, target); err != nil {
-        if backup != "" {
-            _ = os.rename(backup, target)
-            delete(backup)
-        }
-        _ = os.remove_all(staging)
-        fmt.eprintln("anushctl: cannot activate managed", label, ":", err)
-        return false
-    }
-
-    if backup != "" {
-        _ = os.remove_all(backup)
-        delete(backup)
-    }
-    return true
-}
-
-// Copy files added by a newer package without replacing configuration that the
-// user or the theme engine may already have changed. Package-owned config
-// subsets are refreshed separately below.
-seed_missing_directory :: proc(target, source, label: string) -> bool {
-    if !os.exists(source) { return true }
-    if !os.exists(target) {
-        if err := os.make_directory_all(target); err != nil {
-            fmt.eprintln("anushctl: cannot create", label, ":", err)
-            return false
-        }
-    }
-
-    walker := os.walker_create(source)
-    defer os.walker_destroy(&walker)
-    for info in os.walker_walk(&walker) {
-        relative := strings.trim_prefix(info.fullpath, source)
-        relative = strings.trim_prefix(relative, "/")
-        if relative == "" { continue }
-        destination := fmt.aprintf("%s/%s", target, relative)
-        if info.type == .Directory {
-            if !os.exists(destination) {
-                if err := os.make_directory_all(destination); err != nil {
-                    fmt.eprintln("anushctl: cannot seed", label, ":", err)
-                    delete(destination)
-                    return false
-                }
-            }
-        } else if !os.exists(destination) {
-            if err := os.copy_file(destination, info.fullpath); err != nil {
-                fmt.eprintln("anushctl: cannot seed", label, ":", err)
-                delete(destination)
-                return false
-            }
-        }
-        delete(destination)
-    }
-    if failed_path, err := os.walker_error(&walker); err != nil {
-        fmt.eprintln("anushctl: cannot inspect", label, failed_path, ":", err)
-        return false
-    }
-    return true
-}
-
-refresh_managed_files :: proc(target, source: string) -> bool {
-    if source == "" || !root_is_complete(source) ||
-            os.are_paths_identical(target, source) {
-        return true
-    }
-
-    source_shell := fmt.aprintf("%s/shell", source)
-    defer delete(source_shell)
-    target_shell := fmt.aprintf("%s/shell", target)
-    defer delete(target_shell)
-    if !replace_managed_directory(target_shell, source_shell, "shell files") {
-        return false
-    }
-    if !ensure_script_permissions(target) { return false }
-
-    source_assets := fmt.aprintf("%s/assets", source)
-    defer delete(source_assets)
-    if os.exists(source_assets) {
-        target_assets := fmt.aprintf("%s/assets", target)
-        defer delete(target_assets)
-        if !replace_managed_directory(target_assets, source_assets, "assets") {
-            return false
-        }
-    }
-
-    // Presets are managed data even though they live under config/ so users
-    // can inspect and extend them. Refresh bundled files without touching
-    // unrelated desktop configuration or user-added preset JSON files.
-    source_presets := fmt.aprintf("%s/config/themes/presets", source)
-    defer delete(source_presets)
-    if os.exists(source_presets) {
-        target_presets := fmt.aprintf("%s/config/themes/presets", target)
-        defer delete(target_presets)
-        if err := os.copy_directory_all(target_presets, source_presets); err != nil {
-            fmt.eprintln("anushctl: cannot refresh managed theme presets:", err)
-            return false
-        }
-    }
-
-    // matugen integration is also managed application data. Keep it current
-    // without replacing the rest of the user's config directory.
-    source_matugen := fmt.aprintf("%s/config/matugen", source)
-    defer delete(source_matugen)
-    if os.exists(source_matugen) {
-        target_matugen := fmt.aprintf("%s/config/matugen", target)
-        defer delete(target_matugen)
-        if err := os.copy_directory_all(target_matugen, source_matugen); err != nil {
-            fmt.eprintln("anushctl: cannot refresh managed matugen config:", err)
-            return false
-        }
-    }
-
-    // Fastfetch's config is user-writable because theme changes recolor it.
-    // Seed it for installations created before Fastfetch integration, but do
-    // not replace a copy that already carries the user's active palette.
-    source_fastfetch := fmt.aprintf("%s/config/fastfetch", source)
-    defer delete(source_fastfetch)
-    target_fastfetch := fmt.aprintf("%s/config/fastfetch", target)
-    defer delete(target_fastfetch)
-    if os.exists(source_fastfetch) && !os.exists(target_fastfetch) {
-        if err := os.copy_directory_all(target_fastfetch, source_fastfetch); err != nil {
-            fmt.eprintln("anushctl: cannot seed Fastfetch config:", err)
-            return false
-        }
-    }
-
-    // Do this last so new configuration areas ship to existing installs too.
-    // Existing files remain user-owned; managed subsets above still receive
-    // package updates even when they already exist.
-    source_config := fmt.aprintf("%s/config", source)
-    defer delete(source_config)
-    target_config := fmt.aprintf("%s/config", target)
-    defer delete(target_config)
-    if !seed_missing_directory(target_config, source_config, "configuration files") {
-        return false
-    }
-    return true
-}
-
 reload_shell :: proc() -> int {
     root, ready := prepare_shell_root()
     if !ready { return EXIT_RUNTIME }
@@ -383,80 +206,13 @@ reload_shell :: proc() -> int {
 }
 
 prepare_shell_root :: proc() -> (string, bool) {
-    target := shell_root()
-    if target == "" {
-        fmt.eprintln("anushctl: HOME and XDG_CONFIG_HOME are unset; set ANUSH_ROOT")
-        return "", false
-    }
-    if root_is_complete(target) {
-        // ANUSH_ROOT is an explicit source/checkout selection and must not be
-        // overwritten. Default user installations receive managed code
-        // updates while their config/ directory remains untouched.
-        env_buf: [4096]u8
-        if os.get_env_buf(env_buf[:], "ANUSH_ROOT") == "" {
-            source := system_root()
-            defer if source != "" { delete(source) }
-            if !refresh_managed_files(target, source) {
-                delete(target)
-                return "", false
-            }
-        }
-        return target, true
-    }
-    if os.exists(target) {
-        fmt.eprintln("anushctl:", target, "exists but is not a complete anush installation")
-        delete(target)
-        return "", false
-    }
-
-    source := system_root()
-    if source == "" || !root_is_complete(source) {
+    root := shell_root()
+    if root == "" || !root_is_complete(root) {
         fmt.eprintln("anushctl: could not find anush data; set ANUSH_SYSTEM_DIR")
-        delete(target)
-        if source != "" { delete(source) }
+        if root != "" { delete(root) }
         return "", false
     }
-    defer delete(source)
-
-    parent := filepath.dir(target)
-    if !os.exists(parent) {
-        if err := os.make_directory_all(parent); err != nil {
-            fmt.eprintln("anushctl: cannot create", parent, ":", err)
-            delete(target)
-            return "", false
-        }
-    }
-
-    staging, staging_err := os.make_directory_temp(
-        parent, ".anush-initialize-*", context.allocator)
-    if staging_err != nil {
-        fmt.eprintln("anushctl: cannot create initialization directory:", staging_err)
-        delete(target)
-        return "", false
-    }
-    defer delete(staging)
-
-    if err := os.copy_directory_all(staging, source); err != nil {
-        _ = os.remove_all(staging)
-        fmt.eprintln("anushctl: cannot initialize from", source, ":", err)
-        delete(target)
-        return "", false
-    }
-    if !ensure_script_permissions(staging) {
-        _ = os.remove_all(staging)
-        delete(target)
-        return "", false
-    }
-    if err := os.rename(staging, target); err != nil {
-        _ = os.remove_all(staging)
-        if root_is_complete(target) { return target, true }
-        fmt.eprintln("anushctl: cannot install user files at", target, ":", err)
-        delete(target)
-        return "", false
-    }
-
-    fmt.println("Initialized anush at", target)
-    return target, true
+    return root, true
 }
 
 run_process :: proc(command: []string) -> (exit_code: int, stdout, stderr: []byte, started: bool) {
@@ -516,7 +272,7 @@ restore_wallpaper :: proc() -> int {
     if !ready { return EXIT_RUNTIME }
     defer delete(root)
     wallpaper := fmt.aprintf(
-        "%s/config/wallpaper/hadrut_srcery.jpeg", root)
+        "%s/config/wallpaper/minimal.png", root)
     defer delete(wallpaper)
     if !os.exists(wallpaper) {
         fmt.eprintln("anushctl: default wallpaper is missing from", root)

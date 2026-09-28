@@ -35,7 +35,7 @@ identifier. This commonly supports WhatsApp, Telegram, Signal, and other chat
 notifications, but availability is controlled by the phone application and its
 notification settings. Notification previews and SMS inbox previews are kept to
 one line with an ellipsis; opening an SMS conversation still shows its full text.
-After a successful quick reply, Anush asks KDE Connect to dismiss the original
+After a successful quick reply, anush asks KDE Connect to dismiss the original
 notification when it is dismissable. Reply text is delivered to the helper over
 standard input, so private chat content is not exposed in the process command
 line.

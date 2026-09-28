@@ -19,7 +19,7 @@ Usage: anushctl COMMAND [ARGUMENTS]
 Runtime commands:
   start                          Launch anush
   status                         Show shell and protocol status
-  reload                         Sync updates and hard-reload the running shell
+  reload                         Hard-reload the running shell
   restart                        Stop and relaunch the shell
   lock                           Lock the session with Betterlockscreen
   launcher toggle               Toggle the application launcher
@@ -32,10 +32,6 @@ Runtime commands:
   wallpaper set FILE             Set the desktop wallpaper
   wallpaper random|restore       Pick a random or restore the last wallpaper
   theme mode light|dark          Change the shell colour mode
-
-Compositor integration:
-  install skarwm                 Add anush startup and key bindings
-  remove skarwm                  Remove the managed integration block
 
 Other:
   help, -h, --help               Show this help
@@ -164,12 +160,6 @@ run_cli :: proc(args: []string) -> int {
             return usage_error("expected: theme mode light|dark")
         }
         return ipc_call("anush", "themeMode", []string{args[2]})
-    case "install", "remove":
-        if len(args) != 2 || args[1] != "skarwm" {
-            return usage_error("expected: install|remove skarwm")
-        }
-        if args[0] == "install" { return install_skarwm() }
-        return remove_skarwm()
     case:
         fmt.eprintf("anushctl: unknown command '%s'\n", args[0])
         fmt.eprintln("Try 'anushctl --help' for usage.")

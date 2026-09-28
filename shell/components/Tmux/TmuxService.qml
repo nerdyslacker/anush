@@ -94,7 +94,7 @@ Singleton {
     function openTerminal(arguments) {
         const script =
             "unset TMUX; " +
-            "config=${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/anush/config}; " +
+            "config=${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/skarwm/anush}; " +
             "if [ -n \"${TERMINAL:-}\" ] && command -v \"$TERMINAL\" >/dev/null 2>&1; then " +
             "if [ \"${TERMINAL##*/}\" = kitty ]; then " +
             "exec \"$TERMINAL\" --config \"$config/kitty/kitty.conf\" -- \"$@\"; " +

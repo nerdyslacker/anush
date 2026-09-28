@@ -13,6 +13,19 @@ legacy = Path(sys.argv[3])
 if target.exists():
     raise SystemExit(0)
 
+legacy_names = (
+    "bar-height", "bar-scale", "bar-transparent", "bar-widgets.json",
+    "keyboard-layout.json", "tray-hidden.json", "tags.json", "pomodoro",
+    "weather-location", "weather-units", "theme-accent", "srcery-accent",
+    "wallpaper-theme-enabled", "wallpaper-palette.json", "window-gap",
+    "night-light",
+)
+if not any((legacy / name).is_file() for name in legacy_names):
+    # FileView does not create missing parents when the first interactive
+    # setting is saved. Prepare only the state directory, not a defaults copy.
+    target.parent.mkdir(parents=True, exist_ok=True)
+    raise SystemExit(0)
+
 state = json.loads(template.read_text())
 
 

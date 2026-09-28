@@ -124,7 +124,7 @@ Popout {
             + "printf '\\nSSH exited with status %s. Press Enter to close.\\n' \"$status\"; "
             + "read answer; fi; exit \"$status\""
         const terminalScript =
-            "config=${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/anush/config}; "
+            "config=${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/skarwm/anush}; "
             + "if [ -n \"${TERMINAL:-}\" ] && command -v \"$TERMINAL\" >/dev/null 2>&1; then "
             + "if [ \"${TERMINAL##*/}\" = kitty ]; then "
             + "exec \"$TERMINAL\" --config \"$config/kitty/kitty.conf\" -- \"$@\"; "

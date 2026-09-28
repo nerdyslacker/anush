@@ -29,7 +29,7 @@ Popout {
     property bool randomPending: false
     property string selectedPath: ""
     property bool browsing: false
-    readonly property string defaultDirectory: Theme.configDir + "/wallpaper"
+    readonly property string defaultDirectory: Theme.packageConfigDir + "/wallpaper"
     readonly property string wallpaperDirectory: {
         const saved = String(ShellState.state.wallpaper?.directory ?? "").trim()
         return saved !== "" ? saved : defaultDirectory

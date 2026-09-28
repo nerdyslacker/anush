@@ -76,8 +76,8 @@ sudo xbps-install -S quickshell picom dunst feh kitty fastfetch xss-lock \
 
 Package availability depends on the enabled Void repositories; the Nerd Font may need separate installation.
 
-Every Kitty launch provided by anush passes
-`config/kitty/kitty.conf` explicitly, so it does not depend on a separate
+Every Kitty launch provided by anush passes the writable
+`skarwm/anush/kitty/kitty.conf` explicitly, so it does not depend on a separate
 system or user Kitty configuration. `anushctl start` also exports that location
 to applications launched by the shell. Its selection, URL, active-tab, border,
 and primary ANSI colors follow the current anush accent. The focused skarwm
@@ -86,8 +86,8 @@ window border is updated in the live skarwm configuration at the same time.
 `anushctl start` seeds the anush Fastfetch configuration when it is missing and
 makes Fastfetch's standard
 `${XDG_CONFIG_HOME:-$HOME/.config}/fastfetch/config.jsonc` path point to
-`config/fastfetch/config.jsonc`. An existing regular config is preserved once
-as `config.jsonc.pre-anush`. Fastfetch's keys, title, separator, and divider
+`skarwm/anush/fastfetch/config.jsonc`. An existing regular config is preserved
+once as `config.jsonc.pre-anush`. Fastfetch's keys, title, separator, and divider
 follow the active anush theme.
 
 ## Install and launch
@@ -110,21 +110,26 @@ and matching polkit
 policies. Running those helpers directly from a writable source checkout is
 intentionally unsupported.
 
-On the first `anushctl start`, the CLI detects the installed data and seeds
-`${XDG_CONFIG_HOME:-$HOME/.config}/anush` itself. No separate initialization
-script is required. Later starts refresh managed shell code and assets while
-leaving user-owned configuration unchanged. Bundled theme preset filenames and
-the Matugen integration file are package-managed; custom presets should use
-their own filenames. Fastfetch is seeded only when its anush config is absent.
-New configuration files added by an update are seeded without replacing files
-the user or the theme engine has already changed.
+`anushctl start` runs QML, helpers, assets, defaults, presets, and wallpapers
+directly from the detected package installation. It never copies those trees
+into the user's home directory. Writable application-theme files and overrides
+are created only under
+`${XDG_CONFIG_HOME:-$HOME/.config}/skarwm/anush`; existing files are preserved.
 
-After installing an updated package, run `anushctl reload`. It stages and
-refreshes package-owned shell code and assets, removes obsolete managed files,
-and then hard-reloads Quickshell. A logout and manual copying from
-`/usr/share/anush` are not required. Use `anushctl restart` only when a full
-process restart is needed. Run these commands as the desktop user, never with
-`sudo`; only `make install` requires elevated privileges.
+Separated bar sections require an X11 compositor for their unused window area
+to remain transparent. The recommended Picom autostart line is documented in
+[`docs/skarwm.md`](docs/skarwm.md). The Layout picker includes a **Picom
+compositor** switch that comments or uncomments that line and stops or starts
+Picom immediately.
+
+Fresh installations use `config/wallpaper/minimal.png` as the fallback
+wallpaper and enable wallpaper-derived theme generation by default. Existing
+state keeps the user's current wallpaper-theme preference.
+
+After installing an updated package, run `anushctl reload` to hard-reload
+Quickshell from the updated package tree. Use `anushctl restart` only when a
+full process restart is needed. Run these commands as the desktop user, never
+with `sudo`; only `make install` requires elevated privileges.
 
 Launch it directly with:
 
@@ -148,33 +153,20 @@ anushctl wallpaper set ~/Pictures/wallpaper.jpg
 anushctl theme mode dark
 ```
 
-It can add or remove idempotent shell startup and keybinding blocks without
-overwriting the rest of an existing compositor configuration:
-
-```sh
-anushctl install skarwm
-```
-
 See [`docs/anushctl.md`](docs/anushctl.md) for the full command tree, exit
 codes, config paths, and protocol notes.
+See [`docs/skarwm.md`](docs/skarwm.md) for the required startup line and
+optional skarwm bindings and services.
 See [`docs/widgets/`](docs/widgets/README.md) for a short guide to every bar
 widget and its mouse actions.
 
 There is deliberately no anush session executable or display-manager entry.
-The active WM decides how to start the shell. For skarwm, copy the supplied
-configuration or add the autostart command yourself:
-
-```sh
-cp "${XDG_CONFIG_HOME:-$HOME/.config}/anush/config/skarwm/config.rc" \
-   "${XDG_CONFIG_HOME:-$HOME/.config}/skarwm/config.rc"
-```
+The active WM decides how to start the shell. For skarwm, add this to your own
+configuration:
 
 ```text
 autostart : "anushctl start"
 ```
-
-Future WM integrations belong under `config/<wm>/` and should point to the
-same shell entry point without coupling anush to their session lifecycle.
 
 With a current skarwm build, anush also replaces the WM's native keybinding,
 notice, and reminder windows automatically. The keybinding window searches
@@ -186,11 +178,10 @@ built-in windows.
 ## Layout
 
 ```text
-config/                 external application and WM integration examples
+config/                 package defaults, templates, presets, and wallpapers
 shell/common/           shared QML types and state management
 shell/components/       QML grouped by feature
 shell/scripts/          feature-grouped shell helper programs
-shell/states/           default state document
 shell/shell.qml         Quickshell entry point
 ```
 
@@ -201,6 +192,13 @@ Persistent settings live in
 `ANUSH_STATE_DIR` to override that directory. The sections are `bar`,
 `weather`, `launcher`, `wallpaper`, `keyboard`, `tray`, `tags`, `pomodoro`, `theme`,
 `windowManager`, `windowList`, and `desktop`.
+
+The complete package defaults live in `config/defaults.json`. Optional
+sparse overrides may be placed in
+`${XDG_CONFIG_HOME:-$HOME/.config}/skarwm/anush/config.json`; objects merge
+recursively, while arrays replace. See
+[`docs/configuration.md`](docs/configuration.md) for precedence, diagnostics,
+and the package/config/state ownership model.
 
 The optional **Window list** Bar widget uses one shared pill containing one
 icon per application. Clicking a group with multiple windows opens a window
@@ -270,14 +268,12 @@ surface square; larger values derive coherent small, medium, and large radii:
 }
 ```
 
-Committing the corner-radius slider also updates `corner_radius` in
-`config/skarwm/config.rc` atomically and requests a skarwm configuration reload.
-Set `ANUSH_CONFIG_DIR` when anush's writable configuration lives somewhere
-other than its installed `config/` directory.
+Committing the corner-radius slider also updates `corner_radius` in the active
+user-owned skarwm configuration atomically and requests a reload.
 
 The same popup includes a persistent **Window decorations** switch. It updates
-both anush's skarwm template and the live skarwm configuration, then reloads
-the WM. Decoration backgrounds, text, controls, and borders follow the active
+the live user-owned skarwm configuration, then reloads the WM. Decoration
+backgrounds, text, controls, and borders follow the active
 theme's surface and foreground roles; both active and inactive frame outlines
 follow the active accent. Preset, mode, wallpaper-palette, and accent changes
 update those colors automatically.
@@ -291,8 +287,10 @@ active accent.
 
 The layout/appearance popup includes selectable palette cards for Srcery,
 Catppuccin, Gruvbox, Nord, and Everforest in dark and light variants, plus the
-Windows 95-inspired Classic palette. Presets are individual JSON files under
-`config/themes/presets`; adding a valid file adds a card without changing QML.
+Windows 95-inspired Classic palette. Package presets are under
+`config/themes/presets`; user presets belong under
+`$XDG_CONFIG_HOME/skarwm/anush/themes/presets` and can override a package
+preset with the same id.
 The selection and its corresponding mode are stored as `theme.preset` and
 `theme.mode` and update the running shell immediately:
 

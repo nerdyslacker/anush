@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+
+"""Build anush's effective configuration from defaults, overrides, and state."""
+
+import copy
+import json
+from pathlib import Path
+import sys
+
+
+OPEN_OBJECTS = {
+    "bar.widgets",
+    "bar.clusters",
+    "keyboard.layout",
+}
+
+
+def read_object(path, required, label):
+    if not path.is_file():
+        if required:
+            print(f"anush config: required {label} is missing: {path}", file=sys.stderr)
+            raise SystemExit(1)
+        return {}
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        print(f"anush config: cannot read {label} {path}: {error}", file=sys.stderr)
+        raise SystemExit(1)
+    if not isinstance(value, dict):
+        print(f"anush config: {label} must contain a JSON object: {path}", file=sys.stderr)
+        raise SystemExit(1)
+    return value
+
+
+def compatible(base, value):
+    if base is None:
+        return True
+    if isinstance(base, bool):
+        return isinstance(value, bool)
+    if isinstance(base, (int, float)) and not isinstance(base, bool):
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    return isinstance(value, type(base))
+
+
+def merge(base, override, source, prefix="", diagnose=False):
+    result = copy.deepcopy(base)
+    for key, value in override.items():
+        dotted = f"{prefix}.{key}" if prefix else key
+        if key not in base:
+            if prefix in OPEN_OBJECTS or dotted in OPEN_OBJECTS:
+                result[key] = copy.deepcopy(value)
+            elif diagnose:
+                print(f"anush config: unknown {source} key '{dotted}'", file=sys.stderr)
+            continue
+        current = base[key]
+        if isinstance(current, dict):
+            if not isinstance(value, dict):
+                if diagnose:
+                    print(
+                        f"anush config: '{dotted}' must be an object; ignoring {source} value",
+                        file=sys.stderr,
+                    )
+                continue
+            result[key] = merge(current, value, source, dotted, diagnose)
+        elif not compatible(current, value):
+            if diagnose:
+                expected = "array" if isinstance(current, list) else type(current).__name__
+                print(
+                    f"anush config: '{dotted}' must be {expected}; ignoring {source} value",
+                    file=sys.stderr,
+                )
+        else:
+            # Scalars and arrays replace the lower-precedence value.
+            result[key] = copy.deepcopy(value)
+    return result
+
+
+def main():
+    if len(sys.argv) != 4:
+        print("usage: load-config DEFAULTS USER_CONFIG STATE", file=sys.stderr)
+        return 2
+    defaults = read_object(Path(sys.argv[1]), True, "installed defaults")
+    user = read_object(Path(sys.argv[2]), False, "user config")
+    state = read_object(Path(sys.argv[3]), False, "state")
+    effective = merge(defaults, user, "user config", diagnose=True)
+    effective = merge(effective, state, "state")
+
+    # State documents predating named presets only recorded light/dark.
+    if "theme" in state and "preset" not in state["theme"]:
+        effective["theme"]["preset"] = (
+            "srcery-light" if state["theme"].get("mode") == "light" else "srcery-dark"
+        )
+    json.dump(effective, sys.stdout, separators=(",", ":"))
+    sys.stdout.write("\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

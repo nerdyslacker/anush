@@ -46,13 +46,19 @@
     "side": "right",
     "extended": false
   },
+  "colorPicker": {
+    "current": "",
+    "history": []
+  },
   "theme": {
     "accent": "orange",
+    "customAccent": "#6574A8",
     "defaultAccent": "yellow",
+    "usePresetAccent": true,
     "preset": "srcery-dark",
     "iconTheme": "",
     "cursorTheme": "",
-    "wallpaperEnabled": false,
+    "wallpaperEnabled": true,
     "palette": null,
     "cornerRadius": 0,
     "mode": "dark"

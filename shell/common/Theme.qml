@@ -10,9 +10,17 @@ Singleton {
     id: root
 
     readonly property string shellDir: ShellState.shellDir
+    readonly property string packageConfigDir: {
+        const configured = String(Quickshell.env("ANUSH_PACKAGE_CONFIG_DIR") ?? "")
+        return configured !== "" ? configured : ShellState.shellDir + "/../config"
+    }
     readonly property string configDir: {
         const configured = String(Quickshell.env("ANUSH_CONFIG_DIR") ?? "")
-        return configured !== "" ? configured : ShellState.shellDir + "/../config"
+        if (configured !== "")
+            return configured
+        const xdg = String(Quickshell.env("XDG_CONFIG_HOME") ?? "")
+        return (xdg !== "" ? xdg : String(Quickshell.env("HOME") ?? "") + "/.config")
+            + "/skarwm/anush"
     }
     readonly property string stateDir: ShellState.stateDir
     readonly property string scriptsDir: ShellState.scriptsDir
@@ -581,13 +589,15 @@ Singleton {
         if (firstExternalSync && !wallpaperThemeEnabled)
             applyExternalAccent(accentName)
         const palette = theme.palette
-        if (wallpaperThemeEnabled && palette?.image
-                && palette?.generator !== "matugen"
-                && !wallpaperPaletteRefreshAttempted) {
+        if (wallpaperThemeEnabled && !wallpaperPaletteRefreshAttempted
+                && (!palette?.image || palette?.generator !== "matugen")) {
             wallpaperPaletteRefreshAttempted = true
+            const image = palette?.image
+                ? String(palette.image)
+                : root.packageConfigDir + "/wallpaper/minimal.png"
             Quickshell.execDetached([
                 root.scriptsDir + "/theme/generate-wallpaper-theme",
-                String(palette.image), mode,
+                image, mode,
                 "--wm-msg", Wm.msgPath
             ])
         }
@@ -598,6 +608,7 @@ Singleton {
         id: presetLoader
         running: true
         command: [root.scriptsDir + "/theme/load-theme-presets",
+            root.packageConfigDir + "/themes/presets",
             root.configDir + "/themes/presets"]
         stdout: StdioCollector {
             onStreamFinished: {

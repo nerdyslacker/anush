@@ -11,18 +11,21 @@ export XDG_CONFIG_HOME="$tmp/desktop-config"
 export XDG_DATA_HOME="$tmp/data"
 export XDG_DATA_DIRS="$tmp/share"
 export ANUSH_CONFIG_DIR="$tmp/config"
+export ANUSH_PACKAGE_CONFIG_DIR="$repo/config"
 export ANUSH_STATE_DIR="$tmp/state"
 export ANUSH_THEME_NO_RELOAD=1
 mkdir -p "$tmp/bin" "$ANUSH_CONFIG_DIR/rofi" "$ANUSH_CONFIG_DIR/kitty" \
-    "$ANUSH_CONFIG_DIR/fastfetch" \
-    "$ANUSH_CONFIG_DIR/skarwm" "$ANUSH_STATE_DIR" \
+    "$ANUSH_CONFIG_DIR/fastfetch" "$ANUSH_STATE_DIR" \
     "$XDG_CONFIG_HOME/gtk-3.0" "$XDG_CONFIG_HOME/skarwm" \
-    "$XDG_DATA_DIRS/themes/adw-gtk3/gtk-3.0" "$ANUSH_CONFIG_DIR/matugen"
-cp "$repo/config/matugen/config.toml" "$ANUSH_CONFIG_DIR/matugen/config.toml"
+    "$XDG_DATA_DIRS/themes/adw-gtk3/gtk-3.0"
 cp "$repo/config/fastfetch/config.jsonc" \
     "$ANUSH_CONFIG_DIR/fastfetch/config.jsonc"
-cp "$repo/config/skarwm/config.rc" "$ANUSH_CONFIG_DIR/skarwm/config.rc"
-cp "$repo/config/skarwm/config.rc" "$XDG_CONFIG_HOME/skarwm/config.rc"
+cat >"$XDG_CONFIG_HOME/skarwm/config.rc" <<'EOF'
+corner_radius : 0
+decorations_enabled : false
+norm_outer_border : #504D47
+sel_outer_border  : #FED06E
+EOF
 touch "$tmp/wallpaper.png"
 printf '%s\n' '{"theme":{"palette":null,"wallpaperEnabled":true}}' \
     >"$ANUSH_STATE_DIR/shell-state.json"
@@ -176,20 +179,16 @@ grep -qi "^[[:space:]]*norm_outer_border[[:space:]]*:[[:space:]]*$normal_border_
 grep -q '^decorations_enabled : true$' \
     "$SKARWM_CONFIG"
 
-# The persistent switch updates both the anush template and a pre-existing
-# live config, including installations whose file predates the setting.
+# The persistent switch updates a pre-existing live config, including files
+# that predate the setting.
 sed -i '/^[[:space:]]*decorations_enabled[[:space:]]*:/d' \
     "$SKARWM_CONFIG"
 ANUSH_DECORATION_NO_RELOAD=1 \
     "$repo/shell/scripts/theme/apply-window-decorations" true ''
 grep -q '^decorations_enabled : true$' \
-    "$ANUSH_CONFIG_DIR/skarwm/config.rc"
-grep -q '^decorations_enabled : true$' \
     "$SKARWM_CONFIG"
 ANUSH_DECORATION_NO_RELOAD=1 \
     "$repo/shell/scripts/theme/apply-window-decorations" false ''
-grep -q '^decorations_enabled : false$' \
-    "$ANUSH_CONFIG_DIR/skarwm/config.rc"
 grep -q '^decorations_enabled : false$' \
     "$SKARWM_CONFIG"
 
@@ -197,7 +196,7 @@ grep -q '^decorations_enabled : false$' \
 # discovering the config path skarwm received through its -c argument.
 export SKARWM_MESSAGE_LOG="$tmp/skarwm-message.log"
 queried_config="$tmp/queried-skarwm.rc"
-cp "$repo/config/skarwm/config.rc" "$queried_config"
+cp "$XDG_CONFIG_HOME/skarwm/config.rc" "$queried_config"
 cat >"$tmp/bin/skarwm-msg" <<'EOF'
 #!/bin/sh
 if [ "${1:-}" = get-version ]; then
@@ -263,6 +262,20 @@ import json, sys
 palette = json.load(open(sys.argv[1]))["theme"]["palette"]
 assert palette["generator"] == "anush"
 assert "material" not in palette
+PY
+
+# A fresh installation has no state file yet. Theme generation initializes it
+# from the installed defaults instead of requiring the shell to write it first.
+export ANUSH_STATE_DIR="$tmp/fresh-state"
+"$repo/shell/scripts/theme/generate-wallpaper-theme" \
+    "$repo/config/wallpaper/minimal.png" dark
+python3 - "$ANUSH_STATE_DIR/shell-state.json" <<'PY'
+import json, sys
+state = json.load(open(sys.argv[1]))
+assert state["theme"]["wallpaperEnabled"] is True
+assert state["theme"]["palette"]["image"].endswith(
+    "/config/wallpaper/minimal.png")
+assert state["theme"]["palette"]["generator"] == "matugen"
 PY
 
 printf '%s\n' 'theme generation tests passed'

@@ -13,7 +13,10 @@ Popout {
     cardWidth: 360
     cardHeight: content.implicitHeight + 2 * cardPadding
 
-    onVisibleChanged: if (visible) AppearanceService.refresh()
+    onVisibleChanged: if (visible) {
+        AppearanceService.refresh()
+        Wm.refreshPicomState()
+    }
 
     Connections {
         target: ShellActions
@@ -476,6 +479,30 @@ Popout {
         }
 
         SectionLabel { text: "Desktop" }
+
+        Item {
+            width: parent.width
+            height: visible ? 30 : 0
+            visible: Wm.picomAvailable
+
+            Text {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                text: "picom compositor"
+                color: Theme.foreground
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize
+            }
+
+            SettingSwitch {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                checked: Wm.picomEnabled
+                enabled: !Wm.picomBusy
+                opacity: enabled ? 1 : 0.55
+                onToggled: Wm.setPicomEnabled(!Wm.picomEnabled)
+            }
+        }
 
         Item {
             width: parent.width
