@@ -33,18 +33,18 @@ decoration_border_width : 1
 decoration_resize_hit_width : 4
 decoration_show_title : true
 decoration_color_source : explicit
-decoration_accent : #659cbe
-decoration_active_background : #39434a
-decoration_inactive_background : #2c3940
-decoration_active_foreground : #659cbe
-decoration_inactive_foreground : #659cbe
-decoration_active_border : #659cbe
-decoration_inactive_border : #659cbe
+decoration_accent : #d59a72
+decoration_active_background : #333a46
+decoration_inactive_background : #262e3d
+decoration_active_foreground : #d59a72
+decoration_inactive_foreground : #d59a72
+decoration_active_border : #d59a72
+decoration_inactive_border : #d59a72
 
 # Window border colours as #RRGGBB. The normal colour remains accepted for
 # config compatibility; unfocused windows currently have no border.
 norm_outer_border : #5c6870
-sel_outer_border  : #659cbe
+sel_outer_border  : #d59a72
 
 # True (default): moving the pointer over a window focuses it.
 focus_follows_mouse : true
@@ -52,6 +52,9 @@ focus_follows_mouse : true
 # Optional WM-level ultrawide split. Output is the RandR monitor name; percent
 # controls the left region and the signed final field nudges the boundary.
 # virtual_screen : DP-1 : split : 75 : -30
+
+# Optional per-tag defaults (also accepts `tag_layout`).
+workspace_layout : 3 : dwindle
 
 # ---- launching ----------------------------------------------------------------
 
@@ -88,7 +91,8 @@ autostart : "udiskie --smart-tray"
 # Action tokens: focusleft/right/up/down resizeleft/right/up/down
 # moveleft/right/up/down ws_up ws_down
 # ws_next ws_prev togglefloating togglefullscreen layout_tabbed layout_stacked
-# toggle_tabbed show_bindings show_datetime show_battery
+# toggle_tabbed layout_scrolling_tile layout_dwindle layout_monocle
+# layout_floating layout_next show_bindings show_datetime show_battery
 # focus_output_next/prev move_to_output_next/prev
 # screen_split_toggle/enable/disable screen_split_grow/shrink/ratio
 # reminder_new reminder_show_all reminder_clear_all
@@ -116,6 +120,7 @@ call : mod + Shift + l : moveright
 call : mod + space : togglefloating
 call : mod + f     : togglefullscreen
 call : mod + t     : toggle_tabbed
+call : mod + g     : layout_next
 call : mod + Control + Alt + h : show_bindings
 call : mod + Control + Alt + t : show_datetime
 call : mod + Control + Alt + b : show_battery
@@ -126,6 +131,8 @@ call : mod + Control + Shift + r : reminder_clear_all
 # only the focused column becomes a tab group. Move chosen windows into that
 # column with mod+Shift+h/l; mod+k/j selects tabs and mod+Shift+k/j reorders.
 # Toggling tabs off splits them back into separate horizontal columns.
+# `layout_next` cycles the workspace through Scrolling Tile, Dwindle/Fibonacci,
+# Monocle, and Floating. `togglefloating` above changes only one window.
 call : mod + Shift + q : close_window
 call : mod + Shift + r : reload_config
 

@@ -14,7 +14,7 @@ import sys
 # Older anush versions selected this generated overlay during every accent
 # change. Keep the name only so existing installations can migrate away from
 # it; no new overlay is created or selected.
-LEGACY_OVERLAY_NAME = "Anush-Papirus"
+LEGACY_OVERLAY_NAME = "anush-Papirus"
 MANAGED_OVERLAY_PREFIX = "anush-"
 MANAGED_OVERLAY_SUFFIX = "-Folders"
 
@@ -219,7 +219,7 @@ Directories={','.join(directories)}
 def recolour_folders(theme: str, accent: str) -> str:
     # Folder recolouring is an explicit capability of Papirus itself. A theme
     # merely inheriting Papirus is not treated as Papirus: doing so previously
-    # replaced unrelated themes with Anush-Papirus on every accent change.
+    # replaced unrelated themes with anush-Papirus on every accent change.
     if not theme.casefold().startswith("papirus"):
         return theme
     path = theme_path(theme)

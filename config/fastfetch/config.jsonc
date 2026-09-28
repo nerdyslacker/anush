@@ -9,9 +9,9 @@
     },
     "display": {
         "color": {
-            "keys": "38;2;244;169;116", // THEME: fastfetch_primary
-            "title": "38;2;210;197;188", // THEME: fastfetch_foreground
-            "separator": "38;2;73;105;157" // THEME: fastfetch_secondary
+            "keys": "38;2;101;156;190", // THEME: fastfetch_primary
+            "title": "38;2;210;199;188", // THEME: fastfetch_foreground
+            "separator": "38;2;224;204;184" // THEME: fastfetch_secondary
         },
         "separator": "  ",
         "key": {
@@ -23,7 +23,7 @@
         "title",
         {
             "type": "custom",
-            "format": "\u001b[38;2;244;169;116m────────────────────────────\u001b[0m" // THEME: fastfetch_primary
+            "format": "\u001b[38;2;101;156;190m────────────────────────────\u001b[0m" // THEME: fastfetch_primary
         },
         { "type": "os",       "key": "os" },
         { "type": "kernel",   "key": "kern" },

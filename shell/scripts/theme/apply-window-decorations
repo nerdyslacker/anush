@@ -12,6 +12,17 @@ case $enabled in
 esac
 
 config_dir=${ANUSH_CONFIG_DIR:-$(CDPATH= cd "$(dirname "$0")/../../../config" && pwd)}
+message=$(command -v "$wm_message" 2>/dev/null || true)
+if [ -z "$message" ]; then
+    message=$(command -v skarwm-msg 2>/dev/null || true)
+fi
+active_config=
+if [ -n "$message" ]; then
+    active_config=$(
+        "$message" get-version 2>/dev/null \
+            | sed -n 's/.*"loaded_config_file_name":"\([^"]*\)".*/\1/p'
+    )
+fi
 
 rewrite_enabled() {
     file=$1
@@ -33,7 +44,9 @@ decorations_enabled : '"$enabled" "$file" > "$temporary" \
 template_config=$config_dir/skarwm/config.rc
 rewrite_enabled "$template_config"
 
-if [ -n "${SKARWM_CONFIG:-}" ]; then
+if [ -n "$active_config" ]; then
+    live_config=$active_config
+elif [ -n "${SKARWM_CONFIG:-}" ]; then
     live_config=$SKARWM_CONFIG
 elif [ -n "${XDG_CONFIG_HOME:-}" ]; then
     live_config=$XDG_CONFIG_HOME/skarwm/config.rc
@@ -47,9 +60,12 @@ if [ -n "$live_config" ] && [ "$live_config" != "$template_config" ]; then
 fi
 
 if [ "${ANUSH_DECORATION_NO_RELOAD:-0}" != 1 ]; then
-    message=$(command -v "$wm_message" 2>/dev/null || true)
-    if [ -z "$message" ]; then
-        message=$(command -v skarwm-msg 2>/dev/null || true)
+    if [ -n "$message" ]; then
+        # Apply directly to the running WM. A reload can read an explicit -c
+        # path that this helper cannot discover, leaving the switch unchanged.
+        if ! "$message" decorations "$enabled" >/dev/null 2>&1; then
+            # Keep compatibility with skarwm builds predating the command.
+            "$message" reload >/dev/null 2>&1 || true
+        fi
     fi
-    [ -z "$message" ] || "$message" reload >/dev/null 2>&1 || true
 fi

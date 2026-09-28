@@ -32,9 +32,14 @@ Singleton {
     readonly property string msgPath: "skarwm-msg"
 
     readonly property var layouts: [
-        { name: "Tiling", glyph: "󰙀", command: "tiling" },
+        { name: "Scrolling Tile", glyph: "󰙀", command: "scrolling-tile" },
         { name: "Tabbed", glyph: "󰓩", command: "tabbed" },
+        { name: "Dwindle", glyph: "󰕮", command: "dwindle" },
+        { name: "Monocle", glyph: "󰍹", command: "monocle" },
         { name: "Floating", glyph: "󰕰", command: "floating" }
+    ]
+    readonly property var workspaceLayoutCommands: [
+        "scrolling-tile", "dwindle", "monocle", "floating"
     ]
     readonly property var focusedWindow: {
         for (const win of windows)
@@ -46,8 +51,20 @@ Singleton {
             if (output.focused) return output
         return outputs.length > 0 ? outputs[0] : null
     }
-    readonly property int layoutIndex: focusedWindow?.floating === true ? 2
-        : focusedWindow?.column_layout === "tabbed" ? 1 : 0
+    readonly property var focusedWorkspace: {
+        for (const ws of workspaces)
+            if (ws.focused === true) return ws
+        return null
+    }
+    readonly property string workspaceLayout: String(
+        focusedWorkspace?.layout ?? "scrolling-tile")
+    readonly property int layoutIndex: {
+        if (workspaceLayout === "scrolling-tile"
+                && focusedWindow?.column_layout === "tabbed")
+            return layouts.findIndex(layout => layout.command === "tabbed")
+        const index = layouts.findIndex(layout => layout.command === workspaceLayout)
+        return index >= 0 ? index : 0
+    }
     property int gaps: 8
     property bool decorationsEnabled: false
     property bool decorationStateLoaded: false
@@ -248,11 +265,19 @@ Singleton {
     }
     function setLayout(index) {
         const layout = layouts[index]
-        if (layout)
-            Quickshell.execDetached([msgPath, "layout", layout.command])
+        if (layout) {
+            const command = layout.command === "scrolling-tile"
+                    && focusedWindow?.column_layout === "tabbed"
+                ? "stacked" : layout.command
+            Quickshell.execDetached([msgPath, "layout", command])
+        }
     }
     function cycleLayout(direction) {
-        setLayout((layoutIndex + direction + layouts.length) % layouts.length)
+        let index = workspaceLayoutCommands.indexOf(workspaceLayout)
+        if (index < 0) index = 0
+        const next = (index + direction + workspaceLayoutCommands.length)
+            % workspaceLayoutCommands.length
+        Quickshell.execDetached([msgPath, "layout", workspaceLayoutCommands[next]])
     }
     function focusWindow(id) {
         if (id !== undefined && id !== null)

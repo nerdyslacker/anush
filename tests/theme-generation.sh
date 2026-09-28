@@ -193,6 +193,33 @@ grep -q '^decorations_enabled : false$' \
 grep -q '^decorations_enabled : false$' \
     "$SKARWM_CONFIG"
 
+# The switch also updates the running WM directly; this must not depend on
+# discovering the config path skarwm received through its -c argument.
+export SKARWM_MESSAGE_LOG="$tmp/skarwm-message.log"
+queried_config="$tmp/queried-skarwm.rc"
+cp "$repo/config/skarwm/config.rc" "$queried_config"
+cat >"$tmp/bin/skarwm-msg" <<'EOF'
+#!/bin/sh
+if [ "${1:-}" = get-version ]; then
+    printf '{"loaded_config_file_name":"%s"}\n' "$QUERIED_SKARWM_CONFIG"
+    exit 0
+fi
+printf '%s\n' "$*" >>"$SKARWM_MESSAGE_LOG"
+EOF
+chmod +x "$tmp/bin/skarwm-msg"
+export QUERIED_SKARWM_CONFIG="$queried_config"
+"$repo/shell/scripts/theme/apply-window-decorations" true skarwm-msg
+grep -qx 'decorations true' "$SKARWM_MESSAGE_LOG"
+grep -q '^decorations_enabled : true$' "$queried_config"
+
+# Accent refresh uses the same queried active path, so its reload cannot
+# restore a stale decoration value from an explicit -c configuration.
+ANUSH_ACCENT_NO_RELOAD=1 "$repo/shell/scripts/theme/apply-accent" \
+    '#6574a8' skarwm-msg '#fce8c3' '#68a8e4' \
+    '#333333' '#292929' '#6574a8' '#6574a8' '#6574a8' '#6574a8' true
+grep -q '^decorations_enabled : true$' "$queried_config"
+grep -q '^decoration_accent : #6574a8$' "$queried_config"
+
 "$repo/shell/scripts/theme/apply-application-theme" gtk
 "$repo/shell/scripts/theme/apply-application-theme" qt
 grep -q 'keep user CSS' "$XDG_CONFIG_HOME/gtk-3.0/gtk.css"

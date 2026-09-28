@@ -2,9 +2,9 @@ import QtQuick
 import QtQuick.Dialogs
 import "../.."
 
-// Focused window/column layout. Left click opens desktop appearance controls,
+// Workspace layout. Left click opens desktop appearance controls,
 // right click opens wallpapers, middle click applies a random wallpaper, and
-// scrolling cycles tiling, tabbed and floating modes.
+// scrolling cycles Scrolling Tile, Dwindle, Monocle, and Floating modes.
 BarModule {
     id: root
     property bool restoreWallpaperPicker: false

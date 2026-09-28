@@ -4,8 +4,7 @@ import QtQuick
 import QtQuick.Controls as Controls
 import "../.."
 
-// Layout and appearance controls adapted to skarwm. Layout selection applies
-// to the focused window/column; desktop gap and all visual choices persist.
+// Workspace and focused-column layout controls adapted to skarwm.
 Popout {
     id: root
 
@@ -419,12 +418,12 @@ Popout {
         anchors.right: parent.right
         spacing: 7
 
-        SectionLabel { text: "Focused layout" }
+        SectionLabel { text: "Workspace layout" }
 
         Grid {
             id: layoutGrid
             width: parent.width
-            columns: 3
+            columns: 2
             spacing: 5
 
             Repeater {
@@ -436,7 +435,7 @@ Popout {
                     required property int index
                     readonly property bool current: Wm.layoutIndex === index
 
-                    width: (layoutGrid.width - 10) / 3
+                    width: (layoutGrid.width - layoutGrid.spacing) / 2
                     height: 52
                     radius: Theme.radiusSmall
                     color: current ? Theme.selbg

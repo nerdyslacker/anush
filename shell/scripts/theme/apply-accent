@@ -58,6 +58,17 @@ foreground_sgr=$(hex_to_sgr "$foreground")
 secondary_sgr=$(hex_to_sgr "$secondary")
 
 config_dir=${ANUSH_CONFIG_DIR:-$(CDPATH= cd "$(dirname "$0")/../../../config" && pwd)}
+message=$(command -v "$wm_message" 2>/dev/null || true)
+if [ -z "$message" ]; then
+    message=$(command -v skarwm-msg 2>/dev/null || true)
+fi
+active_config=
+if [ -n "$message" ]; then
+    active_config=$(
+        "$message" get-version 2>/dev/null \
+            | sed -n 's/.*"loaded_config_file_name":"\([^"]*\)".*/\1/p'
+    )
+fi
 
 rewrite() {
     file=$1
@@ -126,7 +137,9 @@ rewrite "$config_dir/fastfetch/config.jsonc" \
 # skarwm reads its live configuration outside the anush data directory. Keep
 # that copy in sync as well, respecting the same environment lookup order used
 # by the window manager.
-if [ -n "${SKARWM_CONFIG:-}" ]; then
+if [ -n "$active_config" ]; then
+    wm_config=$active_config
+elif [ -n "${SKARWM_CONFIG:-}" ]; then
     wm_config=$SKARWM_CONFIG
 elif [ -n "${XDG_CONFIG_HOME:-}" ]; then
     wm_config=$XDG_CONFIG_HOME/skarwm/config.rc
@@ -151,10 +164,6 @@ if [ "${ANUSH_ACCENT_NO_RELOAD:-0}" != 1 ]; then
         dunstctl reload >/dev/null 2>&1 || true
     elif command -v pkill >/dev/null 2>&1; then
         pkill -HUP -x dunst 2>/dev/null || true
-    fi
-    message=$(command -v "$wm_message" 2>/dev/null || true)
-    if [ -z "$message" ]; then
-        message=$(command -v skarwm-msg 2>/dev/null || true)
     fi
     [ -z "$message" ] || "$message" reload >/dev/null 2>&1 || true
 fi

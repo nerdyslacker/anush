@@ -83,7 +83,7 @@ ensure_fastfetch_config :: proc(config_dir: string) {
     }
 
     if err := os.symlink(source, target); err != nil {
-        fmt.eprintln("anushctl: cannot activate Anush Fastfetch config:", err)
+        fmt.eprintln("anushctl: cannot activate anush Fastfetch config:", err)
         if managed_link {
             _ = os.symlink(link_target, target)
         } else if moved_existing {
