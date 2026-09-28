@@ -116,12 +116,15 @@ script is required. Later starts refresh managed shell code and assets while
 leaving user-owned configuration unchanged. Bundled theme preset filenames and
 the Matugen integration file are package-managed; custom presets should use
 their own filenames. Fastfetch is seeded only when its anush config is absent.
+New configuration files added by an update are seeded without replacing files
+the user or the theme engine has already changed.
 
 After installing an updated package, run `anushctl reload`. It stages and
 refreshes package-owned shell code and assets, removes obsolete managed files,
 and then hard-reloads Quickshell. A logout and manual copying from
 `/usr/share/anush` are not required. Use `anushctl restart` only when a full
-process restart is needed.
+process restart is needed. Run these commands as the desktop user, never with
+`sudo`; only `make install` requires elevated privileges.
 
 Launch it directly with:
 

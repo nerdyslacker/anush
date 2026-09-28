@@ -253,6 +253,49 @@ replace_managed_directory :: proc(target, source, label: string) -> bool {
     return true
 }
 
+// Copy files added by a newer package without replacing configuration that the
+// user or the theme engine may already have changed. Package-owned config
+// subsets are refreshed separately below.
+seed_missing_directory :: proc(target, source, label: string) -> bool {
+    if !os.exists(source) { return true }
+    if !os.exists(target) {
+        if err := os.make_directory_all(target); err != nil {
+            fmt.eprintln("anushctl: cannot create", label, ":", err)
+            return false
+        }
+    }
+
+    walker := os.walker_create(source)
+    defer os.walker_destroy(&walker)
+    for info in os.walker_walk(&walker) {
+        relative := strings.trim_prefix(info.fullpath, source)
+        relative = strings.trim_prefix(relative, "/")
+        if relative == "" { continue }
+        destination := fmt.aprintf("%s/%s", target, relative)
+        if info.type == .Directory {
+            if !os.exists(destination) {
+                if err := os.make_directory_all(destination); err != nil {
+                    fmt.eprintln("anushctl: cannot seed", label, ":", err)
+                    delete(destination)
+                    return false
+                }
+            }
+        } else if !os.exists(destination) {
+            if err := os.copy_file(destination, info.fullpath); err != nil {
+                fmt.eprintln("anushctl: cannot seed", label, ":", err)
+                delete(destination)
+                return false
+            }
+        }
+        delete(destination)
+    }
+    if failed_path, err := os.walker_error(&walker); err != nil {
+        fmt.eprintln("anushctl: cannot inspect", label, failed_path, ":", err)
+        return false
+    }
+    return true
+}
+
 refresh_managed_files :: proc(target, source: string) -> bool {
     if source == "" || !root_is_complete(source) ||
             os.are_paths_identical(target, source) {
@@ -317,6 +360,17 @@ refresh_managed_files :: proc(target, source: string) -> bool {
             fmt.eprintln("anushctl: cannot seed Fastfetch config:", err)
             return false
         }
+    }
+
+    // Do this last so new configuration areas ship to existing installs too.
+    // Existing files remain user-owned; managed subsets above still receive
+    // package updates even when they already exist.
+    source_config := fmt.aprintf("%s/config", source)
+    defer delete(source_config)
+    target_config := fmt.aprintf("%s/config", target)
+    defer delete(target_config)
+    if !seed_missing_directory(target_config, source_config, "configuration files") {
+        return false
     }
     return true
 }

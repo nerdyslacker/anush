@@ -17,6 +17,11 @@ PanelWindow {
     readonly property bool separatedVertical: separated && vertical
     readonly property real compactScreenMargin: 8
     readonly property int floatingGap: BarVisibility.floating ? Theme.surfaceGap : 0
+    // A compact panel cannot use margins on its unanchored (centred) axis.
+    // Put the floating gap inside its native surface instead, so Fit content
+    // and Floating remain independent options and the rounded panel visibly
+    // detaches from every screen edge.
+    readonly property int compactFloatingPadding: compact && BarVisibility.floating ? Theme.surfaceGap : 0
     readonly property real screenLongExtent: vertical ? Number(modelData?.height ?? height) : Number(modelData?.width ?? width)
     readonly property real compactContentWidth: compactContent.implicitWidth + 12
     readonly property real compactContentHeight: compactVerticalContent.implicitHeight + 12
@@ -65,12 +70,17 @@ PanelWindow {
         left: BarVisibility.barPosition === "left" || (!root.vertical && !root.compactHorizontal) ? root.floatingGap : 0
         right: BarVisibility.barPosition === "right" || (!root.vertical && !root.compactHorizontal) ? root.floatingGap : 0
     }
-    implicitWidth: compactHorizontal ? Math.min(maximumCompactExtent, Math.max(Theme.effectiveBarHeight, compactContentWidth)) : Theme.effectiveBarHeight
-    implicitHeight: compactVertical ? Math.min(maximumCompactExtent, Math.max(Theme.effectiveBarHeight, compactContentHeight)) : Theme.effectiveBarHeight
+    implicitWidth: compactHorizontal
+        ? Math.min(maximumCompactExtent, Math.max(Theme.effectiveBarHeight, compactContentWidth) + 2 * compactFloatingPadding)
+        : Theme.effectiveBarHeight + (compactVertical ? 2 * compactFloatingPadding : 0)
+    implicitHeight: compactVertical
+        ? Math.min(maximumCompactExtent, Math.max(Theme.effectiveBarHeight, compactContentHeight) + 2 * compactFloatingPadding)
+        : Theme.effectiveBarHeight + (compactHorizontal ? 2 * compactFloatingPadding : 0)
     // Be explicit: Quickshell otherwise derives the X11 reservation from the
     // panel's height, which is the full screen dimension for side bars. The WM
     // adds its configured outer gap outside this physical reservation.
-    exclusiveZone: Math.round((root.vertical ? root.width : root.height) + root.floatingGap)
+    exclusiveZone: Math.round((root.vertical ? root.width : root.height)
+        + (root.compact ? 0 : root.floatingGap))
     // Keep the native window surface ARGB. Giving PanelWindow a translucent
     // color can be flattened against black by X11 compositors; the child
     // rectangle below paints the requested opacity onto this clear surface.
@@ -185,6 +195,7 @@ PanelWindow {
     Rectangle {
         id: panel
         anchors.fill: parent
+        anchors.margins: root.compactFloatingPadding
         clip: root.compact
         color: root.separated ? "transparent" : Qt.alpha(Theme.bg, Theme.barBackgroundOpacity)
         // The panel is flush with screen edges, so only round it when the

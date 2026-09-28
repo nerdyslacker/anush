@@ -22,8 +22,9 @@ update are removed from these managed directories too. The user-owned
 configuration is preserved. Bundled theme preset filenames and
 `config/matugen/config.toml` are package-managed and refreshed; user-created
 presets with distinct filenames are retained. The writable Fastfetch config is
-only seeded when absent. Setting `ANUSH_ROOT` explicitly selects a checkout or
-custom tree and disables this refresh.
+only seeded when absent. New configuration files introduced by an update are
+seeded without overwriting existing user configuration. Setting `ANUSH_ROOT`
+explicitly selects a checkout or custom tree and disables this refresh.
 
 Starting the shell also activates anush's themed Fastfetch configuration at
 Fastfetch's standard XDG path. Before creating the symlink, an existing config

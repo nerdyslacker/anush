@@ -164,7 +164,10 @@ rm "$tmp/system/assets/current"
 printf '%s\n' 'asset v2' >"$tmp/system/assets/replacement"
 printf '%s\n' 'preset v2' >"$tmp/system/config/themes/presets/test.json"
 printf '%s\n' 'matugen v2' >"$tmp/system/config/matugen/config.toml"
+mkdir -p "$tmp/system/config/new-feature"
+printf '%s\n' 'new default' >"$tmp/system/config/new-feature/default.conf"
 printf '%s\n' 'user setting' >"$XDG_CONFIG_HOME/anush/config/user-setting"
+printf '%s\n' 'package default' >"$tmp/system/config/user-setting"
 # Obsolete files in the package-owned shell tree must not survive an update.
 printf '%s\n' '#!/bin/sh' >"$XDG_CONFIG_HOME/anush/shell/scripts/bar"
 $binary reload
@@ -176,7 +179,8 @@ $binary reload
 [ "$(cat "$XDG_CONFIG_HOME/anush/assets/replacement")" = "asset v2" ]
 [ "$(cat "$XDG_CONFIG_HOME/anush/config/themes/presets/test.json")" = "preset v2" ]
 [ "$(cat "$XDG_CONFIG_HOME/anush/config/matugen/config.toml")" = "matugen v2" ]
-grep -q 'user setting' "$XDG_CONFIG_HOME/anush/config/user-setting"
+[ "$(cat "$XDG_CONFIG_HOME/anush/config/new-feature/default.conf")" = "new default" ]
+[ "$(cat "$XDG_CONFIG_HOME/anush/config/user-setting")" = "user setting" ]
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call anush reload'
 
 export ANUSH_ROOT="$tmp/root"

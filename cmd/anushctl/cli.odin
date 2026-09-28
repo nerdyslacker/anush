@@ -56,6 +56,17 @@ run_cli :: proc(args: []string) -> int {
         return EXIT_USAGE
     }
 
+    // anushctl manages files and processes in the desktop user's session.
+    // Running it through sudo selects the wrong HOME/session and leaves files
+    // that the user cannot update on the next reload.
+    sudo_user_buf: [4096]u8
+    if os.get_euid() == 0 &&
+            os.get_env_buf(sudo_user_buf[:], "SUDO_USER") != "" {
+        fmt.eprintln("anushctl: do not run anushctl with sudo; run it as your desktop user")
+        fmt.eprintln("anushctl: sudo is only needed for 'make install'")
+        return EXIT_RUNTIME
+    }
+
     switch args[0] {
     case "help", "-h", "--help":
         usage()
