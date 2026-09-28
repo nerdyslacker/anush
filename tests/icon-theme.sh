@@ -56,8 +56,8 @@ grep -q '^gtk-icon-theme-name=Fairy$' \
 # fills can exactly match the muted accent instead of a bright named variant.
 : >"$ICON_HELPER_LOG"
 "$helper" --set Papirus '#b8817d'
-overlay="$XDG_DATA_HOME/icons/Anush-Papirus-Folders"
-grep -q '^gtk-icon-theme-name=Anush-Papirus-Folders$' \
+overlay="$XDG_DATA_HOME/icons/anush-papirus-folders"
+grep -q '^gtk-icon-theme-name=anush-papirus-folders$' \
     "$XDG_CONFIG_HOME/gtk-3.0/settings.ini"
 grep -qi '#b8817d' "$overlay/48x48/places/folder-documents.svg"
 grep -qi '#976a66' "$overlay/48x48/places/folder-documents.svg"
@@ -76,15 +76,15 @@ done
 
 # Migrate settings left by the old overlay implementation on the next accent
 # update, without treating an inheriting theme as Papirus-capable.
-mkdir -p "$XDG_DATA_HOME/icons/Anush-Papirus"
-cat >"$XDG_DATA_HOME/icons/Anush-Papirus/index.theme" <<'EOF'
+mkdir -p "$XDG_DATA_HOME/icons/anush-papirus"
+cat >"$XDG_DATA_HOME/icons/anush-papirus/index.theme" <<'EOF'
 [Icon Theme]
 Name=anush Papirus
 Inherits=Fairy
 Directories=
 EOF
 for gtk in gtk-3.0 gtk-4.0; do
-    sed -i 's/^gtk-icon-theme-name=.*/gtk-icon-theme-name=Anush-Papirus/' \
+    sed -i 's/^gtk-icon-theme-name=.*/gtk-icon-theme-name=anush-papirus/' \
         "$XDG_CONFIG_HOME/$gtk/settings.ini"
 done
 : >"$ICON_HELPER_LOG"
@@ -108,8 +108,8 @@ for icon in folder-blue folder-blue-documents user-blue-home; do
         >"$system_places/$icon.svg"
 done
 "$helper" --set Papirus-Dark '#b8817d'
-overlay="$XDG_DATA_HOME/icons/Anush-Papirus-Dark-Folders"
-grep -q '^gtk-icon-theme-name=Anush-Papirus-Dark-Folders$' \
+overlay="$XDG_DATA_HOME/icons/anush-papirus-dark-folders"
+grep -q '^gtk-icon-theme-name=anush-papirus-dark-folders$' \
     "$XDG_CONFIG_HOME/gtk-3.0/settings.ini"
 grep -q '^Inherits=Papirus-Dark$' "$overlay/index.theme"
 grep -qi '#b8817d' "$overlay/48x48/places/folder-documents.svg"
@@ -124,6 +124,6 @@ grep -qi '#00ff00' "$overlay/48x48/places/inode-directory.svg"
 "$helper" --set Fairy '#00ff00'
 grep -q '^gtk-icon-theme-name=Fairy$' \
     "$XDG_CONFIG_HOME/gtk-3.0/settings.ini"
-! "$helper" --list | grep -q '^Anush-Papirus-Dark-Folders$'
+! "$helper" --list | grep -q '^anush-papirus-dark-folders$'
 
 printf '%s\n' 'icon theme tests passed'

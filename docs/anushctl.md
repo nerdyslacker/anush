@@ -15,10 +15,15 @@ to the user directory, launches `qs --no-duplicate`, and remains attached for
 the lifetime of the shell. This makes it suitable for a skarwm `autostart`
 entry without a separate initialization script.
 
-On later starts, managed `shell/` and `assets/` files are refreshed from the
-detected installation so package updates reach an existing user directory.
-The user-owned `config/` directory is preserved. Setting `ANUSH_ROOT`
-explicitly selects a checkout or custom tree and disables this refresh.
+On later starts, and before `reload` or `restart`, managed `shell/` and
+`assets/` files are staged and refreshed from the detected installation so
+package updates reach an existing user directory. Files removed by a package
+update are removed from these managed directories too. The user-owned
+configuration is preserved. Bundled theme preset filenames and
+`config/matugen/config.toml` are package-managed and refreshed; user-created
+presets with distinct filenames are retained. The writable Fastfetch config is
+only seeded when absent. Setting `ANUSH_ROOT` explicitly selects a checkout or
+custom tree and disables this refresh.
 
 Starting the shell also activates anush's themed Fastfetch configuration at
 Fastfetch's standard XDG path. Before creating the symlink, an existing config
@@ -54,10 +59,11 @@ anushctl theme mode light
 anushctl theme mode dark
 ```
 
-`sidebar toggle` is an alias for the current Notepad sidebar. `reload` uses
-Quickshell's native hard reload and keeps the process instance. `restart` waits
-for the old instance to stop, launches its replacement, and verifies that its
-IPC endpoint is ready. `lock` invokes Betterlockscreen and
+`sidebar toggle` is an alias for the current Notepad sidebar. `reload` first
+synchronizes installed managed files, then uses Quickshell's native hard reload
+and keeps the process instance. `restart` performs the same synchronization,
+waits for the old instance to stop, launches its replacement, and verifies that
+its IPC endpoint is ready. `lock` invokes Betterlockscreen and
 returns its exit status. The `daemon` and `restore` commands provide stable
 skarwm autostart entry points for anush-owned clipboard and wallpaper behavior.
 

@@ -131,11 +131,12 @@ set -e
 
 # A first start discovers the system data tree and atomically seeds the user
 # directory without an external initializer.
-mkdir -p "$tmp/system/shell/scripts/shell" "$tmp/system/config/themes/presets" \
-    "$tmp/system/config/matugen"
+mkdir -p "$tmp/system/shell/scripts/shell" "$tmp/system/assets" \
+    "$tmp/system/config/themes/presets" "$tmp/system/config/matugen"
 touch "$tmp/system/shell/shell.qml"
 printf '%s\n' '#!/bin/sh' >"$tmp/system/shell/scripts/new-helper"
 printf '%s\n' '#!/bin/sh' >"$tmp/system/shell/scripts/shell/bar"
+printf '%s\n' 'asset v1' >"$tmp/system/assets/current"
 printf '%s\n' 'seeded' >"$tmp/system/config/first-run-marker"
 printf '%s\n' 'preset v1' >"$tmp/system/config/themes/presets/test.json"
 printf '%s\n' 'matugen v1' >"$tmp/system/config/matugen/config.toml"
@@ -146,6 +147,7 @@ $binary start
 [ -f "$XDG_CONFIG_HOME/anush/config/first-run-marker" ]
 [ -x "$XDG_CONFIG_HOME/anush/shell/scripts/new-helper" ]
 [ -x "$XDG_CONFIG_HOME/anush/shell/scripts/shell/bar" ]
+[ "$(cat "$XDG_CONFIG_HOME/anush/assets/current")" = "asset v1" ]
 [ "$(cat "$XDG_CONFIG_HOME/anush/config/themes/presets/test.json")" = "preset v1" ]
 [ "$(cat "$XDG_CONFIG_HOME/anush/config/matugen/config.toml")" = "matugen v1" ]
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" \
@@ -153,24 +155,27 @@ assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" \
 assert_contains "$(tail -n 1 "$FAKE_QS_KITTY_LOG")" \
     "$XDG_CONFIG_HOME/anush/config/kitty"
 
-# Later starts refresh managed shell files while preserving user config.
+# Reload refreshes managed shell files while preserving user config.
 printf '%s\n' 'updated shell' >"$tmp/system/shell/update-marker"
 printf '%s\n' '#!/bin/sh' >"$tmp/system/shell/scripts/refreshed-helper"
+rm "$tmp/system/assets/current"
+printf '%s\n' 'asset v2' >"$tmp/system/assets/replacement"
 printf '%s\n' 'preset v2' >"$tmp/system/config/themes/presets/test.json"
 printf '%s\n' 'matugen v2' >"$tmp/system/config/matugen/config.toml"
 printf '%s\n' 'user setting' >"$XDG_CONFIG_HOME/anush/config/user-setting"
-# Older installations have a regular file at this path. The grouped helper
-# deliberately uses scripts/shell/bar so refreshing never has to replace that
-# file with a directory.
+# Obsolete files in the package-owned shell tree must not survive an update.
 printf '%s\n' '#!/bin/sh' >"$XDG_CONFIG_HOME/anush/shell/scripts/bar"
-$binary start
+$binary reload
 [ -f "$XDG_CONFIG_HOME/anush/shell/update-marker" ]
 [ -x "$XDG_CONFIG_HOME/anush/shell/scripts/refreshed-helper" ]
-[ -f "$XDG_CONFIG_HOME/anush/shell/scripts/bar" ]
+[ ! -e "$XDG_CONFIG_HOME/anush/shell/scripts/bar" ]
 [ -x "$XDG_CONFIG_HOME/anush/shell/scripts/shell/bar" ]
+[ ! -e "$XDG_CONFIG_HOME/anush/assets/current" ]
+[ "$(cat "$XDG_CONFIG_HOME/anush/assets/replacement")" = "asset v2" ]
 [ "$(cat "$XDG_CONFIG_HOME/anush/config/themes/presets/test.json")" = "preset v2" ]
 [ "$(cat "$XDG_CONFIG_HOME/anush/config/matugen/config.toml")" = "matugen v2" ]
 grep -q 'user setting' "$XDG_CONFIG_HOME/anush/config/user-setting"
+assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call anush reload'
 
 export ANUSH_ROOT="$tmp/root"
 unset ANUSH_SYSTEM_DIR

@@ -176,7 +176,7 @@ grep -qi "^[[:space:]]*norm_outer_border[[:space:]]*:[[:space:]]*$normal_border_
 grep -q '^decorations_enabled : true$' \
     "$SKARWM_CONFIG"
 
-# The persistent switch updates both the Anush template and a pre-existing
+# The persistent switch updates both the anush template and a pre-existing
 # live config, including installations whose file predates the setting.
 sed -i '/^[[:space:]]*decorations_enabled[[:space:]]*:/d' \
     "$SKARWM_CONFIG"

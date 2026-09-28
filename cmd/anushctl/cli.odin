@@ -19,7 +19,7 @@ Usage: anushctl COMMAND [ARGUMENTS]
 Runtime commands:
   start                          Launch anush
   status                         Show shell and protocol status
-  reload                         Hard-reload the running shell configuration
+  reload                         Sync updates and hard-reload the running shell
   restart                        Stop and relaunch the shell
   lock                           Lock the session with Betterlockscreen
   launcher toggle               Toggle the application launcher
@@ -71,7 +71,7 @@ run_cli :: proc(args: []string) -> int {
         return launch_shell()
     case "reload":
         if len(args) != 1 { return usage_error("reload takes no arguments") }
-        return ipc_call("anush", "reload", nil)
+        return reload_shell()
     case "restart":
         if len(args) != 1 { return usage_error("restart takes no arguments") }
         return restart_shell()

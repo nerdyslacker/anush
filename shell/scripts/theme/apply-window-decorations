@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Persist Anush's decoration switch in both its skarwm template and the live
+# Persist anush's decoration switch in both its skarwm template and the live
 # skarwm configuration, then make the change visible immediately.
 set -u
 

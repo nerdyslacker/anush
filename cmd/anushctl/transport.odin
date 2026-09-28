@@ -190,6 +190,69 @@ system_root :: proc() -> string {
     return ""
 }
 
+// Replace a package-owned directory as one unit. Overlay copies leave files
+// removed by a newer package behind and can expose a partially updated QML
+// tree. Staging beside the target keeps the activation window short and permits
+// rollback when the new tree cannot be installed.
+replace_managed_directory :: proc(target, source, label: string) -> bool {
+    parent := filepath.dir(target)
+    staging, staging_err := os.make_directory_temp(
+        parent, ".anush-refresh-*", context.allocator)
+    if staging_err != nil {
+        fmt.eprintln("anushctl: cannot stage managed", label, ":", staging_err)
+        return false
+    }
+    defer delete(staging)
+
+    if err := os.copy_directory_all(staging, source); err != nil {
+        _ = os.remove_all(staging)
+        fmt.eprintln("anushctl: cannot refresh managed", label, ":", err)
+        return false
+    }
+
+    backup := ""
+    if os.exists(target) {
+        backup_dir, backup_err := os.make_directory_temp(
+            parent, ".anush-previous-*", context.allocator)
+        if backup_err != nil {
+            _ = os.remove_all(staging)
+            fmt.eprintln("anushctl: cannot prepare managed", label,
+                "backup:", backup_err)
+            return false
+        }
+        backup = backup_dir
+        if err := os.remove(backup); err != nil {
+            delete(backup)
+            _ = os.remove_all(staging)
+            fmt.eprintln("anushctl: cannot prepare managed", label,
+                "backup:", err)
+            return false
+        }
+        if err := os.rename(target, backup); err != nil {
+            delete(backup)
+            _ = os.remove_all(staging)
+            fmt.eprintln("anushctl: cannot replace managed", label, ":", err)
+            return false
+        }
+    }
+
+    if err := os.rename(staging, target); err != nil {
+        if backup != "" {
+            _ = os.rename(backup, target)
+            delete(backup)
+        }
+        _ = os.remove_all(staging)
+        fmt.eprintln("anushctl: cannot activate managed", label, ":", err)
+        return false
+    }
+
+    if backup != "" {
+        _ = os.remove_all(backup)
+        delete(backup)
+    }
+    return true
+}
+
 refresh_managed_files :: proc(target, source: string) -> bool {
     if source == "" || !root_is_complete(source) ||
             os.are_paths_identical(target, source) {
@@ -200,8 +263,7 @@ refresh_managed_files :: proc(target, source: string) -> bool {
     defer delete(source_shell)
     target_shell := fmt.aprintf("%s/shell", target)
     defer delete(target_shell)
-    if err := os.copy_directory_all(target_shell, source_shell); err != nil {
-        fmt.eprintln("anushctl: cannot refresh managed shell files:", err)
+    if !replace_managed_directory(target_shell, source_shell, "shell files") {
         return false
     }
     if !ensure_script_permissions(target) { return false }
@@ -211,8 +273,7 @@ refresh_managed_files :: proc(target, source: string) -> bool {
     if os.exists(source_assets) {
         target_assets := fmt.aprintf("%s/assets", target)
         defer delete(target_assets)
-        if err := os.copy_directory_all(target_assets, source_assets); err != nil {
-            fmt.eprintln("anushctl: cannot refresh managed assets:", err)
+        if !replace_managed_directory(target_assets, source_assets, "assets") {
             return false
         }
     }
@@ -258,6 +319,13 @@ refresh_managed_files :: proc(target, source: string) -> bool {
         }
     }
     return true
+}
+
+reload_shell :: proc() -> int {
+    root, ready := prepare_shell_root()
+    if !ready { return EXIT_RUNTIME }
+    delete(root)
+    return ipc_call("anush", "reload", nil)
 }
 
 prepare_shell_root :: proc() -> (string, bool) {

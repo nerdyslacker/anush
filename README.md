@@ -111,7 +111,15 @@ intentionally unsupported.
 On the first `anushctl start`, the CLI detects the installed data and seeds
 `${XDG_CONFIG_HOME:-$HOME/.config}/anush` itself. No separate initialization
 script is required. Later starts refresh managed shell code and assets while
-leaving the user-owned `config/` directory unchanged.
+leaving user-owned configuration unchanged. Bundled theme preset filenames and
+the Matugen integration file are package-managed; custom presets should use
+their own filenames. Fastfetch is seeded only when its anush config is absent.
+
+After installing an updated package, run `anushctl reload`. It stages and
+refreshes package-owned shell code and assets, removes obsolete managed files,
+and then hard-reloads Quickshell. A logout and manual copying from
+`/usr/share/anush` are not required. Use `anushctl restart` only when a full
+process restart is needed.
 
 Launch it directly with:
 
