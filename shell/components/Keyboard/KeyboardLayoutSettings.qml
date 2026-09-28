@@ -202,7 +202,7 @@ Popout {
             id: layoutRow
             required property var modelData
 
-            width: layoutList.width
+            width: layoutList.width - 14
             height: 32
             radius: Theme.radiusSmall
             readonly property int selectedIndex: root.selectedLayouts.indexOf(modelData.code)

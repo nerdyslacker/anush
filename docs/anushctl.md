@@ -47,6 +47,7 @@ anushctl notes close
 anushctl popup network
 anushctl popup hotspot
 anushctl popup bluetooth
+anushctl popup phone
 anushctl hotspot status
 anushctl hotspot on
 anushctl hotspot off

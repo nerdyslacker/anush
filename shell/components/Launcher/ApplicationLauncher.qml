@@ -405,7 +405,7 @@ Popout {
                         && String(modelData.icon ?? "") !== ""
                         ? Quickshell.iconPath(String(modelData.icon), true) : ""
 
-                    width: appList.width
+                    width: appList.width - 14
                     height: 52
                     radius: Theme.radiusSmall
                     color: index === appList.currentIndex

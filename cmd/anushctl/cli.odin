@@ -26,7 +26,7 @@ Runtime commands:
   clipboard toggle|daemon       Toggle history or run its capture daemon
   sidebar toggle                Toggle the Notepad sidebar
   notes toggle|new|save|close    Control Notepad
-  popup network|hotspot|bluetooth Open a connectivity popup
+  popup network|hotspot|bluetooth|phone Open a connectivity popup
   hotspot status|on|off|toggle   Control the NetworkManager hotspot
   hotspot clients                Show associated hotspot stations
   wallpaper set FILE             Set the desktop wallpaper
@@ -110,13 +110,14 @@ run_cli :: proc(args: []string) -> int {
         }
     case "popup":
         if len(args) != 2 {
-            return usage_error("expected: popup network|hotspot|bluetooth")
+            return usage_error("expected: popup network|hotspot|bluetooth|phone")
         }
         switch args[1] {
         case "network":   return ipc_call("network", "open", nil)
         case "hotspot":   return ipc_call("hotspot", "openPopup", nil)
         case "bluetooth": return ipc_call("bluetooth", "open", nil)
-        case: return usage_error("expected: popup network|hotspot|bluetooth")
+        case "phone":     return ipc_call("phone", "open", nil)
+        case: return usage_error("expected: popup network|hotspot|bluetooth|phone")
         }
     case "hotspot":
         if len(args) != 2 {

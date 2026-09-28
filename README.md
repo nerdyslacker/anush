@@ -38,6 +38,8 @@ Optional desktop integrations:
 - renCal for calendar events;
 - NetworkManager, its command-line/editor tools, BlueZ, Blueman, `pactl`, and
   Pavucontrol for network, Bluetooth, and audio controls;
+- KDE Connect or Valent, with PyGObject, for phone pairing, battery state,
+  ping/ring, clipboard, sharing, and remote-file controls;
 - for the Wi-Fi hotspot popup: NetworkManager/libnm GIR bindings for PyGObject,
   `iw`, `iproute2`, `iptables`, `dnsmasq`, polkit/`pkexec`, `hostapd`, and
   `create_ap`; NetworkManager owns second-adapter hotspots. Same-radio sharing
@@ -237,6 +239,17 @@ The optional tmux bar widget shows the number of running sessions. Its popup
 can create and attach sessions in `$TERMINAL`, Kitty, Foot, Alacritty, WezTerm,
 or XTerm; it also renames sessions and uses a two-click confirmation before
 killing one. Middle-clicking the widget refreshes its session count.
+
+The optional Phone connect widget discovers either KDE Connect or Valent
+through the session D-Bus and prefers KDE Connect when both are running. It
+shows connected devices and their batteries and exposes pairing, ping, ring,
+clipboard, native multi-file sharing, remote files, and a service switch. KDE
+Connect also provides SMS conversations, replies, synced-contact search,
+LAN/manual/Tailscale discovery, phone notifications with supported inline chat
+replies, and new-message composition; Valent opens its native Messages window
+because it does not export equivalent message data. Middle click refreshes
+discovery, right click opens the backend application, and `anushctl popup phone`
+opens the quick controls.
 
 Right-click a tag to configure the workspace count, dynamic workspaces, tag
 numbers, and an optional per-page tag limit. When the available tags exceed

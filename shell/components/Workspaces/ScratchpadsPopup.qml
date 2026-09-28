@@ -67,7 +67,7 @@ Popout {
                 id: entry
                 required property var modelData
 
-                width: list.width
+                width: list.width - 14
                 height: root.rowHeight
                 radius: Theme.radiusSmall
                 color: entryMouse.containsMouse

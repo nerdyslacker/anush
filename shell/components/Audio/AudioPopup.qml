@@ -271,7 +271,9 @@ Popout {
 
                 Column {
                     id: applicationList
-                    width: parent.width
+                    // Attached scrollbars overlay Flickable content. Keep an
+                    // 8 px bar plus a 6 px breathing gap permanently reserved.
+                    width: parent.width - 14
                     spacing: 8
 
                     Repeater {

@@ -2,8 +2,6 @@
 
 Shows Bluetooth availability, radio state, and whether a device is connected.
 
-> Screenshot placeholder — Bluetooth widget
-
 ## Actions
 
 - **Left click:** Open quick Bluetooth controls.

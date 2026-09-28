@@ -21,12 +21,13 @@ placeholders are intentionally left in place for project screenshots.
 | Muted mic | Muted microphone warning |
 | [Network](network.md) | Connections, VPN, and hotspot controls |
 | [Bluetooth](bluetooth.md) | Bluetooth status and devices |
+| [Phone connect](phone.md) | KDE Connect and Valent devices |
 | [Keyboard](keyboard.md) | Keyboard layout selection |
 | [Clipboard](clipboard.md) | Clipboard history |
 | [Color picker](color-picker.md) | Screen color picker and history |
 | [Notepad](notepad.md) | Sidebar notes |
 | [System tray](system-tray.md) | StatusNotifier items |
-| DND indicator | Do-not-disturb status |
+| [DND indicator](dnd-indicator.md) | Do-not-disturb status |
 | [Clock](clock.md) | Time, calendar, and events |
 | Caps Lock | Caps Lock warning |
 | Screenshot | Flameshot launcher |

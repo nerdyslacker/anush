@@ -266,9 +266,9 @@ Popout {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
 
-            Column {
-                id: wifiList
-                width: parent.width
+                Column {
+                    id: wifiList
+                    width: parent.width - 14
                 spacing: 4
 
                 Repeater {
@@ -493,6 +493,7 @@ Popout {
             }
 
             Controls.ScrollBar.vertical: Controls.ScrollBar {
+                id: wifiScrollBar
                 width: 8
                 policy: Controls.ScrollBar.AsNeeded
                 interactive: true
@@ -507,8 +508,8 @@ Popout {
                 contentItem: Rectangle {
                     implicitWidth: 6
                     implicitHeight: 28
-                    color: parent.pressed ? Theme.brightOrange
-                         : parent.hovered ? Theme.orange : Theme.gray6
+                    color: wifiScrollBar.pressed ? Theme.brightOrange
+                         : wifiScrollBar.hovered ? Theme.orange : Theme.gray6
                     radius: Math.min(width / 2, Theme.radiusSmall)
 
                     Behavior on color { ColorAnimation { duration: 100 } }

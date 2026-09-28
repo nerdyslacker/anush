@@ -88,7 +88,7 @@ Popout {
                 required property SystemTrayItem modelData
                 readonly property bool hidden: TrayState.isHidden(modelData)
 
-                width: list.width
+                width: list.width - 14
                 height: root.rowHeight
                 radius: Theme.radiusSmall
                 color: entryMouse.containsMouse ? Theme.gray3 : Theme.gray2

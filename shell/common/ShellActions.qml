@@ -15,6 +15,7 @@ Singleton {
     readonly property int protocolVersion: 1
     signal networkRequested(string action)
     signal bluetoothRequested(string action)
+    signal phoneRequested(string action)
     signal commandsRequested(string action)
     signal weatherRequested(string action)
     signal wallpaperRequested(string action, string path)
@@ -48,6 +49,13 @@ Singleton {
         function toggle(): void { root.bluetoothRequested("toggle") }
         function open(): void { root.bluetoothRequested("open") }
         function close(): void { root.bluetoothRequested("close") }
+    }
+
+    IpcHandler {
+        target: "phone"
+        function toggle(): void { root.phoneRequested("toggle") }
+        function open(): void { root.phoneRequested("open") }
+        function close(): void { root.phoneRequested("close") }
     }
 
     IpcHandler {

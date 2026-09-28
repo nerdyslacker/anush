@@ -687,7 +687,7 @@ Popout {
                 delegate: Rectangle {
                     id: clientRow
                     required property var modelData
-                    width: clientList.width - (clientList.count > 3 ? 10 : 0)
+                    width: clientList.width - 14
                     height: 44
                     radius: Theme.radiusSmall
                     color: Theme.gray2

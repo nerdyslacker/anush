@@ -102,6 +102,8 @@ $binary notes new
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call notepad newNote'
 $binary popup bluetooth
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call bluetooth open'
+$binary popup phone
+assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call phone open'
 $binary popup hotspot
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call hotspot openPopup'
 $binary hotspot status

@@ -27,7 +27,7 @@ corner_radius : 0
 
 # Optional skarwm-owned titlebars and resize frames. anush keeps this explicit
 # palette synchronized with the selected theme and accent.
-decorations_enabled : true
+decorations_enabled : false
 decoration_titlebar_height : 20
 decoration_border_width : 1
 decoration_resize_hit_width : 4

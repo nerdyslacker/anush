@@ -1,0 +1,1127 @@
+#!/usr/bin/env python3
+"""Small JSON bridge between anush and KDE Connect or Valent over D-Bus."""
+
+from __future__ import annotations
+
+import json
+import ipaddress
+import html
+import os
+from pathlib import Path
+import quopri
+import shutil
+import socket
+import subprocess
+import sys
+import re
+from typing import Any
+from urllib.parse import unquote, urlparse
+
+try:
+    import gi
+
+    gi.require_version("Gio", "2.0")
+    from gi.repository import Gio, GLib
+except (ImportError, ValueError) as error:
+    print(json.dumps({"ok": False, "error": f"PyGObject is required: {error}"}))
+    raise SystemExit(1)
+
+
+KDE_SERVICE = "org.kde.kdeconnect"
+KDE_ROOT = "/modules/kdeconnect"
+KDE_DAEMON = "org.kde.kdeconnect.daemon"
+KDE_DEVICE = "org.kde.kdeconnect.device"
+VALENT_SERVICE = "ca.andyholmes.Valent"
+VALENT_ROOT = "/ca/andyholmes/Valent"
+VALENT_DEVICE = "ca.andyholmes.Valent.Device"
+PROPERTIES = "org.freedesktop.DBus.Properties"
+ACTIONS = "org.gtk.Actions"
+KDE_CONVERSATIONS = "org.kde.kdeconnect.device.conversations"
+KDE_SMS = "org.kde.kdeconnect.device.sms"
+KDE_NOTIFICATIONS = "org.kde.kdeconnect.device.notifications"
+KDE_NOTIFICATION = "org.kde.kdeconnect.device.notifications.notification"
+KDE_DAEMONS = (
+    "/usr/lib/kdeconnectd", "/usr/libexec/kdeconnectd",
+    "/usr/bin/kdeconnectd", "/usr/local/bin/kdeconnectd",
+)
+MAX_CONVERSATIONS = 128
+MAX_MESSAGES = 128
+MAX_CONTACTS = 512
+MAX_CUSTOM_ADDRESSES = 64
+MAX_TAILSCALE_PEERS = 128
+MAX_NOTIFICATIONS = 64
+MAX_REPLY_BYTES = 8192
+
+
+def unpack(value: Any) -> Any:
+    if isinstance(value, GLib.Variant):
+        return unpack(value.unpack())
+    if isinstance(value, dict):
+        return {str(key): unpack(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [unpack(item) for item in value]
+    return value
+
+
+def emit(payload: dict[str, Any], code: int = 0) -> None:
+    print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+    raise SystemExit(code)
+
+
+def bus() -> Gio.DBusConnection:
+    return Gio.bus_get_sync(Gio.BusType.SESSION, None)
+
+
+def call(connection: Gio.DBusConnection, service: str, path: str,
+         interface: str, method: str, parameters: GLib.Variant | None = None,
+         timeout: int = 5000) -> Any:
+    result = connection.call_sync(service, path, interface, method, parameters,
+                                  None, Gio.DBusCallFlags.NONE, timeout, None)
+    return unpack(result)
+
+
+def owned(connection: Gio.DBusConnection, name: str) -> bool:
+    try:
+        result = call(connection, "org.freedesktop.DBus",
+                      "/org/freedesktop/DBus", "org.freedesktop.DBus",
+                      "NameHasOwner", GLib.Variant("(s)", (name,)))
+        return bool(result and result[0])
+    except GLib.Error:
+        return False
+
+
+def properties(connection: Gio.DBusConnection, service: str, path: str,
+               interface: str) -> dict[str, Any]:
+    try:
+        result = call(connection, service, path, PROPERTIES, "GetAll",
+                      GLib.Variant("(s)", (interface,)))
+        return result[0] if result and isinstance(result[0], dict) else {}
+    except GLib.Error:
+        return {}
+
+
+def kde_ids(connection: Gio.DBusConnection) -> list[str]:
+    attempts = (
+        GLib.Variant("(bb)", (False, False)),
+        GLib.Variant("(b)", (False,)),
+        None,
+    )
+    for arguments in attempts:
+        try:
+            result = call(connection, KDE_SERVICE, KDE_ROOT, KDE_DAEMON,
+                          "devices", arguments)
+            values = result[0] if result else []
+            return [str(value) for value in values]
+        except GLib.Error:
+            continue
+    return []
+
+
+def normalized_plugins(raw: Any) -> list[str]:
+    result = []
+    for entry in raw if isinstance(raw, list) else []:
+        name = str(entry)
+        if name.startswith("kdeconnect_"):
+            name = name[len("kdeconnect_"):]
+        if name not in result:
+            result.append(name)
+    return result
+
+
+def kde_devices(connection: Gio.DBusConnection) -> list[dict[str, Any]]:
+    devices = []
+    for device_id in kde_ids(connection):
+        path = f"{KDE_ROOT}/devices/{device_id}"
+        props = properties(connection, KDE_SERVICE, path, KDE_DEVICE)
+        plugins = normalized_plugins(props.get("supportedPlugins", []))
+        if not plugins:
+            try:
+                result = call(connection, KDE_SERVICE, path, KDE_DEVICE,
+                              "loadedPlugins")
+                plugins = normalized_plugins(result[0] if result else [])
+            except GLib.Error:
+                pass
+        battery = properties(connection, KDE_SERVICE, f"{path}/battery",
+                             "org.kde.kdeconnect.device.battery") \
+            if "battery" in plugins else {}
+        devices.append({
+            "id": device_id,
+            "name": str(props.get("name") or device_id),
+            "type": str(props.get("type") or "phone"),
+            "reachable": bool(props.get("isReachable", False)),
+            "paired": bool(props.get("isPaired", False)),
+            "pairRequested": bool(props.get("isPairRequested", False)),
+            "pairRequestedByPeer": bool(
+                props.get("isPairRequestedByPeer", False)),
+            "verificationKey": str(props.get("verificationKey") or ""),
+            "battery": int(battery.get("charge", -1)),
+            "charging": bool(battery.get("isCharging",
+                                          battery.get("charging", False))),
+            "plugins": plugins,
+        })
+    return devices
+
+
+def valent_escape(device_id: str) -> str:
+    output = []
+    for value in device_id.encode("utf-8"):
+        character = chr(value)
+        output.append(character if character.isascii() and character.isalnum()
+                      else f"_{value:02x}")
+    return "".join(output)
+
+
+def valent_unescape(value: str) -> str:
+    output = bytearray()
+    index = 0
+    while index < len(value):
+        if value[index] == "_" and index + 2 < len(value):
+            try:
+                output.append(int(value[index + 1:index + 3], 16))
+                index += 3
+                continue
+            except ValueError:
+                pass
+        output.extend(value[index].encode("utf-8"))
+        index += 1
+    return output.decode("utf-8", errors="replace")
+
+
+def valent_path(device_id: str) -> str:
+    return f"{VALENT_ROOT}/Device/{valent_escape(device_id)}"
+
+
+def find_state(value: Any) -> dict[str, Any]:
+    value = unpack(value)
+    if isinstance(value, dict):
+        if "percentage" in value or "signal-strengths" in value:
+            return value
+        for child in value.values():
+            found = find_state(child)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for child in value:
+            found = find_state(child)
+            if found:
+                return found
+    return {}
+
+
+def valent_description(connection: Gio.DBusConnection, path: str,
+                       name: str) -> Any:
+    try:
+        return call(connection, VALENT_SERVICE, path, ACTIONS, "Describe",
+                    GLib.Variant("(s)", (name,)))
+    except GLib.Error:
+        return []
+
+
+def valent_actions(connection: Gio.DBusConnection, path: str) -> list[str]:
+    try:
+        described = call(connection, VALENT_SERVICE, path, ACTIONS,
+                         "DescribeAll")
+    except GLib.Error:
+        return []
+    payload = described[0] if described else {}
+    return [str(name) for name in payload.keys()] \
+        if isinstance(payload, dict) else []
+
+
+def valent_devices(connection: Gio.DBusConnection) -> list[dict[str, Any]]:
+    try:
+        result = call(connection, VALENT_SERVICE, VALENT_ROOT,
+                      "org.freedesktop.DBus.ObjectManager", "GetManagedObjects")
+    except GLib.Error:
+        return []
+    managed = result[0] if result else {}
+    devices = []
+    for path, interfaces in managed.items():
+        if not isinstance(interfaces, dict) or VALENT_DEVICE not in interfaces:
+            continue
+        props = interfaces[VALENT_DEVICE]
+        marker = "/Device/"
+        escaped = str(path).split(marker, 1)[-1]
+        # Valent's Id property is preferred; object path decoding is only a
+        # fallback for older releases.
+        device_id = str(props.get("Id") or props.get("ID")
+                        or valent_unescape(escaped))
+        state = int(props.get("State", 0) or 0)
+        icon = str(props.get("IconName") or "smartphone")
+        action_names = valent_actions(connection, str(path))
+        battery_state = find_state(valent_description(
+            connection, str(path), "battery.state"))
+        plugins = []
+        plugin_actions = {
+            "battery": ("battery.state",),
+            "clipboard": ("clipboard.push",),
+            "findmyphone": ("findmyphone.ring",),
+            "ping": ("ping.ping", "ping.message"),
+            "sftp": ("sftp.browse",),
+            "share": ("share.text", "share.uri", "share.uris"),
+            "sms": ("sms.sync",),
+        }
+        for plugin, names in plugin_actions.items():
+            if any(name in action_names for name in names):
+                plugins.append(plugin)
+        devices.append({
+            "id": device_id,
+            "name": str(props.get("Name") or device_id),
+            "type": "tablet" if "tablet" in icon else
+                    "laptop" if "laptop" in icon else
+                    "desktop" if "computer" in icon or "desktop" in icon
+                    else "phone",
+            "reachable": bool(state & 1),
+            "paired": bool(state & 2),
+            "pairRequestedByPeer": bool(state & 4),
+            "pairRequested": bool(state & 8),
+            "verificationKey": "",
+            "battery": int(battery_state.get("percentage", -1)),
+            "charging": bool(battery_state.get("charging", False)),
+            "plugins": plugins,
+            "actions": action_names,
+            "path": str(path),
+        })
+    return devices
+
+
+def status() -> dict[str, Any]:
+    connection = bus()
+    kde_running = owned(connection, KDE_SERVICE)
+    valent_running = owned(connection, VALENT_SERVICE)
+    backend = "kdeconnect" if kde_running else "valent" if valent_running else ""
+    devices = kde_devices(connection) if kde_running else \
+        valent_devices(connection) if valent_running else []
+    devices.sort(key=lambda item: (
+        not (item["paired"] and item["reachable"]),
+        not item["pairRequestedByPeer"], not item["reachable"],
+        item["name"].casefold()))
+    return {
+        "ok": True,
+        "backend": backend,
+        "running": bool(backend),
+        "runningBackends": {
+            "kdeconnect": kde_running, "valent": valent_running,
+        },
+        "installed": {
+            "kdeconnect": bool(kde_daemon() or shutil.which("kdeconnect-cli")
+                               or kde_running),
+            "valent": bool(shutil.which("valent") or valent_running),
+        },
+        "devices": devices,
+    }
+
+
+def kde_daemon() -> str:
+    for candidate in KDE_DAEMONS:
+        if Path(candidate).is_file() and os.access(candidate, os.X_OK):
+            return candidate
+    return shutil.which("kdeconnectd") or ""
+
+
+def set_backend_running(backend: str, enabled: bool) -> None:
+    connection = bus()
+    if backend == "kdeconnect":
+        if enabled:
+            executable = kde_daemon()
+            if not executable:
+                raise RuntimeError("kdeconnectd is not installed")
+            if not owned(connection, KDE_SERVICE):
+                subprocess.Popen([executable], start_new_session=True,
+                                 stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
+        elif owned(connection, KDE_SERVICE):
+            try:
+                call(connection, KDE_SERVICE, "/MainApplication",
+                     "org.qtproject.Qt.QCoreApplication", "quit")
+            except GLib.Error:
+                subprocess.run(["pkill", "-u", str(os.getuid()), "-x",
+                                "kdeconnectd"], check=False)
+        return
+    if backend == "valent":
+        if enabled:
+            executable = shutil.which("valent")
+            if not executable:
+                raise RuntimeError("valent is not installed")
+            if not owned(connection, VALENT_SERVICE):
+                subprocess.Popen([executable, "--gapplication-service"],
+                                 start_new_session=True,
+                                 stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
+        elif owned(connection, VALENT_SERVICE):
+            try:
+                call(connection, VALENT_SERVICE, VALENT_ROOT,
+                     "org.gtk.Application", "Quit")
+            except GLib.Error:
+                subprocess.run(["pkill", "-u", str(os.getuid()), "-x",
+                                "valent"], check=False)
+        return
+    raise ValueError("No supported phone backend is selected")
+
+
+def unique_addresses(values: Any) -> list[str]:
+    result = []
+    for value in values if isinstance(values, list) else []:
+        try:
+            address = str(ipaddress.ip_address(str(value).strip()))
+        except ValueError:
+            continue
+        if address not in result:
+            result.append(address)
+        if len(result) >= MAX_CUSTOM_ADDRESSES:
+            break
+    return result
+
+
+def kde_custom_addresses(connection: Gio.DBusConnection) -> list[str]:
+    return unique_addresses(properties(connection, KDE_SERVICE, KDE_ROOT,
+                                       KDE_DAEMON).get("customDevices", []))
+
+
+def set_kde_custom_addresses(connection: Gio.DBusConnection,
+                             addresses: list[str]) -> None:
+    values = unique_addresses(addresses)
+    call(connection, KDE_SERVICE, KDE_ROOT, PROPERTIES, "Set",
+         GLib.Variant("(ssv)", (KDE_DAEMON, "customDevices",
+                                 GLib.Variant("as", values))))
+
+
+def resolve_address(value: str) -> str:
+    candidate = str(value).strip().strip("[]")
+    if not candidate or len(candidate) > 253:
+        raise ValueError("Enter an IP address or machine name")
+    try:
+        return str(ipaddress.ip_address(candidate))
+    except ValueError:
+        pass
+    if any(character not in
+           "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_"
+           for character in candidate):
+        raise ValueError("Invalid machine name")
+    try:
+        answers = socket.getaddrinfo(candidate, None, type=socket.SOCK_STREAM)
+    except socket.gaierror as error:
+        raise ValueError(f"Could not resolve {candidate}") from error
+    for family, _kind, _protocol, _canonical, sockaddr in answers:
+        if family in (socket.AF_INET, socket.AF_INET6):
+            return str(ipaddress.ip_address(sockaddr[0]))
+    raise ValueError(f"No IP address found for {candidate}")
+
+
+def local_lan_address() -> str:
+    connection = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        connection.connect(("192.0.2.1", 9))
+        return str(connection.getsockname()[0])
+    except OSError:
+        return ""
+    finally:
+        connection.close()
+
+
+def tailscale_info() -> dict[str, Any]:
+    executable = shutil.which("tailscale")
+    fallback = {"installed": bool(executable), "running": False,
+                "address": "", "peers": []}
+    if not executable:
+        return fallback
+    try:
+        completed = subprocess.run(
+            [executable, "status", "--json"], check=False, text=True,
+            capture_output=True, timeout=5)
+        if completed.returncode != 0 or len(completed.stdout) > 2 << 20:
+            return fallback
+        payload = json.loads(completed.stdout)
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        return fallback
+
+    def ipv4(values: Any) -> str:
+        for value in values if isinstance(values, list) else []:
+            try:
+                address = ipaddress.ip_address(str(value))
+                if address.version == 4:
+                    return str(address)
+            except ValueError:
+                continue
+        return ""
+
+    peers = []
+    raw_peers = payload.get("Peer", {})
+    sources = raw_peers.values() if isinstance(raw_peers, dict) else raw_peers \
+        if isinstance(raw_peers, list) else []
+    for peer in sources:
+        if not isinstance(peer, dict):
+            continue
+        address = ipv4(peer.get("TailscaleIPs", []))
+        if not address:
+            continue
+        dns_name = str(peer.get("DNSName") or "").rstrip(".")[:253]
+        host_name = str(peer.get("HostName") or "")[:253]
+        peers.append({
+            "name": host_name or dns_name.split(".", 1)[0] or address,
+            "dnsName": dns_name,
+            "address": address,
+            "os": str(peer.get("OS") or "")[:32],
+            "online": bool(peer.get("Online", False)),
+        })
+        if len(peers) >= MAX_TAILSCALE_PEERS:
+            break
+    peers.sort(key=lambda peer: (not peer["online"], peer["name"].casefold()))
+    self_node = payload.get("Self", {})
+    return {"installed": True,
+            "running": str(payload.get("BackendState") or "") == "Running",
+            "address": ipv4(self_node.get("TailscaleIPs", []))
+                if isinstance(self_node, dict) else "",
+            "peers": peers}
+
+
+def discovery_info(connection: Gio.DBusConnection) -> dict[str, Any]:
+    return {"ok": True, "lanAddress": local_lan_address(),
+            "customAddresses": kde_custom_addresses(connection),
+            "tailscale": tailscale_info()}
+
+
+def refresh_discovery() -> None:
+    executable = shutil.which("kdeconnect-cli")
+    if not executable:
+        raise RuntimeError("kdeconnect-cli is not installed")
+    completed = subprocess.run([executable, "--refresh"], check=False,
+                               timeout=15, capture_output=True, text=True)
+    if completed.returncode != 0:
+        detail = completed.stderr.strip()[:256]
+        raise RuntimeError(detail or "KDE Connect discovery failed")
+
+
+def notification_id(value: str) -> str:
+    identifier = str(value)
+    if not identifier or len(identifier) > 128 \
+            or re.fullmatch(r"[A-Za-z0-9_]+", identifier) is None:
+        raise ValueError("Invalid notification identifier")
+    return identifier
+
+
+def plain_notification_text(value: Any) -> str:
+    text = str(value or "")
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    return html.unescape(text).strip()[:8192]
+
+
+def kde_notifications(connection: Gio.DBusConnection,
+                      device_id: str) -> list[dict[str, Any]]:
+    base = f"{KDE_ROOT}/devices/{device_id}/notifications"
+    result = call(connection, KDE_SERVICE, base, KDE_NOTIFICATIONS,
+                  "activeNotifications")
+    identifiers = result[0] if result and isinstance(result[0], list) else []
+    rows = []
+    for raw_id in identifiers[-MAX_NOTIFICATIONS:]:
+        try:
+            identifier = notification_id(str(raw_id))
+        except ValueError:
+            continue
+        props = properties(connection, KDE_SERVICE,
+                           f"{base}/{identifier}", KDE_NOTIFICATION)
+        if not props:
+            continue
+        actions = [str(value)[:128] for value in props.get("actions", [])
+                   if str(value)][:12]
+        rows.append({
+            "id": identifier,
+            "app": str(props.get("appName") or "Notification")[:128],
+            "title": plain_notification_text(props.get("title"))[:256],
+            "text": plain_notification_text(props.get("text")
+                                               or props.get("ticker")),
+            "dismissable": bool(props.get("dismissable", False)),
+            "replyId": str(props.get("replyId") or "")[:256],
+            "actions": actions,
+        })
+    rows.reverse()
+    return rows
+
+
+def kde_notification_dismiss(connection: Gio.DBusConnection,
+                             device_id: str, identifier: str) -> None:
+    identifier = notification_id(identifier)
+    call(connection, KDE_SERVICE,
+         f"{KDE_ROOT}/devices/{device_id}/notifications/{identifier}",
+         KDE_NOTIFICATION, "dismiss")
+
+
+def kde_notification_reply(connection: Gio.DBusConnection, device_id: str,
+                           identifier: str, reply_id: str, text: str) -> None:
+    if not reply_id or not text.strip():
+        raise ValueError("A reply target and message are required")
+    call(connection, KDE_SERVICE,
+         f"{KDE_ROOT}/devices/{device_id}/notifications",
+         KDE_NOTIFICATIONS, "sendReply",
+         GLib.Variant("(ss)", (reply_id, text)))
+    identifier = notification_id(identifier)
+    path = f"{KDE_ROOT}/devices/{device_id}/notifications/{identifier}"
+    if bool(properties(connection, KDE_SERVICE, path,
+                       KDE_NOTIFICATION).get("dismissable", False)):
+        try:
+            call(connection, KDE_SERVICE, path, KDE_NOTIFICATION, "dismiss")
+        except GLib.Error:
+            pass
+
+
+def message_addresses(raw: Any) -> list[str]:
+    result = []
+    for entry in raw if isinstance(raw, list) else []:
+        value = entry[0] if isinstance(entry, list) and entry else entry
+        text = str(value or "")[:128]
+        if text and text not in result:
+            result.append(text)
+    return result[:16]
+
+
+def parse_message(raw: Any) -> dict[str, Any] | None:
+    raw = unpack(raw)
+    if isinstance(raw, dict):
+        body = str(raw.get("body") or "")[:8192]
+        addresses = message_addresses(raw.get("addresses", []))
+        message_type = int(raw.get("type", 0) or 0)
+        return {
+            "body": body, "addresses": addresses,
+            "date": int(raw.get("date", 0) or 0),
+            "type": message_type, "read": int(raw.get("read", 0) or 0),
+            "threadId": int(raw.get("threadId", 0) or 0),
+            "id": int(raw.get("id", 0) or 0),
+            "fromMe": bool(raw.get("fromMe", message_type == 2)),
+        }
+    if not isinstance(raw, list) or len(raw) < 8:
+        return None
+    message_type = int(raw[4] or 0)
+    return {
+        "body": str(raw[1] or "")[:8192],
+        "addresses": message_addresses(raw[2]),
+        "date": int(raw[3] or 0), "type": message_type,
+        "read": int(raw[5] or 0), "threadId": int(raw[6] or 0),
+        "id": int(raw[7] or 0), "fromMe": message_type == 2,
+    }
+
+
+def decode_vcard_value(key: str, value: str) -> str:
+    if "QUOTED-PRINTABLE" in key.upper():
+        try:
+            value = quopri.decodestring(value).decode("utf-8", errors="replace")
+        except (ValueError, UnicodeError):
+            pass
+    return value.replace("\\n", "\n").replace("\\,", ",") \
+        .replace("\\;", ";").replace("\\\\", "\\").strip()
+
+
+def parse_vcard(text: str) -> dict[str, Any] | None:
+    unfolded = []
+    for line in text.splitlines():
+        if line.startswith((" ", "\t")) and unfolded:
+            unfolded[-1] += line[1:]
+        else:
+            unfolded.append(line)
+    name = ""
+    structured = ""
+    phones = []
+    for line in unfolded:
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        field = key.split(";", 1)[0].upper()
+        decoded = decode_vcard_value(key, value)[:256]
+        if field == "FN":
+            name = decoded
+        elif field == "N" and not structured:
+            parts = decoded.split(";")
+            structured = " ".join(part for part in (
+                parts[1] if len(parts) > 1 else "", parts[0] if parts else "")
+                if part).strip()
+        elif field == "TEL" and decoded and decoded not in phones:
+            phones.append(decoded)
+    if not phones:
+        return None
+    return {"name": name or structured or phones[0],
+            "phone": phones[0], "phones": phones[:8]}
+
+
+def kde_contacts(device_id: str) -> list[dict[str, Any]]:
+    directory = Path.home() / ".local/share/kpeoplevcard" \
+        / f"kdeconnect-{device_id}"
+    result = []
+    total = 0
+    try:
+        entries = sorted(directory.iterdir(), key=lambda path: path.name)
+    except OSError:
+        return result
+    for path in entries:
+        if len(result) >= MAX_CONTACTS or path.suffix.lower() != ".vcf":
+            continue
+        try:
+            if path.is_symlink() or not path.is_file() or path.stat().st_size > 1 << 20:
+                continue
+            data = path.read_text(errors="replace")
+        except OSError:
+            continue
+        total += len(data)
+        if total > 8 << 20:
+            break
+        contact = parse_vcard(data)
+        if contact:
+            result.append(contact)
+    result.sort(key=lambda item: (item["name"].casefold(), item["phone"]))
+    return result
+
+
+def phone_key(value: str) -> str:
+    return "".join(character for character in str(value) if character.isdigit()) \
+        .lstrip("0")
+
+
+def contact_name(address: str, contacts: list[dict[str, Any]]) -> str:
+    wanted = phone_key(address)
+    for contact in contacts:
+        for phone in contact["phones"]:
+            candidate = phone_key(phone)
+            if wanted and candidate and (wanted.endswith(candidate)
+                                         or candidate.endswith(wanted)):
+                return contact["name"]
+    return address
+
+
+def annotate_message(message: dict[str, Any],
+                     contacts: list[dict[str, Any]]) -> dict[str, Any]:
+    names = [contact_name(address, contacts)
+             for address in message.get("addresses", [])]
+    message["title"] = ", ".join(names) if names else "Unknown"
+    return message
+
+
+def kde_conversations(connection: Gio.DBusConnection,
+                      device_id: str) -> list[dict[str, Any]]:
+    base = f"{KDE_ROOT}/devices/{device_id}"
+    for path, interface, method in (
+            (base, KDE_CONVERSATIONS, "requestAllConversationThreads"),
+            (f"{base}/sms", KDE_SMS, "requestAllConversations")):
+        try:
+            call(connection, KDE_SERVICE, path, interface, method, timeout=300)
+            break
+        except GLib.Error:
+            continue
+    try:
+        call(connection, KDE_SERVICE, f"{base}/contacts",
+             "org.kde.kdeconnect.device.contacts",
+             "synchronizeRemoteWithLocal", timeout=300)
+    except GLib.Error:
+        pass
+    result = call(connection, KDE_SERVICE, base, KDE_CONVERSATIONS,
+                  "activeConversations")
+    contacts = kde_contacts(device_id)
+    rows = []
+    for raw in (result[0] if result else [])[:MAX_CONVERSATIONS]:
+        message = parse_message(raw)
+        if message:
+            rows.append(annotate_message(message, contacts))
+    rows.sort(key=lambda item: item["date"], reverse=True)
+    return rows
+
+
+def kde_thread(connection: Gio.DBusConnection, device_id: str,
+               thread_id: int) -> list[dict[str, Any]]:
+    base = f"{KDE_ROOT}/devices/{device_id}"
+    messages = {}
+    loop = GLib.MainLoop()
+    quiet_timer = {"id": 0}
+
+    def finish_soon() -> None:
+        if quiet_timer["id"]:
+            GLib.source_remove(quiet_timer["id"])
+        quiet_timer["id"] = GLib.timeout_add(250, loop.quit)
+
+    def receive(_connection, _sender, _path, _interface, signal, parameters):
+        values = unpack(parameters)
+        if signal in ("conversationUpdated", "conversationCreated") and values:
+            message = parse_message(values[0])
+            if message and message["threadId"] == thread_id:
+                messages[message["id"]] = message
+                if len(messages) >= MAX_MESSAGES:
+                    loop.quit()
+                else:
+                    finish_soon()
+        elif signal == "conversationLoaded" and values \
+                and int(values[0]) == thread_id:
+            finish_soon()
+
+    subscription = connection.signal_subscribe(
+        KDE_SERVICE, KDE_CONVERSATIONS, None, base, None,
+        Gio.DBusSignalFlags.NONE, receive)
+    try:
+        try:
+            call(connection, KDE_SERVICE, base, KDE_CONVERSATIONS,
+                 "requestConversation",
+                 GLib.Variant("(xii)", (thread_id, 0, 64)), timeout=300)
+        except GLib.Error:
+            pass
+        GLib.timeout_add(1800, loop.quit)
+        loop.run()
+    finally:
+        connection.signal_unsubscribe(subscription)
+    contacts = kde_contacts(device_id)
+    rows = [annotate_message(message, contacts) for message in messages.values()]
+    rows.sort(key=lambda item: item["date"])
+    if not rows:
+        rows = [item for item in kde_conversations(connection, device_id)
+                if item["threadId"] == thread_id]
+    return rows
+
+
+def kde_sms_send(connection: Gio.DBusConnection, device_id: str,
+                 number: str, text: str) -> None:
+    base = f"{KDE_ROOT}/devices/{device_id}"
+    addresses = [GLib.Variant("(s)", (number,))]
+    attempts = (
+        (base, KDE_CONVERSATIONS, "sendWithoutConversation",
+         GLib.Variant("(avsav)", (addresses, text, []))),
+        (f"{base}/sms", KDE_SMS, "sendSms",
+         GLib.Variant("(avsav)", (addresses, text, []))),
+    )
+    last_error = None
+    for path, interface, method, arguments in attempts:
+        try:
+            call(connection, KDE_SERVICE, path, interface, method, arguments)
+            return
+        except GLib.Error as error:
+            last_error = error
+    if last_error:
+        raise last_error
+
+
+def kde_sms_reply(connection: Gio.DBusConnection, device_id: str,
+                  thread_id: int, text: str) -> None:
+    base = f"{KDE_ROOT}/devices/{device_id}"
+    try:
+        call(connection, KDE_SERVICE, base, KDE_CONVERSATIONS,
+             "replyToConversation",
+             GLib.Variant("(xsav)", (thread_id, text, [])))
+    except GLib.Error:
+        call(connection, KDE_SERVICE, base, KDE_CONVERSATIONS,
+             "replyToConversation", GLib.Variant("(xs)", (thread_id, text)))
+
+
+def open_sms(backend: str, device_id: str) -> None:
+    if backend == "valent":
+        result = subprocess.run(["gapplication", "action",
+                                 "ca.andyholmes.Valent", "messages-window"],
+                                check=False)
+        if result.returncode != 0:
+            raise RuntimeError("Could not open Valent Messages")
+        return
+    connection = bus()
+    try:
+        call(connection, KDE_SERVICE,
+             f"{KDE_ROOT}/devices/{device_id}/sms", KDE_SMS, "launchApp")
+    except GLib.Error:
+        executable = shutil.which("kdeconnect-sms")
+        if not executable:
+            raise RuntimeError("kdeconnect-sms is not installed")
+        subprocess.Popen([executable, "--device", device_id],
+                         start_new_session=True)
+
+
+def kde_action(connection: Gio.DBusConnection, action: str,
+               device_id: str, value: str = "") -> None:
+    base = f"{KDE_ROOT}/devices/{device_id}"
+    calls = {
+        "pair": (base, KDE_DEVICE,
+                 (("requestPairing", None), ("requestPair", None))),
+        "accept": (base, KDE_DEVICE,
+                   (("acceptPairing", None),
+                    ("acceptPairingRequest", None))),
+        "reject": (base, KDE_DEVICE,
+                   (("cancelPairing", None),
+                    ("rejectPairingRequest", None))),
+        "unpair": (base, KDE_DEVICE, (("unpair", None),)),
+        "ping": (f"{base}/ping", "org.kde.kdeconnect.device.ping",
+                 (("sendPing", None),
+                  ("sendPing", GLib.Variant("(s)", ("Ping from anush",))))),
+        "ring": (f"{base}/findmyphone",
+                 "org.kde.kdeconnect.device.findmyphone", (("ring", None),)),
+        "clipboard": (f"{base}/clipboard",
+                      "org.kde.kdeconnect.device.clipboard",
+                      (("sendClipboard", None),)),
+        "browse": (f"{base}/sftp", "org.kde.kdeconnect.device.sftp",
+                   (("mount", None),)),
+        "share-text": (f"{base}/share", "org.kde.kdeconnect.device.share",
+                       (("shareText", GLib.Variant("(s)", (value,))),)),
+        "share-file": (f"{base}/share", "org.kde.kdeconnect.device.share",
+                       (("shareUrl", GLib.Variant("(s)",
+                       (local_file(value).resolve().as_uri(),))),)),
+    }
+    if action not in calls:
+        raise ValueError(f"Unsupported action: {action}")
+    path, interface, attempts = calls[action]
+    last_error = None
+    for method, arguments in attempts:
+        try:
+            call(connection, KDE_SERVICE, path, interface, method, arguments)
+            last_error = None
+            break
+        except GLib.Error as error:
+            last_error = error
+    if last_error is not None:
+        raise last_error
+    if action == "browse":
+        subprocess.Popen(["xdg-open", f"kdeconnect://{device_id}/"],
+                         start_new_session=True)
+
+
+def valent_activate(connection: Gio.DBusConnection, device_id: str,
+                    name: str, value: str | None = None) -> None:
+    parameters = [] if value is None else [GLib.Variant("s", value)]
+    call(connection, VALENT_SERVICE, valent_path(device_id), ACTIONS,
+         "Activate", GLib.Variant("(sava{sv})", (name, parameters, {})))
+
+
+def valent_action(connection: Gio.DBusConnection, action: str,
+                  device_id: str, value: str = "") -> None:
+    mapping = {
+        "pair": ("pair", None), "accept": ("pair", None),
+        "reject": ("unpair", None), "unpair": ("unpair", None),
+        "ping": ("ping.ping", None), "ring": ("findmyphone.ring", None),
+        "clipboard": ("clipboard.push", None),
+        "browse": ("sftp.browse", None),
+        "share-text": ("share.text", value),
+        "share-file": ("share.uri",
+                       local_file(value).resolve().as_uri()),
+    }
+    if action not in mapping:
+        raise ValueError(f"Unsupported action: {action}")
+    name, parameter = mapping[action]
+    valent_activate(connection, device_id, name, parameter)
+
+
+def open_backend(backend: str) -> None:
+    candidates = (["kdeconnect-app"], ["kdeconnect-settings"]) \
+        if backend == "kdeconnect" else (["valent"],)
+    for command in candidates:
+        if shutil.which(command[0]):
+            subprocess.Popen(command, start_new_session=True)
+            return
+    raise RuntimeError(f"No {backend or 'phone integration'} application found")
+
+
+def local_file(value: str) -> Path:
+    text = str(value)
+    if text.startswith("file:"):
+        parsed = urlparse(text)
+        return Path(unquote(parsed.path))
+    return Path(text).expanduser()
+
+
+def main() -> None:
+    if len(sys.argv) == 2 and sys.argv[1] == "self-test":
+        samples = ("phone-id", "pixel_8", "téléphone")
+        if any(valent_unescape(valent_escape(value)) != value
+               for value in samples):
+            emit({"ok": False, "error": "Valent path round-trip failed"}, 1)
+        if normalized_plugins(["kdeconnect_ping", "battery", "battery"]) \
+                != ["ping", "battery"]:
+            emit({"ok": False, "error": "Plugin normalization failed"}, 1)
+        message = parse_message([0, "hello", [["+123"]], 10, 1, 0, 7, 9])
+        if not message or message["body"] != "hello" \
+                or message["addresses"] != ["+123"]:
+            emit({"ok": False, "error": "SMS normalization failed"}, 1)
+        contact = parse_vcard("BEGIN:VCARD\nFN:Test Person\nTEL:+123\nEND:VCARD")
+        if not contact or contact["phone"] != "+123":
+            emit({"ok": False, "error": "Contact normalization failed"}, 1)
+        if str(local_file("file:///tmp/example%20file")) != "/tmp/example file":
+            emit({"ok": False, "error": "File URI normalization failed"}, 1)
+        if unique_addresses(["100.64.0.1", "100.64.0.1", "bad"]) \
+                != ["100.64.0.1"]:
+            emit({"ok": False, "error": "Address normalization failed"}, 1)
+        if resolve_address("127.0.0.1") != "127.0.0.1":
+            emit({"ok": False, "error": "Address resolution failed"}, 1)
+        if plain_notification_text("Hello<br><b>world</b>") != "Hello\nworld":
+            emit({"ok": False, "error": "Notification text cleanup failed"}, 1)
+        address = [GLib.Variant("(s)", ("+123",))]
+        GLib.Variant("(avsav)", (address, "hello", []))
+        GLib.Variant("(xsav)", (7, "reply", []))
+        GLib.Variant("(sava{sv})", ("share.text",
+                                    [GLib.Variant("s", "hello")], {}))
+        GLib.Variant("(ssv)", (KDE_DAEMON, "customDevices",
+                               GLib.Variant("as", ["100.64.0.1"])))
+        GLib.Variant("(ss)", ("reply-id", "hello"))
+        emit({"ok": True})
+
+    if len(sys.argv) == 1 or sys.argv[1] == "status":
+        try:
+            emit(status())
+        except (GLib.Error, OSError, ValueError) as error:
+            emit({"ok": False, "error": str(error)}, 1)
+
+    action = sys.argv[1]
+    if action in ("discovery-info", "discover", "address-add",
+                  "address-remove"):
+        try:
+            connection = bus()
+            if not owned(connection, KDE_SERVICE):
+                raise RuntimeError("KDE Connect must be running for discovery")
+            if action == "discovery-info":
+                emit(discovery_info(connection))
+            if action == "discover":
+                refresh_discovery()
+                emit({"ok": True})
+            if len(sys.argv) < 3:
+                raise ValueError("An IP address or machine name is required")
+            requested = sys.argv[2]
+            if action == "address-add":
+                address = resolve_address(requested)
+                addresses = kde_custom_addresses(connection)
+                if address not in addresses:
+                    set_kde_custom_addresses(connection, addresses + [address])
+                refresh_discovery()
+                emit({"ok": True, "address": address})
+            address = resolve_address(requested)
+            addresses = [value for value in kde_custom_addresses(connection)
+                         if value != address]
+            set_kde_custom_addresses(connection, addresses)
+            emit({"ok": True, "address": address})
+        except (GLib.Error, OSError, RuntimeError, ValueError,
+                subprocess.TimeoutExpired) as error:
+            emit({"ok": False, "error": str(error)}, 1)
+
+    if action == "stop-all":
+        try:
+            connection = bus()
+            if owned(connection, KDE_SERVICE):
+                set_backend_running("kdeconnect", False)
+            if owned(connection, VALENT_SERVICE):
+                set_backend_running("valent", False)
+            emit({"ok": True})
+        except (GLib.Error, OSError, RuntimeError, ValueError) as error:
+            emit({"ok": False, "error": str(error)}, 1)
+
+    if action in ("start", "stop"):
+        try:
+            backend = sys.argv[2] if len(sys.argv) > 2 else ""
+            set_backend_running(backend, action == "start")
+            emit({"ok": True})
+        except (GLib.Error, OSError, RuntimeError, ValueError) as error:
+            emit({"ok": False, "error": str(error)}, 1)
+
+    if action == "open":
+        try:
+            backend = sys.argv[2] if len(sys.argv) > 2 else ""
+            if backend not in ("kdeconnect", "valent"):
+                backend = "kdeconnect" if shutil.which("kdeconnect-cli") \
+                    else "valent" if shutil.which("valent") else ""
+            open_backend(backend)
+            emit({"ok": True})
+        except (OSError, RuntimeError, ValueError) as error:
+            emit({"ok": False, "error": str(error)}, 1)
+
+    if action == "sms-app":
+        try:
+            if len(sys.argv) < 4:
+                raise ValueError("A backend and device are required")
+            open_sms(sys.argv[2], sys.argv[3])
+            emit({"ok": True})
+        except (GLib.Error, OSError, RuntimeError, ValueError) as error:
+            emit({"ok": False, "error": str(error)}, 1)
+
+    if len(sys.argv) < 4:
+        emit({"ok": False,
+              "error": "Usage: phone-control ACTION BACKEND DEVICE [VALUE]"}, 2)
+    backend, device_id = sys.argv[2], sys.argv[3]
+    value = sys.argv[4] if len(sys.argv) > 4 else ""
+    if action == "share-file" and not local_file(value).is_file():
+        emit({"ok": False, "error": f"File not found: {value}"}, 2)
+    if action == "share-files":
+        values = sys.argv[4:]
+        missing = [item for item in values if not local_file(item).is_file()]
+        if not values:
+            emit({"ok": False, "error": "Choose at least one file"}, 2)
+        if missing:
+            emit({"ok": False, "error": f"File not found: {missing[0]}"}, 2)
+        try:
+            connection = bus()
+            for item in values:
+                if backend == "kdeconnect":
+                    kde_action(connection, "share-file", device_id, item)
+                elif backend == "valent":
+                    valent_action(connection, "share-file", device_id, item)
+                else:
+                    raise ValueError("No supported phone backend is running")
+            emit({"ok": True, "count": len(values)})
+        except (GLib.Error, OSError, ValueError) as error:
+            emit({"ok": False, "error": str(error)}, 1)
+    try:
+        connection = bus()
+        if action == "notifications":
+            if backend != "kdeconnect":
+                raise ValueError("Notifications are provided by KDE Connect only")
+            emit({"ok": True,
+                  "notifications": kde_notifications(connection, device_id)})
+        if action == "notification-dismiss":
+            if backend != "kdeconnect" or len(sys.argv) < 5:
+                raise ValueError("A KDE Connect notification is required")
+            kde_notification_dismiss(connection, device_id, sys.argv[4])
+            emit({"ok": True})
+        if action == "notification-reply":
+            if backend != "kdeconnect" or len(sys.argv) < 7:
+                raise ValueError("A notification reply and message are required")
+            kde_notification_reply(connection, device_id,
+                                   sys.argv[4], sys.argv[5], sys.argv[6])
+            emit({"ok": True})
+        if action == "notification-reply-stdin":
+            if backend != "kdeconnect" or len(sys.argv) < 6:
+                raise ValueError("A notification reply target is required")
+            payload = sys.stdin.buffer.read(MAX_REPLY_BYTES + 1)
+            if len(payload) > MAX_REPLY_BYTES:
+                raise ValueError("Notification reply is too long")
+            text = payload.decode("utf-8", errors="replace")
+            kde_notification_reply(connection, device_id,
+                                   sys.argv[4], sys.argv[5], text)
+            emit({"ok": True})
+        if action == "conversations":
+            if backend != "kdeconnect":
+                raise ValueError("SMS history is provided by KDE Connect only")
+            emit({"ok": True,
+                  "conversations": kde_conversations(connection, device_id)})
+        if action == "conversation":
+            if backend != "kdeconnect" or len(sys.argv) < 5:
+                raise ValueError("A KDE Connect thread is required")
+            thread_id = int(sys.argv[4])
+            emit({"ok": True, "threadId": thread_id,
+                  "messages": kde_thread(connection, device_id, thread_id)})
+        if action == "contacts":
+            if backend != "kdeconnect":
+                raise ValueError("Contacts are provided by KDE Connect only")
+            try:
+                call(connection, KDE_SERVICE,
+                     f"{KDE_ROOT}/devices/{device_id}/contacts",
+                     "org.kde.kdeconnect.device.contacts",
+                     "synchronizeRemoteWithLocal", timeout=300)
+            except GLib.Error:
+                pass
+            emit({"ok": True, "contacts": kde_contacts(device_id)})
+        if action == "sms-send":
+            if backend != "kdeconnect" or len(sys.argv) < 6:
+                raise ValueError("A recipient and message are required")
+            kde_sms_send(connection, device_id, sys.argv[4], sys.argv[5])
+            emit({"ok": True})
+        if action == "sms-reply":
+            if backend != "kdeconnect" or len(sys.argv) < 6:
+                raise ValueError("A thread and message are required")
+            kde_sms_reply(connection, device_id, int(sys.argv[4]), sys.argv[5])
+            emit({"ok": True})
+        if backend == "kdeconnect":
+            kde_action(connection, action, device_id, value)
+        elif backend == "valent":
+            valent_action(connection, action, device_id, value)
+        else:
+            raise ValueError("No supported phone backend is running")
+        emit({"ok": True})
+    except (GLib.Error, OSError, ValueError) as error:
+        emit({"ok": False, "error": str(error)}, 1)
+
+
+if __name__ == "__main__":
+    main()

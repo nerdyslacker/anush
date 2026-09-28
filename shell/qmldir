@@ -18,6 +18,7 @@ singleton DisplayConfigurationService components/Displays/DisplayConfigurationSe
 singleton NetworkService components/Network/NetworkService.qml
 singleton HotspotService components/Network/HotspotService.qml
 singleton BluetoothService components/Network/BluetoothService.qml
+singleton PhoneService components/Phone/PhoneService.qml
 singleton EasyEffectsService components/Audio/EasyEffectsService.qml
 singleton TmuxService components/Tmux/TmuxService.qml
 singleton NotepadState components/Notepad/NotepadState.qml
@@ -58,6 +59,9 @@ NetworkPopup components/Network/NetworkPopup.qml
 HotspotPopup components/Network/HotspotPopup.qml
 Bluetooth components/Network/Bluetooth.qml
 BluetoothPopup components/Network/BluetoothPopup.qml
+Phone components/Phone/Phone.qml
+PhonePopup components/Phone/PhonePopup.qml
+PhoneSms components/Phone/PhoneSms.qml
 Notepad components/Notepad/Notepad.qml
 NotepadSidebar components/Notepad/NotepadSidebar.qml
 Bell components/Notifications/Bell.qml
