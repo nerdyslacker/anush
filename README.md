@@ -48,7 +48,8 @@ Optional desktop integrations:
 - brightnessctl, powerprofilesctl, redshift, xset, and xrandr for hardware and
   power controls;
 - curl, xcolor, xdg-open, flameshot, xinput, notify-send, and xterm for individual
-  widget actions;
+  widget actions; `plocate` and `fd` (or `fdfind`) enable both launcher file
+  search backends, while either one can provide partial results on its own;
 - matugen for Material You wallpaper themes; ImageMagick remains the automatic
   fallback when matugen is unavailable or cannot generate a valid palette;
 - `adw-gtk-theme` (`adw-gtk3`) for applying generated colors consistently to

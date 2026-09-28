@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+"""Discovery backend for the prefixed application-launcher modes."""
+
+import glob
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+
+LIMIT = 100
+PSEUDO_FILESYSTEMS = {
+    "autofs", "binder", "bpf", "cgroup", "cgroup2", "configfs", "cpuset",
+    "debugfs", "devpts", "devtmpfs", "efivarfs", "fuse.gvfsd-fuse",
+    "fuse.portal", "fusectl", "hugetlbfs", "mqueue", "overlay", "pipefs",
+    "proc", "pstore", "ramfs", "securityfs", "sockfs", "sysfs", "tmpfs",
+    "tracefs",
+}
+
+
+def emit(results, partial=False, error=""):
+    print(json.dumps({"results": results[:LIMIT], "partial": partial, "error": error}))
+
+
+def file_search(query):
+    if not query:
+        return [], False, ""
+
+    found = {}
+    partial = False
+    errors = []
+    commands = []
+    plocate = shutil.which("plocate")
+    fd = shutil.which("fd") or shutil.which("fdfind")
+    if plocate:
+        commands.append(("plocate", [plocate, "--ignore-case", "--limit", str(LIMIT), "--", query]))
+    else:
+        partial = True
+    if fd:
+        commands.append(("fd", [fd, "--hidden", "--no-ignore", "--color", "never", "--absolute-path",
+                                  "--max-results", str(LIMIT), "--fixed-strings", "--", query,
+                                  os.path.expanduser("~")]))
+    else:
+        partial = True
+
+    for backend, command in commands:
+        try:
+            process = subprocess.run(command, capture_output=True, text=True, timeout=5,
+                                     errors="replace")
+        except (OSError, subprocess.TimeoutExpired) as error:
+            partial = True
+            errors.append(f"{backend}: {error}")
+            continue
+        if process.returncode not in (0, 1):
+            partial = True
+            message = process.stderr.strip() or f"exit status {process.returncode}"
+            errors.append(f"{backend}: {message}")
+            continue
+        lines = process.stdout.splitlines()
+        if len(lines) >= LIMIT:
+            partial = True
+        for path in lines:
+            path = os.path.normpath(path.strip())
+            if path and path not in found:
+                found[path] = backend
+
+    query_lower = query.lower()
+    ordered = sorted(found, key=lambda path: (
+        query_lower not in os.path.basename(path).lower(),
+        os.path.basename(path).lower(), path.lower()))
+    results = [{
+        "kind": "file",
+        "name": os.path.basename(path) or path,
+        "detail": os.path.dirname(path),
+        "value": path,
+        "source": found[path],
+    } for path in ordered[:LIMIT]]
+    return results, partial or len(ordered) > LIMIT, "; ".join(errors)
+
+
+def expand_include(pattern, base_directory):
+    pattern = os.path.expanduser(pattern)
+    if not os.path.isabs(pattern):
+        pattern = os.path.join(base_directory, pattern)
+    return sorted(glob.glob(pattern))
+
+
+def config_hosts(path, visited=None):
+    visited = set() if visited is None else visited
+    path = os.path.abspath(os.path.expanduser(path))
+    if path in visited or not os.path.isfile(path):
+        return []
+    visited.add(path)
+    hosts = []
+    include_unconditional = True
+    try:
+        with open(path, encoding="utf-8", errors="replace") as config:
+            logical_lines = []
+            pending = ""
+            for raw_line in config:
+                line = raw_line.rstrip("\n")
+                pending += line
+                if pending.endswith("\\"):
+                    pending = pending[:-1]
+                    continue
+                logical_lines.append(pending)
+                pending = ""
+            if pending:
+                logical_lines.append(pending)
+    except OSError:
+        return []
+
+    for raw_line in logical_lines:
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        parts = line.split()
+        keyword = parts[0].lower()
+        values = parts[1:]
+        if keyword == "match":
+            include_unconditional = False
+        elif keyword == "host":
+            include_unconditional = False
+            for host in values:
+                if not any(character in host for character in "*!?"):
+                    hosts.append(host)
+        elif keyword == "include" and include_unconditional:
+            for pattern in values:
+                for included in expand_include(pattern, os.path.dirname(path)):
+                    hosts.extend(config_hosts(included, visited))
+    return hosts
+
+
+def known_hosts(path):
+    hosts = []
+    try:
+        with open(os.path.expanduser(path), encoding="utf-8", errors="replace") as known:
+            for raw_line in known:
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                fields = line.split()
+                if fields and fields[0].startswith("@"):
+                    fields = fields[1:]
+                if not fields:
+                    continue
+                for host in fields[0].split(","):
+                    if host.startswith("|") or any(char in host for char in "*!?"):
+                        continue
+                    match = re.fullmatch(r"\[([^]]+)\]:(\d+)", host)
+                    hosts.append(match.group(1) if match else host)
+    except OSError:
+        pass
+    return hosts
+
+
+def valid_direct_host(value):
+    if not value or value.startswith("-") or any(char.isspace() for char in value):
+        return False
+    return re.fullmatch(r"(?:[A-Za-z0-9._~-]+@)?(?:[A-Za-z0-9._:-]+|\[[0-9A-Fa-f:]+\])", value) is not None
+
+
+def ssh_search(query):
+    config = os.environ.get("ANUSH_LAUNCHER_SSH_CONFIG", "~/.ssh/config")
+    known = os.environ.get("ANUSH_LAUNCHER_KNOWN_HOSTS", "~/.ssh/known_hosts")
+    configured = config_hosts(config)
+    known_names = known_hosts(known)
+    saved = list(dict.fromkeys(configured + known_names))
+    saved_lower = {host.lower() for host in saved}
+    needle = query.lower()
+    matches = [host for host in saved if needle in host.lower()]
+    matches.sort(key=lambda host: (not host.lower().startswith(needle), host.lower()))
+    results = [{
+        "kind": "ssh", "name": host,
+        "detail": "SSH config" if host in configured else "known_hosts",
+        "value": host,
+    } for host in matches[:LIMIT]]
+    if query and valid_direct_host(query) and query.lower() not in saved_lower and len(results) < LIMIT:
+        results.append({"kind": "ssh", "name": query, "detail": "Direct connection", "value": query})
+    return results, len(matches) > LIMIT, ""
+
+
+def unescape_mount(value):
+    return re.sub(r"\\([0-7]{3})", lambda match: chr(int(match.group(1), 8)), value)
+
+
+def mount_search(query):
+    path = os.environ.get("ANUSH_LAUNCHER_MOUNTINFO", "/proc/self/mountinfo")
+    visible = {}
+    try:
+        with open(path, encoding="utf-8", errors="replace") as mountinfo:
+            for line in mountinfo:
+                fields = line.split()
+                try:
+                    separator = fields.index("-")
+                    mountpoint = unescape_mount(fields[4])
+                    filesystem = fields[separator + 1]
+                    source = unescape_mount(fields[separator + 2])
+                except (ValueError, IndexError):
+                    continue
+                if filesystem in PSEUDO_FILESYSTEMS:
+                    continue
+                # Later mountinfo entries hide earlier mounts at the same path.
+                visible[mountpoint] = (source, filesystem)
+    except OSError as error:
+        return [], True, str(error)
+
+    needle = query.lower()
+    mounts = [(target, source, filesystem) for target, (source, filesystem) in visible.items()
+              if needle in " ".join((target, source, filesystem)).lower()]
+    mounts.sort(key=lambda item: (item[0] != "/", item[0].lower()))
+    results = [{
+        "kind": "mount", "name": target,
+        "detail": f"{source} · {filesystem}", "value": target,
+    } for target, source, filesystem in mounts[:LIMIT]]
+    return results, len(mounts) > LIMIT, ""
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] not in ("file", "ssh", "mounts"):
+        print("usage: search-provider file|ssh|mounts [query]", file=sys.stderr)
+        return 2
+    mode = sys.argv[1]
+    query = sys.argv[2].strip() if len(sys.argv) > 2 else ""
+    if mode == "file":
+        emit(*file_search(query))
+    elif mode == "ssh":
+        emit(*ssh_search(query))
+    else:
+        emit(*mount_search(query))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

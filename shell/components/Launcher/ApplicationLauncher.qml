@@ -5,7 +5,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Widgets
 
-// Searchable application launcher backed by the system's .desktop entries.
+// Application launcher with opt-in file, SSH host, and mount search modes.
 Popout {
     id: root
 
@@ -24,7 +24,25 @@ Popout {
         { name: "Utilities", icon: "󰦬", matches: ["Utility"] },
         { name: "Other", icon: "󰘦", matches: [] }
     ]
-    readonly property string query: search.text.trim().toLowerCase()
+    readonly property string rawQuery: search.text.trim()
+    readonly property string lowerQuery: rawQuery.toLowerCase()
+    readonly property string searchMode: lowerQuery.startsWith("file:") ? "file"
+        : lowerQuery.startsWith("f:") ? "file"
+        : lowerQuery.startsWith("ssh:") ? "ssh"
+        : lowerQuery.startsWith("mounts:") ? "mounts" : "applications"
+    readonly property int prefixLength: lowerQuery.startsWith("file:") ? 5
+        : lowerQuery.startsWith("f:") ? 2
+        : lowerQuery.startsWith("ssh:") ? 4
+        : lowerQuery.startsWith("mounts:") ? 7 : 0
+    readonly property string modeQuery: rawQuery.slice(prefixLength).trim()
+    property var providerResults: []
+    property bool providerPartial: false
+    property string providerError: ""
+    property string providerRequest: ""
+    property string providerCompletedRequest: ""
+    readonly property var results: searchMode === "applications"
+        ? applications : providerResults
+    readonly property int footerHeight: 44
 
     function categoryFor(app) {
         const appCategories = app.categories || []
@@ -49,11 +67,13 @@ Popout {
                     && root.selectedCategory !== "Favorites"
                     && root.categoryFor(app) !== root.selectedCategory)
                 return false
-            if (root.query === "")
+            if (root.searchMode !== "applications")
+                return false
+            if (root.lowerQuery === "")
                 return true
             const searchable = [app.name, app.genericName, app.comment]
                 .concat(app.keywords).join(" ").toLowerCase()
-            return searchable.indexOf(root.query) !== -1
+            return searchable.indexOf(root.lowerQuery) !== -1
         })
         entries.sort((a, b) => a.name.localeCompare(b.name))
         return entries
@@ -93,11 +113,72 @@ Popout {
         search.forceActiveFocus()
     }
 
-    function launch(app) {
-        if (!app)
+    function sshCommand(host) {
+        return "ssh '" + host.split("'").join("'\"'\"'") + "'"
+    }
+
+    function openSsh(host) {
+        const sessionScript =
+            "ssh \"$1\"; status=$?; "
+            + "if [ \"$status\" -ne 0 ]; then "
+            + "printf '\\nSSH exited with status %s. Press Enter to close.\\n' \"$status\"; "
+            + "read answer; fi; exit \"$status\""
+        const terminalScript =
+            "config=${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/anush/config}; "
+            + "if [ -n \"${TERMINAL:-}\" ] && command -v \"$TERMINAL\" >/dev/null 2>&1; then "
+            + "if [ \"${TERMINAL##*/}\" = kitty ]; then "
+            + "exec \"$TERMINAL\" --config \"$config/kitty/kitty.conf\" -- \"$@\"; "
+            + "else exec \"$TERMINAL\" -e \"$@\"; fi; "
+            + "elif command -v kitty >/dev/null 2>&1; then "
+            + "exec kitty --config \"$config/kitty/kitty.conf\" -- \"$@\"; "
+            + "elif command -v foot >/dev/null 2>&1; then exec foot -- \"$@\"; "
+            + "elif command -v alacritty >/dev/null 2>&1; then exec alacritty -e \"$@\"; "
+            + "elif command -v wezterm >/dev/null 2>&1; then exec wezterm start -- \"$@\"; "
+            + "elif command -v xterm >/dev/null 2>&1; then exec xterm -e \"$@\"; "
+            + "else command -v notify-send >/dev/null 2>&1 && "
+            + "notify-send -u critical 'anush launcher' 'No supported terminal was found.'; exit 127; fi"
+        Quickshell.execDetached(["sh", "-c", terminalScript, "anush-ssh-terminal",
+            "sh", "-c", sessionScript, "anush-ssh", host])
+    }
+
+    function activate(item, copyOnly) {
+        if (!item)
             return
+        if (searchMode === "applications") {
+            visible = false
+            item.execute()
+            return
+        }
+        const value = String(item.value ?? "")
+        if (value === "") return
+        if (copyOnly) {
+            Quickshell.clipboardText = item.kind === "ssh"
+                ? sshCommand(value) : value
+            visible = false
+            return
+        }
         visible = false
-        app.execute()
+        if (item.kind === "ssh") openSsh(value)
+        else Quickshell.execDetached(["xdg-open", value])
+    }
+
+    function refreshProvider() {
+        if (searchMode === "applications" || (searchMode === "file" && modeQuery === "")) {
+            providerResults = []
+            providerPartial = false
+            providerError = ""
+            providerRequest = ""
+            providerCompletedRequest = ""
+            return
+        }
+        const signature = searchMode + "\n" + modeQuery
+        if (providerQuery.running || signature === providerCompletedRequest)
+            return
+        providerRequest = signature
+        providerError = ""
+        providerQuery.command = [Theme.scriptsDir + "/launcher/search-provider",
+            searchMode, modeQuery]
+        providerQuery.running = true
     }
 
     onVisibleChanged: {
@@ -138,6 +219,12 @@ Popout {
         onTriggered: root.suspendOutsideClose = false
     }
 
+    Timer {
+        id: providerDebounce
+        interval: 120
+        onTriggered: root.refreshProvider()
+    }
+
     Connections {
         target: LauncherState
         function onCenteredRequested() { root.toggleCentered() }
@@ -160,6 +247,41 @@ Popout {
                     console.warn("application launcher output query:", error)
                 }
             }
+        }
+    }
+
+
+    Process {
+        id: providerQuery
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const current = root.searchMode + "\n" + root.modeQuery
+                if (root.providerRequest !== current)
+                    return
+                try {
+                    const response = JSON.parse(text)
+                    root.providerResults = Array.isArray(response.results)
+                        ? response.results : []
+                    root.providerPartial = response.partial === true
+                    root.providerError = String(response.error ?? "")
+                    root.providerCompletedRequest = current
+                    appList.currentIndex = root.providerResults.length > 0 ? 0 : -1
+                    appList.positionViewAtBeginning()
+                } catch (error) {
+                    root.providerResults = []
+                    root.providerError = "Could not read search results."
+                    root.providerCompletedRequest = current
+                    console.warn("application launcher provider:", error)
+                }
+            }
+        }
+        onExited: exitCode => {
+            if (exitCode !== 0 && root.providerRequest
+                    === root.searchMode + "\n" + root.modeQuery) {
+                root.providerError = "The search provider failed."
+                root.providerCompletedRequest = root.providerRequest
+            }
+            Qt.callLater(() => root.refreshProvider())
         }
     }
 
@@ -203,14 +325,24 @@ Popout {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         visible: search.text.length === 0
-                        text: "Search applications"
+                        text: "Search applications, f:, ssh:, or mounts:"
                         color: Theme.brightBlack
                         font: search.font
                     }
 
                     onTextChanged: {
-                        appList.currentIndex = root.applications.length > 0 ? 0 : -1
+                        const signature = root.searchMode + "\n" + root.modeQuery
+                        if (root.searchMode !== "applications"
+                                && signature !== root.providerCompletedRequest) {
+                            root.providerResults = []
+                            root.providerPartial = false
+                            root.providerError = ""
+                        }
+                        appList.currentIndex = root.results.length > 0 ? 0 : -1
                         appList.positionViewAtBeginning()
+                        root.providerRequest = root.searchMode === "applications"
+                            ? "" : root.providerRequest
+                        providerDebounce.restart()
                     }
                     Keys.onPressed: event => {
                         if (event.key === Qt.Key_Down) {
@@ -223,7 +355,8 @@ Popout {
                             appList.positionViewAtIndex(appList.currentIndex, ListView.Contain)
                             event.accepted = true
                         } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                            root.launch(root.applications[appList.currentIndex])
+                            root.activate(root.results[appList.currentIndex],
+                                (event.modifiers & Qt.ShiftModifier) !== 0)
                             event.accepted = true
                         }
                     }
@@ -235,13 +368,18 @@ Popout {
             id: resultsArea
             width: parent.width
             height: Math.max(0, parent.height - y
-                - categoryBar.height - parent.spacing)
+                - root.footerHeight - parent.spacing)
 
             Text {
                 anchors.fill: parent
-                visible: root.applications.length === 0
-                text: root.selectedCategory === ""
-                    ? "No matching applications"
+                visible: root.results.length === 0
+                text: root.searchMode === "file" && root.modeQuery === ""
+                    ? "Type after f: to search files"
+                    : root.searchMode !== "applications"
+                        && (providerDebounce.running || providerQuery.running) ? "Searching…"
+                    : root.providerError !== "" ? root.providerError
+                    : root.searchMode !== "applications" ? "No matching results"
+                    : root.selectedCategory === "" ? "No matching applications"
                     : "No applications in " + root.selectedCategory
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
@@ -256,14 +394,15 @@ Popout {
                 visible: count > 0
                 clip: true
                 spacing: 3
-                model: root.applications
+                model: root.results
                 currentIndex: count > 0 ? 0 : -1
 
                 delegate: Rectangle {
                     id: appRow
                     required property var modelData
                     required property int index
-                    readonly property string iconSource: String(modelData.icon ?? "") !== ""
+                    readonly property string iconSource: root.searchMode === "applications"
+                        && String(modelData.icon ?? "") !== ""
                         ? Quickshell.iconPath(String(modelData.icon), true) : ""
 
                     width: appList.width
@@ -285,7 +424,7 @@ Popout {
                     Row {
                         anchors.fill: parent
                         anchors.leftMargin: 10
-                        anchors.rightMargin: 52
+                        anchors.rightMargin: root.searchMode === "applications" ? 52 : 10
                         spacing: 12
 
                         IconImage {
@@ -300,7 +439,9 @@ Popout {
                             width: 32
                             visible: appRow.iconSource === ""
                             horizontalAlignment: Text.AlignHCenter
-                            text: "󰏖"
+                            text: root.searchMode === "file" ? "󰈔"
+                                : root.searchMode === "ssh" ? "󰣀"
+                                : root.searchMode === "mounts" ? "󰋊" : "󰏖"
                             color: appRow.index === appList.currentIndex
                                 ? Theme.selfg : Theme.accent
                             font.family: Theme.iconFontFamily
@@ -314,7 +455,7 @@ Popout {
 
                             Text {
                                 width: parent.width
-                                text: appRow.modelData.name
+                                text: String(appRow.modelData.name ?? "")
                                 elide: Text.ElideRight
                                 color: appRow.index === appList.currentIndex
                                     ? Theme.selfg : Theme.fg
@@ -326,7 +467,9 @@ Popout {
                             Text {
                                 width: parent.width
                                 visible: text.length > 0
-                                text: appRow.modelData.genericName || appRow.modelData.comment
+                                text: root.searchMode === "applications"
+                                    ? (appRow.modelData.genericName || appRow.modelData.comment)
+                                    : String(appRow.modelData.detail ?? "")
                                 elide: Text.ElideRight
                                 color: appRow.index === appList.currentIndex
                                     ? Qt.alpha(Theme.selfg, 0.75) : Theme.brightBlack
@@ -346,7 +489,7 @@ Popout {
                         z: 2
                         readonly property bool favorite:
                             LauncherState.isFavorite(appRow.modelData.id)
-                        visible: rowHover.hovered
+                        visible: root.searchMode === "applications" && rowHover.hovered
                         radius: Theme.radiusSmall
                         color: favoriteMouse.containsMouse
                             ? favorite ? Qt.alpha(Theme.brightOrange, 0.28)
@@ -403,11 +546,11 @@ Popout {
                         anchors.left: parent.left
                         anchors.top: parent.top
                         anchors.right: parent.right
-                        anchors.rightMargin: 52
+                        anchors.rightMargin: root.searchMode === "applications" ? 52 : 0
                         anchors.bottom: parent.bottom
                         z: 1
                         acceptedButtons: Qt.LeftButton
-                        onClicked: root.launch(appRow.modelData)
+                        onClicked: root.activate(appRow.modelData, false)
                     }
                 }
 
@@ -439,7 +582,8 @@ Popout {
         Rectangle {
             id: categoryBar
             width: parent.width
-            height: 44
+            height: root.searchMode === "applications" ? root.footerHeight : 0
+            visible: height > 0
             radius: Theme.radiusMedium
             color: Theme.gray2
             border.width: 1
@@ -493,6 +637,30 @@ Popout {
                         Controls.ToolTip.text: categoryButton.modelData.name
                     }
                 }
+            }
+        }
+
+
+        Rectangle {
+            width: parent.width
+            height: root.searchMode !== "applications" ? root.footerHeight : 0
+            visible: height > 0
+            radius: Theme.radiusMedium
+            color: Theme.gray2
+            border.width: 1
+            border.color: Theme.gray5
+
+            Text {
+                anchors.centerIn: parent
+                text: (root.searchMode === "file"
+                    ? "Files · plocate + fd · Enter opens"
+                    : root.searchMode === "ssh"
+                    ? "SSH hosts · Enter connects · Shift+Enter copies"
+                    : "Mounted filesystems · Enter opens · Shift+Enter copies")
+                    + (root.providerPartial ? " · partial results" : "")
+                color: root.providerPartial ? Theme.brightOrange : Theme.brightBlack
+                font.family: Theme.fontFamily
+                font.pixelSize: Math.max(10, Theme.fontSize - 1)
             }
         }
     }
