@@ -1,0 +1,332 @@
+#!/usr/bin/env python3
+"""Create NetworkManager VPN profiles from a JSON document on stdin.
+
+Secrets are passed directly to libnm and never placed on a command line.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+import uuid
+
+try:
+    import gi
+
+    gi.require_version("NM", "1.0")
+    from gi.repository import GLib, NM
+except (ImportError, ValueError) as error:
+    sys.stderr.write("Python NetworkManager bindings are required: " + str(error) + "\n")
+    raise SystemExit(1)
+
+
+SERVICES = {
+    "openconnect": "org.freedesktop.NetworkManager.openconnect",
+    "l2tp": "org.freedesktop.NetworkManager.l2tp",
+    "fortisslvpn": "org.freedesktop.NetworkManager.fortisslvpn",
+    "openvpn": "org.freedesktop.NetworkManager.openvpn",
+}
+SERVICE_KINDS = {service: kind for kind, service in SERVICES.items()}
+
+
+class ProfileError(Exception):
+    pass
+
+
+def text(data, key):
+    value = data.get(key, "")
+    return value.strip() if isinstance(value, str) else ""
+
+
+def optional_file(data, key):
+    path = text(data, key)
+    if not path:
+        return ""
+    path = os.path.abspath(os.path.expanduser(path))
+    if not os.path.isfile(path):
+        raise ProfileError(f"{key} file does not exist")
+    return path
+
+
+def run_async(start):
+    loop = GLib.MainLoop()
+    result = {}
+
+    def done(_source, response, _unused=None):
+        try:
+            result["value"] = result["finish"](response)
+        except GLib.Error as error:
+            result["error"] = error.message
+        finally:
+            loop.quit()
+
+    result["finish"] = start(done)
+    loop.run()
+    if "error" in result:
+        raise ProfileError(result["error"])
+    return result.get("value")
+
+
+def set_data(setting, key, value):
+    if value:
+        setting.add_data_item(key, value)
+    else:
+        setting.remove_data_item(key)
+
+
+def build_profile(data, existing=None):
+    kind = text(data, "type")
+    if kind not in SERVICES:
+        raise ProfileError("Unsupported VPN type")
+
+    name = text(data, "name")
+    gateway = text(data, "gateway")
+    username = text(data, "username")
+    ca_cert = optional_file(data, "caCert")
+    client_cert = optional_file(data, "clientCert")
+    private_key = optional_file(data, "privateKey")
+    password = data.get("password", "")
+    psk = data.get("psk", "")
+    if not isinstance(password, str) or not isinstance(psk, str):
+        raise ProfileError("Invalid secret value")
+    if not name:
+        raise ProfileError("Connection name is required")
+    if not gateway:
+        raise ProfileError("Server address is required")
+    if any(character.isspace() for character in gateway):
+        raise ProfileError("Server address cannot contain spaces")
+    if kind == "fortisslvpn" and bool(client_cert) != bool(private_key):
+        raise ProfileError("FortiVPN client certificate and private key must be selected together")
+
+    editing = existing is not None
+    connection = existing if editing else NM.SimpleConnection.new()
+    if editing:
+        general = connection.get_setting_connection()
+        vpn = connection.get_setting_vpn()
+        if vpn is None or vpn.get_service_type() != SERVICES[kind]:
+            raise ProfileError("VPN type cannot be changed while editing")
+    else:
+        general = NM.SettingConnection.new()
+        general.set_property(NM.SETTING_CONNECTION_UUID, str(uuid.uuid4()))
+        general.set_property(NM.SETTING_CONNECTION_TYPE, "vpn")
+        general.set_property(NM.SETTING_CONNECTION_AUTOCONNECT, False)
+        connection.add_setting(general)
+        vpn = NM.SettingVpn.new()
+        vpn.set_property(NM.SETTING_VPN_SERVICE_TYPE, SERVICES[kind])
+        connection.add_setting(vpn)
+
+    general.set_property(NM.SETTING_CONNECTION_ID, name)
+    vpn.set_property(NM.SETTING_VPN_USER_NAME, username or None)
+
+    if kind == "openconnect":
+        set_data(vpn, "gateway", gateway if "://" in gateway else "https://" + gateway)
+        set_data(vpn, "protocol", "anyconnect")
+        set_data(vpn, "cacert", ca_cert)
+        set_data(vpn, "usercert", client_cert)
+        set_data(vpn, "userkey", private_key)
+    elif kind == "l2tp":
+        set_data(vpn, "gateway", gateway)
+        set_data(vpn, "user", username)
+        if not editing or password:
+            set_data(vpn, "password-flags", "0" if password else "2")
+        set_data(vpn, "ipsec-enabled", "yes")
+        if not editing or psk:
+            set_data(vpn, "ipsec-psk-flags", "0" if psk else "2")
+        if password:
+            vpn.add_secret("password", password)
+        if psk:
+            vpn.add_secret("ipsec-psk", psk)
+    elif kind == "fortisslvpn":
+        set_data(vpn, "gateway", gateway)
+        set_data(vpn, "user", username)
+        # anush launches openfortivpn in an attached terminal for both normal
+        # and SAML profiles, so it can prompt without persisting a password.
+        set_data(vpn, "password-flags", "2")
+        vpn.remove_secret("password")
+    else:
+        set_data(vpn, "remote", gateway)
+        set_data(vpn, "username", username)
+        certificate_auth = bool(client_cert or private_key)
+        set_data(vpn, "connection-type", "password-tls" if username and certificate_auth
+                 else "tls" if certificate_auth else "password")
+        if not editing or password:
+            set_data(vpn, "password-flags", "0" if password else "2")
+        set_data(vpn, "ca", ca_cert)
+        set_data(vpn, "cert", client_cert)
+        set_data(vpn, "key", private_key)
+        if password:
+            vpn.add_secret("password", password)
+
+    user = connection.get_setting_by_name(NM.SETTING_USER_SETTING_NAME)
+    if user is None:
+        user = NM.SettingUser.new()
+        connection.add_setting(user)
+    user.set_data("anush.vpn-kind", kind)
+    if kind == "fortisslvpn":
+        saml = data.get("saml", False) is True
+        saml_port = text(data, "samlPort") or "8020"
+        try:
+            port_number = int(saml_port)
+        except ValueError as error:
+            raise ProfileError("SAML callback port must be a number") from error
+        if port_number < 1 or port_number > 65535:
+            raise ProfileError("SAML callback port must be between 1 and 65535")
+        user.set_data("anush.saml", "true" if saml else "false")
+        user.set_data("anush.saml-port", str(port_number))
+        user.set_data("anush.client-cert", client_cert)
+        user.set_data("anush.private-key", private_key)
+    if not editing:
+        ipv4 = NM.SettingIP4Config.new()
+        ipv4.set_property(NM.SETTING_IP_CONFIG_METHOD, "auto")
+        connection.add_setting(ipv4)
+        ipv6 = NM.SettingIP6Config.new()
+        ipv6.set_property(NM.SETTING_IP_CONFIG_METHOD, "auto")
+        connection.add_setting(ipv6)
+
+    try:
+        connection.verify()
+    except GLib.Error as error:
+        raise ProfileError("Invalid VPN profile: " + error.message) from error
+    return connection
+
+
+def profile_metadata():
+    client = NM.Client.new(None)
+    result = []
+    for connection in client.get_connections() or []:
+        if connection.get_connection_type() != "vpn":
+            continue
+        vpn = connection.get_setting_vpn()
+        if vpn is None:
+            continue
+        user = connection.get_setting_by_name(NM.SETTING_USER_SETTING_NAME)
+        kind = (user.get_data("anush.vpn-kind") if user else "") or \
+            SERVICE_KINDS.get(vpn.get_service_type(), "")
+        if not kind:
+            continue
+        item = vpn.get_data_item
+        result.append({
+            "uuid": connection.get_uuid() or "",
+            "name": connection.get_id() or "",
+            "kind": kind,
+            "editable": True,
+            "saml": bool(user) and user.get_data("anush.saml") == "true",
+            "samlPort": (user.get_data("anush.saml-port") if user else "") or "8020",
+            "gateway": (item("remote") if kind == "openvpn" else item("gateway")) or "",
+            "username": item("username") or item("user") or vpn.get_user_name() or "",
+            "caCert": (item("ca") if kind == "openvpn" else item("cacert")) or "",
+            "clientCert": ((user.get_data("anush.client-cert") if user else "")
+                           if kind == "fortisslvpn"
+                           else item("cert") if kind == "openvpn"
+                           else item("usercert")) or "",
+            "privateKey": ((user.get_data("anush.private-key") if user else "")
+                           if kind == "fortisslvpn"
+                           else item("key") if kind == "openvpn"
+                           else item("userkey")) or "",
+        })
+    print(json.dumps(result), flush=True)
+
+
+def nmcli_uuids():
+    result = subprocess.run(
+        ["nmcli", "-t", "-f", "UUID", "connection", "show"],
+        capture_output=True, text=True, timeout=15, check=False,
+    )
+    if result.returncode != 0:
+        raise ProfileError(result.stderr.strip() or "Could not list VPN profiles")
+    return set(re.findall(
+        r"(?im)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        result.stdout,
+    ))
+
+
+def import_openvpn():
+    data = json.load(sys.stdin)
+    if not isinstance(data, dict):
+        raise ProfileError("Invalid import data")
+    config_path = optional_file(data, "path")
+    name = text(data, "name")
+    before = nmcli_uuids()
+    result = subprocess.run(
+        ["nmcli", "connection", "import", "type", "openvpn", "file", config_path],
+        capture_output=True, text=True, timeout=60, check=False,
+    )
+    if result.returncode != 0:
+        raise ProfileError(result.stderr.strip() or "Could not import OpenVPN profile")
+
+    imported = nmcli_uuids() - before
+    imported_uuid = next(iter(imported)) if len(imported) == 1 else ""
+    if not imported_uuid:
+        match = re.search(
+            r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+            result.stdout,
+            re.IGNORECASE,
+        )
+        imported_uuid = match.group(0) if match else ""
+    if name:
+        if not imported_uuid:
+            raise ProfileError("Profile imported, but its connection name could not be changed")
+        rename = subprocess.run(
+            ["nmcli", "connection", "modify", "uuid", imported_uuid,
+             "connection.id", name],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+        if rename.returncode != 0:
+            raise ProfileError(rename.stderr.strip()
+                               or "Profile imported, but it could not be renamed")
+    print(json.dumps({"ok": True, "uuid": imported_uuid}), flush=True)
+
+
+def main():
+    try:
+        if len(sys.argv) == 2 and sys.argv[1] == "metadata":
+            profile_metadata()
+            return
+        if len(sys.argv) == 2 and sys.argv[1] == "import-openvpn":
+            import_openvpn()
+            return
+        if len(sys.argv) != 1:
+            raise ProfileError("Unknown command")
+        data = json.load(sys.stdin)
+        if not isinstance(data, dict):
+            raise ProfileError("Invalid profile data")
+        client = NM.Client.new(None)
+        profile_uuid = text(data, "uuid")
+        remote = client.get_connection_by_uuid(profile_uuid) if profile_uuid else None
+        if profile_uuid and (remote is None or remote.get_connection_type() != "vpn"):
+            raise ProfileError("VPN profile not found")
+        existing = None
+        if remote is not None:
+            existing = NM.SimpleConnection.new_clone(remote)
+            try:
+                secrets = run_async(lambda callback: (
+                    remote.get_secrets_async("vpn", None, callback),
+                    remote.get_secrets_finish,
+                )[1])
+                if secrets is not None:
+                    existing.update_secrets("vpn", secrets)
+            except ProfileError:
+                pass
+        profile = build_profile(data, existing)
+        if remote is not None:
+            settings = profile.to_dbus(NM.ConnectionSerializationFlags.ALL)
+            run_async(lambda callback: (
+                remote.update2(settings, NM.SettingsUpdate2Flags.TO_DISK,
+                               None, None, callback),
+                remote.update2_finish,
+            )[1])
+        else:
+            run_async(lambda callback: (
+                client.add_connection_async(profile, True, None, callback),
+                client.add_connection_finish,
+            )[1])
+        print(json.dumps({"ok": True, "uuid": profile.get_uuid()}), flush=True)
+    except (ProfileError, GLib.Error, json.JSONDecodeError,
+            subprocess.SubprocessError) as error:
+        sys.stderr.write(str(error).strip().replace("\n", " ") + "\n")
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()

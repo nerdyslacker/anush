@@ -33,7 +33,7 @@ Singleton {
 
     readonly property var layouts: [
         { name: "Scrolling Tile", glyph: "󰙀", command: "scrolling-tile" },
-        { name: "Vertical Scroller", glyph: "󰕇", command: "vertical-scrolling-tile" },
+        { name: "Vertical Scroller", glyph: "󱥣", command: "vertical-scrolling-tile" },
         { name: "Tabbed", glyph: "󰓩", command: "tabbed" },
         { name: "Dwindle", glyph: "󰕮", command: "dwindle" },
         { name: "Monocle", glyph: "󰍹", command: "monocle" },

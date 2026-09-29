@@ -54,7 +54,7 @@ Optional desktop integrations:
   search backends, while either one can provide partial results on its own;
 - matugen for Material You wallpaper themes; ImageMagick remains the automatic
   fallback when matugen is unavailable or cannot generate a valid palette;
-- `adw-gtk-theme` (`adw-gtk3`) for applying generated colors consistently to
+- `adw-gtk3-theme` (`adw-gtk3`) for applying generated colors consistently to
   GTK applications, and Qt5ct or Qt6ct for Qt applications;
 - lxqt-policykit-agent, xss-lock, Betterlockscreen, and Udiskie for the supplied
   full desktop startup configuration.
