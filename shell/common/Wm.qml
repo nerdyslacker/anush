@@ -33,13 +33,14 @@ Singleton {
 
     readonly property var layouts: [
         { name: "Scrolling Tile", glyph: "󰙀", command: "scrolling-tile" },
+        { name: "Vertical Scroller", glyph: "󰕇", command: "vertical-scrolling-tile" },
         { name: "Tabbed", glyph: "󰓩", command: "tabbed" },
         { name: "Dwindle", glyph: "󰕮", command: "dwindle" },
         { name: "Monocle", glyph: "󰍹", command: "monocle" },
         { name: "Floating", glyph: "󰕰", command: "floating" }
     ]
     readonly property var workspaceLayoutCommands: [
-        "scrolling-tile", "dwindle", "monocle", "floating"
+        "scrolling-tile", "vertical-scrolling-tile", "dwindle", "monocle", "floating"
     ]
     readonly property var focusedWindow: {
         for (const win of windows)

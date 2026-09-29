@@ -2,8 +2,8 @@
 
 Shows the current skarwm workspace layout and provides desktop appearance,
 layout, theme, wallpaper, icon, and cursor controls. The available workspace
-layouts are Scrolling Tile, Dwindle/Fibonacci, Monocle, and Floating. Tabbed
-is also available for the focused column. The configured keyboard
+layouts are Scrolling Tile, Vertical Scroller, Dwindle/Fibonacci, Monocle, and
+Floating. Tabbed is also available for the focused column. The configured keyboard
 shortcut handles per-window floating.
 
 ## Actions
