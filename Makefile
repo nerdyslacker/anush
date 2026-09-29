@@ -53,5 +53,7 @@ test: build/anushctl
 	./tests/phone-control.sh
 	./tests/picom-control.sh
 	./tests/theme-generation.sh
+	./tests/taildrop-inbox.sh
+	node --test tests/tailscale-model.test.js
 
 .PHONY: all install clean test

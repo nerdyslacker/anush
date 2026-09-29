@@ -55,6 +55,8 @@ Singleton {
     property var _vpnErrors: []
     property string _openvpn3Configs: ""
     property string _openvpn3Sessions: ""
+    property string _openvpn3StartingPath: ""
+    property string _openvpn3StartError: ""
     property string _vpnMetadata: ""
     signal vpnProfileCreated()
 
@@ -275,6 +277,19 @@ Singleton {
                 configPath: path, sessionPath: session ? session.path : "" })
         }
         openvpn3Vpns = rows
+        if (_openvpn3StartingPath !== "") {
+            const connected = rows.some(vpn => vpn.configPath
+                === _openvpn3StartingPath && vpn.active)
+            if (connected) {
+                _openvpn3StartingPath = ""
+                status = "Network updated"
+                openvpn3StartProcess.connected = true
+                if (openvpn3StartProcess.running)
+                    openvpn3StartProcess.running = false
+                openvpn3RefreshTimer.stop()
+                clearStatus.restart()
+            }
+        }
     }
 
     function startOpenvpn3(configPath) {
@@ -282,10 +297,20 @@ Singleton {
             error = "Invalid OpenVPN 3 profile"
             return
         }
-        openInTerminal(["openvpn3", "session-start", "--config-path", configPath])
-        status = "OpenVPN 3 authentication opened in a terminal"
+        if (_openvpn3StartingPath === configPath)
+            return
+        error = ""
+        status = "Connecting OpenVPN 3…"
+        _openvpn3StartingPath = configPath
+        _openvpn3StartError = ""
+        // This CLI can remain attached after the daemon connects. A dedicated
+        // process keeps it out of the global action queue; the poll below stops
+        // the client once the independently managed D-Bus session appears.
+        openvpn3StartProcess.connected = false
+        openvpn3StartProcess.command = ["openvpn3", "session-start",
+            "--config-path", configPath]
+        openvpn3StartProcess.running = true
         openvpn3RefreshTimer.restart()
-        clearStatus.restart()
     }
 
     function startNmVpn(uuid, name) {
@@ -542,6 +567,32 @@ Singleton {
         }
     }
 
+    Process {
+        id: openvpn3StartProcess
+        property bool connected: false
+        command: []
+        stderr: SplitParser {
+            onRead: line => {
+                const value = line.trim()
+                if (value !== "") root._openvpn3StartError = value
+            }
+        }
+        onExited: code => {
+            if (connected) {
+                connected = false
+                root.error = ""
+                return
+            }
+            if (code !== 0 && root._openvpn3StartingPath !== "") {
+                root._openvpn3StartingPath = ""
+                root.status = ""
+                root.error = root._openvpn3StartError
+                    || "OpenVPN 3 could not start the session"
+                openvpn3RefreshTimer.stop()
+            }
+        }
+    }
+
     Timer {
         id: clearStatus
         interval: 3500
@@ -571,7 +622,15 @@ Singleton {
         onTriggered: {
             ticks += 1
             root.refreshOpenvpn3()
-            if (ticks >= 15) stop()
+            if (ticks >= 15) {
+                if (openvpn3StartProcess.running)
+                    openvpn3StartProcess.running = false
+                root._openvpn3StartingPath = ""
+                root.status = ""
+                if (root.error === "")
+                    root.error = "OpenVPN 3 connection timed out"
+                stop()
+            }
         }
         onRunningChanged: if (running) ticks = 0
     }

@@ -38,6 +38,8 @@ Optional desktop integrations:
 - renCal for calendar events;
 - NetworkManager, its command-line/editor tools, BlueZ, Blueman, `pactl`, and
   Pavucontrol for network, Bluetooth, and audio controls;
+- Tailscale for the optional tailnet widget, including exit-node selection,
+  account switching, SSH, and Taildrop;
 - KDE Connect or Valent, with PyGObject, for phone pairing, battery state,
   ping/ring, clipboard, sharing, and remote-file controls;
 - for the Wi-Fi hotspot popup: NetworkManager/libnm GIR bindings for PyGObject,
@@ -191,7 +193,7 @@ Persistent settings live in
 `${XDG_STATE_HOME:-$HOME/.local/state}/anush/shell-state.json`. Set
 `ANUSH_STATE_DIR` to override that directory. The sections are `bar`,
 `weather`, `launcher`, `wallpaper`, `keyboard`, `tray`, `tags`, `pomodoro`, `theme`,
-`windowManager`, `windowList`, and `desktop`.
+`windowManager`, `windowList`, `tailscale`, and `desktop`.
 
 The complete package defaults live in `config/defaults.json`. Optional
 sparse overrides may be placed in

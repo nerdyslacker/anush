@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""Stage Taildrop files and safely accept or reject individual entries."""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+
+def ensure_directory(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        path.chmod(0o700)
+    except OSError:
+        pass
+    return path
+
+
+def describe(path: Path) -> dict[str, object]:
+    stat = path.stat()
+    return {
+        "name": path.name,
+        "size": stat.st_size,
+        "modifiedMs": int(stat.st_mtime * 1000),
+    }
+
+
+def list_files(inbox: Path) -> None:
+    ensure_directory(inbox)
+    files = [
+        path for path in inbox.iterdir()
+        if path.is_file() and not path.is_symlink()
+    ]
+    files.sort(key=lambda path: (path.stat().st_mtime, path.name.casefold()))
+    print(json.dumps([describe(path) for path in files], ensure_ascii=False))
+
+
+def checked_file(inbox: Path, name: str) -> Path:
+    if not name or Path(name).name != name or name in {".", ".."}:
+        raise ValueError("invalid inbox filename")
+    path = inbox / name
+    if not path.is_file() or path.is_symlink():
+        raise FileNotFoundError(name)
+    return path
+
+
+def available_destination(directory: Path, name: str) -> Path:
+    target = directory / name
+    if not target.exists():
+        return target
+    source = Path(name)
+    for index in range(1, 10_000):
+        candidate = directory / f"{source.stem} ({index}){source.suffix}"
+        if not candidate.exists():
+            return candidate
+    raise RuntimeError("could not find an available destination name")
+
+
+def poll(inbox: Path, executable: str) -> None:
+    ensure_directory(inbox)
+    result = subprocess.run(
+        [executable, "file", "get", "--wait=false", "--conflict=rename",
+         str(inbox)],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=25,
+        check=False,
+    )
+    if result.returncode != 0:
+        message = result.stderr.strip() or result.stdout.strip()
+        raise RuntimeError(message or "tailscale file get failed")
+    list_files(inbox)
+
+
+def accept(inbox: Path, downloads: Path, name: str) -> None:
+    source = checked_file(inbox, name)
+    ensure_directory(downloads)
+    destination = available_destination(downloads, source.name)
+    shutil.move(str(source), str(destination))
+    print(json.dumps({"path": str(destination)}, ensure_ascii=False))
+
+
+def reject(inbox: Path, name: str) -> None:
+    checked_file(inbox, name).unlink()
+
+
+def main() -> int:
+    try:
+        if len(sys.argv) == 3 and sys.argv[1] == "list":
+            list_files(Path(sys.argv[2]))
+        elif len(sys.argv) == 4 and sys.argv[1] == "poll":
+            poll(Path(sys.argv[2]), sys.argv[3])
+        elif len(sys.argv) == 5 and sys.argv[1] == "accept":
+            accept(Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4])
+        elif len(sys.argv) == 4 and sys.argv[1] == "reject":
+            reject(Path(sys.argv[2]), sys.argv[3])
+        else:
+            print("usage: taildrop-inbox {list INBOX|poll INBOX TAILSCALE|"
+                  "accept INBOX DOWNLOADS NAME|reject INBOX NAME}",
+                  file=sys.stderr)
+            return 2
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
+        print(f"taildrop-inbox: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

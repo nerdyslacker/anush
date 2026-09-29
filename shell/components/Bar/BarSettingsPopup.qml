@@ -182,15 +182,29 @@ Popout {
             font.pixelSize: Theme.iconSizeSmall
         }
 
-        Text {
+        Item {
             id: widgetIcon
             anchors.left: handle.right
             anchors.leftMargin: 7
             anchors.verticalCenter: parent.verticalCenter
-            text: widgetRow.info ? widgetRow.info.icon : ""
-            color: widgetRow.isEnabled ? Theme.cyan : Theme.brightBlack
-            font.family: Theme.iconFontFamily
-            font.pixelSize: Theme.iconSize
+            width: Theme.iconSize
+            height: Theme.iconSize
+
+            Text {
+                visible: widgetRow.widgetKey !== "tailscale"
+                anchors.centerIn: parent
+                text: widgetRow.info ? widgetRow.info.icon : ""
+                color: widgetRow.isEnabled ? Theme.cyan : Theme.brightBlack
+                font.family: Theme.iconFontFamily
+                font.pixelSize: Theme.iconSize
+            }
+
+            TailscaleLogo {
+                visible: widgetRow.widgetKey === "tailscale"
+                anchors.fill: parent
+                dotColor: widgetRow.isEnabled
+                    ? Theme.accent : Theme.brightBlack
+            }
         }
 
         Text {

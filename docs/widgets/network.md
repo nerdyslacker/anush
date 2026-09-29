@@ -11,8 +11,9 @@ Shows the active network transport, VPN state, connectivity, and hotspot state.
   The **Add** button beside VPN creates Cisco AnyConnect/OpenConnect, L2TP/IPsec,
   FortiVPN, or OpenVPN NetworkManager profiles. OpenVPN configuration files can
   be imported into either NetworkManager or OpenVPN 3 with an optional custom
-  connection name. OpenVPN 3 connections that require interactive
-  authentication open in a terminal.
+  connection name. OpenVPN 3 connections start directly in the background;
+  profiles that require an interactive credential not stored by OpenVPN 3
+  report the authentication error in the popup instead of opening a terminal.
 
 - **Middle click:** Open NetworkManager connection settings if available.
 - **Right click:** Open hotspot controls.

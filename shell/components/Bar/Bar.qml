@@ -44,6 +44,7 @@ PanelWindow {
             tmux: Qt.resolvedUrl("../Tmux/Tmux.qml"),
             micIndicator: Qt.resolvedUrl("../Audio/MicMute.qml"),
             network: Qt.resolvedUrl("../Network/Network.qml"),
+            tailscale: Qt.resolvedUrl("../Tailscale/Tailscale.qml"),
             bluetooth: Qt.resolvedUrl("../Network/Bluetooth.qml"),
             phone: Qt.resolvedUrl("../Phone/Phone.qml"),
             keyboard: Qt.resolvedUrl("../Keyboard/KeyboardLayout.qml"),

@@ -9,6 +9,7 @@ ShellRoot {
         ShellActions.protocolVersion
         NotepadState.initialize()
         ColorPickerState.initialize()
+        TailscaleService.initialize()
     }
 
     Keybindings {}

@@ -20,6 +20,7 @@ placeholders are intentionally left in place for project screenshots.
 | [tmux](tmux.md) | tmux session manager |
 | Muted mic | Muted microphone warning |
 | [Network](network.md) | Connections, VPN, and hotspot controls |
+| [Tailscale](tailscale.md) | Tailnet, exit-node, machine, and Taildrop controls |
 | [Bluetooth](bluetooth.md) | Bluetooth status and devices |
 | [Phone connect](phone.md) | KDE Connect and Valent devices |
 | [Keyboard](keyboard.md) | Keyboard layout selection |

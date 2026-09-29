@@ -99,6 +99,12 @@ Singleton {
             defaultCluster: "right"
         },
         {
+            key: "tailscale",
+            label: "Tailscale",
+            icon: "󰖂",
+            defaultCluster: "right"
+        },
+        {
             key: "bluetooth",
             label: "Bluetooth",
             icon: "󰂯",
@@ -176,7 +182,7 @@ Singleton {
     readonly property var defaultClusters: ({
             left: ["launcher", "tags", "layout"],
             center: ["windowList", "title", "scratchpads"],
-            right: ["media", "weather", "metrics", "battery", "brightness", "volume", "tmux", "micIndicator", "network", "bluetooth", "phone", "keyboard", "clipboard", "colorPicker", "notepad", "tray", "notifications", "clock", "capsLock", "screenshot", "commands"]
+            right: ["media", "weather", "metrics", "battery", "brightness", "volume", "tmux", "micIndicator", "network", "tailscale", "bluetooth", "phone", "keyboard", "clipboard", "colorPicker", "notepad", "tray", "notifications", "clock", "capsLock", "screenshot", "commands"]
         })
     readonly property var defaults: ({
             launcher: true,
@@ -194,6 +200,7 @@ Singleton {
             tmux: true,
             micIndicator: true,
             network: true,
+            tailscale: true,
             bluetooth: true,
             phone: true,
             keyboard: true,

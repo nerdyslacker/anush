@@ -83,6 +83,9 @@ Singleton {
             tray: {
                 hidden: []
             },
+            tailscale: {
+                acknowledgedHealth: []
+            },
             tags: {
                 count: 9,
                 showNumbers: true,
