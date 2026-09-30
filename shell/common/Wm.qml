@@ -75,6 +75,31 @@ Singleton {
     property bool picomEnabled: false
     property bool picomBusy: false
 
+    function outputNameForScreen(screen) {
+        const nativeName = String(screen?.name ?? "")
+        for (const output of outputs)
+            if (String(output.name ?? "") === nativeName)
+                return nativeName
+
+        if (screen) {
+            const x = Number(screen.x)
+            const y = Number(screen.y)
+            const width = Number(screen.width)
+            const height = Number(screen.height)
+            for (const output of outputs) {
+                const rect = output.rect
+                if (rect && Number(rect.x) === x && Number(rect.y) === y
+                        && Number(rect.width) === width
+                        && Number(rect.height) === height)
+                    return String(output.name ?? nativeName)
+            }
+        }
+
+        if (outputs.length === 1)
+            return String(outputs[0].name ?? nativeName)
+        return nativeName
+    }
+
     function workspaceAt(index, outputName) {
         const id = index + 1
         for (const ws of workspaces)

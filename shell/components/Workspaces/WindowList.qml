@@ -10,7 +10,7 @@ Rectangle {
     id: root
 
     property var barScreen
-    readonly property string outputName: String(barScreen?.name ?? "")
+    readonly property string outputName: Wm.outputNameForScreen(barScreen)
     readonly property int workspace: {
         for (const output of Wm.outputs)
             if (String(output.name) === outputName)

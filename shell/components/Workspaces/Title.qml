@@ -7,7 +7,7 @@ Item {
     id: root
 
     property var barScreen
-    readonly property string outputName: String(barScreen?.name ?? "")
+    readonly property string outputName: Wm.outputNameForScreen(barScreen)
     readonly property var screenWindow: Wm.windowForOutput(outputName)
     readonly property string displayTitle: String(screenWindow?.title
         || screenWindow?.class || screenWindow?.instance || "")

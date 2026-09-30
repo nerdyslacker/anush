@@ -29,7 +29,7 @@ Singleton {
         const screen = window ? window.screen : null
         const focused = Wm.focusedOutput
         if (screen && focused && String(focused.name ?? "") !== "")
-            return String(screen.name ?? "") === String(focused.name)
+            return Wm.outputNameForScreen(screen) === String(focused.name)
 
         // Wm may still be collecting its first output snapshot. Pick one
         // deterministic bar instead of making every monitor handle the call.
