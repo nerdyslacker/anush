@@ -373,6 +373,19 @@ Singleton {
         ])
     }
 
+    // Feed shell-owned status messages through the same themed overlay used
+    // by window-manager notices instead of the desktop notification daemon.
+    function showNotice(message, persistent, outputName) {
+        const requestedOutput = String(outputName ?? "")
+        const focusedName = String(focusedOutput?.name ?? "")
+        root.uiEvent({
+            change: "ui-notice",
+            text: String(message ?? ""),
+            persistent: persistent === true,
+            output: requestedOutput !== "" ? requestedOutput : focusedName
+        })
+    }
+
     function loadWindowManagerState() {
         const saved = Number(ShellState.state.windowManager.gap)
         if (!isNaN(saved)) {

@@ -19,6 +19,9 @@ if grep -Fq 'interval: 750' shell/components/Keyboard/KeyboardState.qml; then
     exit 1
 fi
 grep -Fq 'command: ["xkb-switch", "-W"]' shell/components/Keyboard/KeyboardState.qml
+grep -Fq 'command: ["xinput", "test-xi2", "--root", "Virtual core keyboard"]' \
+    shell/components/Keyboard/KeyboardState.qml
+grep -Fq 'command: ["xkb-switch", "-n"]' shell/components/Keyboard/KeyboardState.qml
 
 if grep -Fq 'dunstctl is-paused' shell/common/Sys.qml; then
     echo "shell-wrapped DND polling was reintroduced" >&2

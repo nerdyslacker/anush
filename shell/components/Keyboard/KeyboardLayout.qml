@@ -9,6 +9,10 @@ BarModule {
     icon: "󰌌"
     iconColor: KeyboardState.switcherAvailable ? Theme.cyan : Theme.brightBlack
     label: KeyboardState.currentLayout.toUpperCase()
+    tooltip: KeyboardState.layoutName(KeyboardState.currentLayout)
+        + (KeyboardState.specVariant(KeyboardState.currentSpec) !== ""
+            ? " (" + KeyboardState.specVariant(KeyboardState.currentSpec) + ")"
+            : "")
 
     onClicked: mouse => {
         if (mouse.button === Qt.RightButton) {

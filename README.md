@@ -34,7 +34,8 @@ Optional desktop integrations:
   user-installed Papirus themes;
 - Picom, Dunst, Feh, Kitty, and Fastfetch for the supplied desktop configuration;
 - Clipmenu and Xdotool for clipboard history and pasting;
-- `setxkbmap` and `xkb-switch` for keyboard layouts;
+- `setxkbmap`, `xkb-switch`, and `xmodmap` for keyboard layouts; `xinput`
+  provides deterministic multi-group cycling for the shortcut presets;
 - renCal for calendar events;
 - NetworkManager, its command-line/editor tools, BlueZ, Blueman, `pactl`, and
   Pavucontrol for network, Bluetooth, and audio controls;

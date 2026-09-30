@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls as Controls
 import "../.."
 
 // Base pill for bar modules: optional nerd-font icon + label, hover feedback,
@@ -18,6 +19,7 @@ Rectangle {
     // some glyphs (e.g. Font Logos ) are missing from JetBrainsMono NF here
     property string iconFont: Theme.iconFontFamily
     property string label: ""
+    property string tooltip: ""
     property color labelColor: Theme.fg
     property int labelPixelSize: Theme.fontSize
     property int compactLabelPixelSize: Math.max(8, Theme.fontSize - 2)
@@ -180,5 +182,21 @@ Rectangle {
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
         onClicked: m => root.clicked(m)
         onWheel: w => root.scrolled(w.angleDelta.y > 0 ? 1 : -1)
+    }
+
+    Controls.ToolTip {
+        parent: root
+        visible: root.hovered && root.tooltip !== ""
+        text: root.tooltip
+        delay: 350
+        popupType: Controls.Popup.Window
+        x: BarVisibility.verticalBar
+            ? (BarVisibility.barPosition === "left"
+                ? root.width + 6 : -width - 6)
+            : (root.width - width) / 2
+        y: BarVisibility.verticalBar
+            ? (root.height - height) / 2
+            : BarVisibility.barPosition === "bottom"
+                ? -height - 6 : root.height + 6
     }
 }
