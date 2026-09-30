@@ -12,6 +12,7 @@ fi
 
 grep -Fq 'signal networkStateInvalidated()' shell/components/Network/NetworkService.qml
 grep -Fq 'function onNetworkStateInvalidated()' shell/components/Network/HotspotService.qml
+grep -Fq 'import "../.."' shell/components/Network/NetworkService.qml
 
 if grep -Fq 'interval: 750' shell/components/Keyboard/KeyboardState.qml; then
     echo "keyboard layout polling was reintroduced" >&2

@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Networking as QsNetwork
+import "../.."
 
 // Reactive NetworkManager state comes from Quickshell's native networking
 // backend. Actions preserve the shell's established nmcli behaviour, while

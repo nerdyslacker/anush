@@ -4,8 +4,12 @@ set -eu
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 helper="$repo/shell/scripts/launcher/search-provider"
+launcher="$repo/shell/components/Launcher/ApplicationLauncher.qml"
 tmp=$(mktemp -d /tmp/anush-launcher-search.XXXXXX)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+
+grep -Fq 'selectedCategory = LauncherState.favorites.length > 0' "$launcher"
+grep -Fq '? "Favorites" : ""' "$launcher"
 
 mkdir -p "$tmp/home/.ssh/conf.d" "$tmp/bin"
 cat >"$tmp/home/.ssh/config" <<'EOF'

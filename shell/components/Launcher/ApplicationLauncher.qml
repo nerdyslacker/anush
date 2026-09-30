@@ -184,7 +184,8 @@ Popout {
     onVisibleChanged: {
         if (visible) {
             search.text = ""
-            selectedCategory = ""
+            selectedCategory = LauncherState.favorites.length > 0
+                ? "Favorites" : ""
             appList.currentIndex = applications.length > 0 ? 0 : -1
             appList.positionViewAtBeginning()
             focusAttempts = 0
