@@ -14,7 +14,8 @@ Singleton {
     property var registeredScratchpads: []
     signal overviewCommand(string action)
     signal uiEvent(var event)
-    signal physicalOutputsChanged()
+    signal physicalOutputConnected()
+    signal physicalOutputDisconnected()
     property int tagCount: 1
     readonly property int dynamicTagCount: {
         let highestOccupied = 0
@@ -238,8 +239,10 @@ Singleton {
                         root.overviewCommand(change.slice(9))
                         return
                     }
-                    if (change === "connected" || change === "disconnected")
-                        root.physicalOutputsChanged()
+                    if (change === "connected")
+                        root.physicalOutputConnected()
+                    else if (change === "disconnected")
+                        root.physicalOutputDisconnected()
                     root.refreshAll()
                 } catch (e) {
                     console.warn("skarwm event:", e)

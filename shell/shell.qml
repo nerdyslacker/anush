@@ -11,8 +11,11 @@ ShellRoot {
 
     Connections {
         target: Wm
-        function onPhysicalOutputsChanged() {
+        function onPhysicalOutputConnected() {
             screenHotplugReload.restart()
+        }
+        function onPhysicalOutputDisconnected() {
+            screenHotplugReload.stop()
         }
     }
 
