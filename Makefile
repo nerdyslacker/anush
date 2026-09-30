@@ -52,6 +52,7 @@ test: build/anushctl
 	./tests/launcher-search.sh
 	./tests/phone-control.sh
 	./tests/picom-control.sh
+	./tests/resource-ownership.sh
 	./tests/theme-generation.sh
 	./tests/taildrop-inbox.sh
 	node --test tests/tailscale-model.test.js

@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+
+set -u
+
+usage() {
+    cat <<'EOF'
+Usage: tools/profile-anush.sh [OPTIONS]
+
+Sample an Anush/Quickshell process tree and write CSV metrics.
+
+Options:
+  --pid PID           Quickshell PID (auto-detected when exactly one exists)
+  --interval SECONDS  Delay between samples (default: 1)
+  --count COUNT       Number of samples; 0 runs until interrupted (default: 60)
+  --output PATH       Write CSV to PATH instead of stdout
+  -h, --help          Show this help
+EOF
+}
+
+root_pid=""
+interval=1
+count=60
+output=/dev/stdout
+
+while (($#)); do
+    case "$1" in
+        --pid)
+            (($# >= 2)) || { printf 'profile-anush: --pid needs a value\n' >&2; exit 2; }
+            root_pid=$2
+            shift 2
+            ;;
+        --interval)
+            (($# >= 2)) || { printf 'profile-anush: --interval needs a value\n' >&2; exit 2; }
+            interval=$2
+            shift 2
+            ;;
+        --count)
+            (($# >= 2)) || { printf 'profile-anush: --count needs a value\n' >&2; exit 2; }
+            count=$2
+            shift 2
+            ;;
+        --output)
+            (($# >= 2)) || { printf 'profile-anush: --output needs a value\n' >&2; exit 2; }
+            output=$2
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            printf 'profile-anush: unknown option: %s\n' "$1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+[[ $interval =~ ^([0-9]+([.][0-9]*)?|[.][0-9]+)$ ]] || {
+    printf 'profile-anush: interval must be a non-negative number\n' >&2
+    exit 2
+}
+[[ $count =~ ^[0-9]+$ ]] || {
+    printf 'profile-anush: count must be a non-negative integer\n' >&2
+    exit 2
+}
+
+if [[ -z $root_pid ]]; then
+    mapfile -t candidates < <(pgrep -x quickshell 2>/dev/null || true)
+    if ((${#candidates[@]} != 1)); then
+        printf 'profile-anush: expected one quickshell process, found %d; pass --pid\n' \
+            "${#candidates[@]}" >&2
+        exit 1
+    fi
+    root_pid=${candidates[0]}
+fi
+
+[[ $root_pid =~ ^[0-9]+$ && -r /proc/$root_pid/status ]] || {
+    printf 'profile-anush: PID %s is not readable\n' "$root_pid" >&2
+    exit 1
+}
+
+output_dir=$(dirname -- "$output")
+[[ -d $output_dir ]] || {
+    printf 'profile-anush: output directory does not exist: %s\n' "$output_dir" >&2
+    exit 1
+}
+
+clock_ticks=$(getconf CLK_TCK 2>/dev/null || printf '100\n')
+start_ns=$(date +%s%N)
+previous_ns=$start_ns
+previous_ticks=""
+
+process_tree() {
+    local -a queue=("$root_pid") result=()
+    local cursor=0 pid child ppid
+    declare -A seen=()
+
+    while ((cursor < ${#queue[@]})); do
+        pid=${queue[$cursor]}
+        ((cursor += 1))
+        [[ -r /proc/$pid/status && -z ${seen[$pid]+present} ]] || continue
+        seen[$pid]=1
+        result+=("$pid")
+
+        for status in /proc/[0-9]*/status; do
+            [[ -r $status ]] || continue
+            child=${status#/proc/}
+            child=${child%/status}
+            [[ -z ${seen[$child]+present} ]] || continue
+            ppid=$(awk '/^PPid:/ { print $2; exit }' "$status" 2>/dev/null)
+            [[ $ppid == "$pid" ]] && queue+=("$child")
+        done
+    done
+
+    printf '%s\n' "${result[@]}"
+}
+
+read_status_value() {
+    local key=$1 file=$2
+    awk -v wanted="$key" '$1 == wanted ":" { print $2; exit }' "$file" 2>/dev/null
+}
+
+printf 'timestamp,elapsed_s,root_pid,processes,children,rss_kib,pss_kib,private_dirty_kib,threads,fds,cpu_pct,voluntary_cs,nonvoluntary_cs\n' >"$output"
+
+sample=0
+while ((count == 0 || sample < count)); do
+    [[ -r /proc/$root_pid/status ]] || {
+        printf 'profile-anush: PID %s exited after %d samples\n' "$root_pid" "$sample" >&2
+        exit 1
+    }
+
+    mapfile -t pids < <(process_tree)
+    rss=0
+    pss=0
+    private_dirty=0
+    threads=0
+    fds=0
+    ticks=0
+    voluntary=0
+    nonvoluntary=0
+
+    for pid in "${pids[@]}"; do
+        status=/proc/$pid/status
+        [[ -r $status ]] || continue
+        value=$(read_status_value VmRSS "$status"); rss=$((rss + ${value:-0}))
+        value=$(read_status_value Threads "$status"); threads=$((threads + ${value:-0}))
+        value=$(read_status_value voluntary_ctxt_switches "$status"); voluntary=$((voluntary + ${value:-0}))
+        value=$(read_status_value nonvoluntary_ctxt_switches "$status"); nonvoluntary=$((nonvoluntary + ${value:-0}))
+
+        if [[ -r /proc/$pid/smaps_rollup ]]; then
+            value=$(read_status_value Pss /proc/$pid/smaps_rollup); pss=$((pss + ${value:-0}))
+            value=$(read_status_value Private_Dirty /proc/$pid/smaps_rollup); private_dirty=$((private_dirty + ${value:-0}))
+        fi
+
+        if [[ -d /proc/$pid/fd ]]; then
+            value=$(find "/proc/$pid/fd" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
+            fds=$((fds + value))
+        fi
+
+        if [[ -r /proc/$pid/stat ]]; then
+            value=$(awk '{ line=$0; sub(/^.*\) /, "", line); split(line, field, " "); print field[12] + field[13] + field[14] + field[15] }' "/proc/$pid/stat" 2>/dev/null)
+            ticks=$((ticks + ${value:-0}))
+        fi
+    done
+
+    now_ns=$(date +%s%N)
+    elapsed=$(awk -v now="$now_ns" -v start="$start_ns" 'BEGIN { printf "%.3f", (now-start)/1000000000 }')
+    cpu=0.000
+    if [[ -n $previous_ticks ]]; then
+        cpu=$(awk -v current="$ticks" -v previous="$previous_ticks" \
+            -v now="$now_ns" -v before="$previous_ns" -v hz="$clock_ticks" \
+            'BEGIN { dt=(now-before)/1000000000; if (dt > 0) printf "%.3f", 100*(current-previous)/hz/dt; else print "0.000" }')
+    fi
+
+    timestamp=$(date --iso-8601=seconds)
+    printf '%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%s,%d,%d\n' \
+        "$timestamp" "$elapsed" "$root_pid" "${#pids[@]}" "$(( ${#pids[@]} - 1 ))" \
+        "$rss" "$pss" "$private_dirty" "$threads" "$fds" "$cpu" \
+        "$voluntary" "$nonvoluntary" >>"$output"
+
+    previous_ticks=$ticks
+    previous_ns=$now_ns
+    ((sample += 1))
+    ((count == 0 || sample < count)) && sleep "$interval"
+done

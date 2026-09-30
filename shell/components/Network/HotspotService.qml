@@ -291,15 +291,11 @@ Singleton {
         }
     }
 
-    // NetworkManager events invalidate hotspot/upstream/profile state without
-    // repeated nmcli polling. Client stations are refreshed modestly only
-    // while their popup is visible.
-    Process {
-        id: nmMonitor
-        command: ["nmcli", "monitor"]
-        running: true
-        stdout: SplitParser { onRead: line => refreshDebounce.restart() }
-        onExited: monitorRestart.restart()
+    // NetworkService owns the shell's single NetworkManager subscription.
+    // Client stations are still refreshed modestly while this popup is open.
+    Connections {
+        target: NetworkService
+        function onNetworkStateInvalidated() { refreshDebounce.restart() }
     }
 
     Timer {
@@ -334,12 +330,6 @@ Singleton {
                 String(root.maxClients)]
             limitProcess.running = true
         }
-    }
-
-    Timer {
-        id: monitorRestart
-        interval: 3000
-        onTriggered: nmMonitor.running = true
     }
 
     Timer {

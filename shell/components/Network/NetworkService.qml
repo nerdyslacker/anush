@@ -11,6 +11,10 @@ import Quickshell.Networking as QsNetwork
 Singleton {
     id: root
 
+    // Shared invalidation stream for every NetworkManager-backed service.
+    // Keeping this here avoids one persistent `nmcli monitor` per consumer.
+    signal networkStateInvalidated()
+
     readonly property bool available:
         QsNetwork.Networking.backend !== QsNetwork.NetworkBackendType.None
     readonly property bool wifiEnabled: QsNetwork.Networking.wifiEnabled
@@ -642,7 +646,10 @@ Singleton {
         running: true
         command: ["nmcli", "monitor"]
         stdout: SplitParser {
-            onRead: line => vpnRefreshDebounce.restart()
+            onRead: line => {
+                root.networkStateInvalidated()
+                vpnRefreshDebounce.restart()
+            }
         }
         onExited: monitorRestart.restart()
     }
