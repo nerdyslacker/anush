@@ -50,6 +50,7 @@ BarModule {
         if (barSettingsPopup)
             barSettingsPopup.visible = false
         pomoDone = false
+        Sys.ensureDnd()
         menu.visible = !menu.visible
     }
 

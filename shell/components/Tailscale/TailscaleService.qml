@@ -11,6 +11,8 @@ import "TailscaleModel.js" as Model
 Singleton {
     id: root
 
+    readonly property bool widgetEnabled: BarVisibility.enabled("tailscale")
+
     property bool initialized: false
     property bool installed: false
     property bool running: false
@@ -88,7 +90,6 @@ Singleton {
         initialized = true
         loadState()
         refresh()
-        refreshTimer.start()
         refreshTaildrop(false)
     }
 
@@ -111,7 +112,8 @@ Singleton {
     }
 
     function refreshTaildrop(fetchRemote) {
-        if (taildropPollProcess.running || taildropActionProcess.running)
+        if (!widgetEnabled || taildropPollProcess.running
+                || taildropActionProcess.running)
             return
         _taildropOutput = ""
         _taildropError = ""
@@ -167,7 +169,7 @@ Singleton {
     }
 
     function refresh() {
-        if (whichProcess.running || statusProcess.running) return
+        if (!widgetEnabled || whichProcess.running || statusProcess.running) return
         if (!installed) {
             refreshing = true
             whichProcess.command = ["which", "tailscale"]
@@ -178,7 +180,7 @@ Singleton {
     }
 
     function refreshDetails() {
-        if (!installed || statusProcess.running) return
+        if (!widgetEnabled || !installed || statusProcess.running) return
         refreshing = true
         _statusOutput = ""
         _statusError = ""
@@ -410,6 +412,7 @@ Singleton {
         id: refreshTimer
         interval: 30000
         repeat: true
+        running: root.initialized && root.widgetEnabled
         onTriggered: root.refresh()
     }
     Timer {
@@ -417,7 +420,8 @@ Singleton {
         interval: 8000
         repeat: true
         triggeredOnStart: true
-        running: root.initialized && root.installed && root.running
+        running: root.initialized && root.widgetEnabled
+            && root.installed && root.running
             && root.fileSharing
         onTriggered: root.refreshTaildrop(true)
     }

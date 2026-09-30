@@ -8,6 +8,8 @@ import "../.."
 Singleton {
     id: root
 
+    readonly property bool widgetEnabled: BarVisibility.enabled("colorPicker")
+
     property string currentColor: ""
     property var history: []
     property bool picking: false
@@ -120,6 +122,8 @@ Singleton {
     }
 
     function copy(value) {
+        if (!widgetEnabled)
+            return
         const color = normalize(value)
         if (!remember(color))
             return
@@ -129,7 +133,7 @@ Singleton {
     }
 
     function clearHistory() {
-        if (history.length === 0)
+        if (!widgetEnabled || history.length === 0)
             return
         history = []
         persist()
@@ -138,7 +142,7 @@ Singleton {
     }
 
     function pick() {
-        if (picking)
+        if (!widgetEnabled || picking)
             return
         resultRetry.stop()
         if (!available) {
@@ -179,7 +183,7 @@ Singleton {
 
     Process {
         id: availabilityCheck
-        running: true
+        running: root.widgetEnabled
         command: ["which", "xcolor"]
         onExited: exitCode => root.available = exitCode === 0
     }
@@ -219,6 +223,14 @@ Singleton {
         interval: 30000
         repeat: false
         onTriggered: root.cancelPick(true)
+    }
+
+    Connections {
+        target: BarVisibility
+        function onWidgetsChanged() {
+            if (!BarVisibility.enabled("colorPicker"))
+                root.cancelPick(false)
+        }
     }
 
     Connections {

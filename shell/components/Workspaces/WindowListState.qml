@@ -9,6 +9,8 @@ import Quickshell
 Singleton {
     id: root
 
+    readonly property bool widgetEnabled: BarVisibility.enabled("windowList")
+
     property var entries: []
     property var iconCache: ({})
     property bool showWindowsFromAllMonitors: false
@@ -126,6 +128,7 @@ Singleton {
 
     Connections {
         target: Wm
+        enabled: root.widgetEnabled
         function onWindowsChanged() {
             root.rebuild();
         }
@@ -133,6 +136,7 @@ Singleton {
 
     Connections {
         target: DesktopEntries
+        enabled: root.widgetEnabled
         function onApplicationsChanged() {
             root.iconCache = ({});
             root.rebuild();
@@ -153,6 +157,9 @@ Singleton {
     Component.onCompleted: {
         if (ShellState.ready)
             loadState();
-        rebuild();
+        if (widgetEnabled)
+            rebuild();
     }
+
+    onWidgetEnabledChanged: if (widgetEnabled) rebuild()
 }

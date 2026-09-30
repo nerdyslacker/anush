@@ -3,6 +3,10 @@ import QtQuick
 import Quickshell
 
 ShellRoot {
+    readonly property var barScreens: BarVisibility.showOnAllMonitors
+        ? Quickshell.screens
+        : Quickshell.screens.length > 0 ? [Quickshell.screens[0]] : []
+
     Timer {
         id: screenHotplugReload
         interval: 350
@@ -19,13 +23,11 @@ ShellRoot {
         }
     }
 
-    // Keep global actions alive even when their bar buttons are disabled.
+    // IPC control stays available, but optional widget services are started by
+    // their widgets so a disabled widget has no background lifecycle.
     Component.onCompleted: {
         ShellControl.protocolVersion
         ShellActions.protocolVersion
-        NotepadState.initialize()
-        ColorPickerState.initialize()
-        TailscaleService.initialize()
     }
 
     Keybindings {}
@@ -33,12 +35,12 @@ ShellRoot {
     Reminder {}
 
     Variants {
-        model: Quickshell.screens
+        model: barScreens
         Bar {}
     }
 
     Variants {
-        model: Quickshell.screens
+        model: BarVisibility.enabled("notepad") ? barScreens : []
         NotepadSidebar {}
     }
 }

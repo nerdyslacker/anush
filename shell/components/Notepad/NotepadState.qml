@@ -78,6 +78,8 @@ Singleton {
         ? files[activeIndex] : null
 
     function initialize() {
+        if (!BarVisibility.enabled("notepad"))
+            return
         loadSettings()
         if (!listingStarted) {
             listingStarted = true
@@ -338,10 +340,24 @@ Singleton {
 
     IpcHandler {
         target: "notepad"
-        function toggle(): void { root.toggleDefault() }
+        function toggle(): void {
+            if (BarVisibility.enabled("notepad")) root.toggleDefault()
+        }
         function close(): void { root.close() }
-        function newNote(): void { root.createNote() }
-        function save(): void { root.saveNow(true) }
+        function newNote(): void {
+            if (BarVisibility.enabled("notepad")) root.createNote()
+        }
+        function save(): void {
+            if (BarVisibility.enabled("notepad")) root.saveNow(true)
+        }
+    }
+
+    Connections {
+        target: BarVisibility
+        function onWidgetsChanged() {
+            if (!BarVisibility.enabled("notepad") && root.opened)
+                root.close()
+        }
     }
 
     Connections {

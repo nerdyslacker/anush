@@ -6,10 +6,12 @@ import Quickshell.Io
 import "../.."
 
 // KDE Connect and Valent expose different D-Bus models. The helper normalizes
-// both into one bounded JSON snapshot while this singleton owns polling and
-// serializes actions for every bar instance.
+// both into one bounded JSON snapshot while this singleton owns event-driven
+// invalidation and serializes actions for every bar instance.
 Singleton {
     id: root
+
+    readonly property bool widgetEnabled: BarVisibility.enabled("phone")
 
     property bool initialized: false
     property bool running: false
@@ -44,6 +46,9 @@ Singleton {
     property var contacts: []
     property var notifications: []
     property string notificationDeviceId: ""
+    property string eventMonitorExecutable: ""
+    property bool eventMonitorOnline: false
+    property bool eventMonitorFailed: false
 
     readonly property string helperPath:
         Theme.scriptsDir + "/phone/phone-control"
@@ -69,7 +74,7 @@ Singleton {
     }
 
     function refresh() {
-        if (statusProcess.running)
+        if (!widgetEnabled || statusProcess.running)
             return
         _statusOutput = ""
         statusProcess.command = [helperPath, "status"]
@@ -454,12 +459,55 @@ Singleton {
         })
     }
 
+    // KDE Connect and Valent already publish state changes on D-Bus. Use one
+    // shared subscription as a cheap invalidation stream instead of starting
+    // the Python/GIO snapshot helper every 12 seconds while nothing changes.
+    Process {
+        id: eventMonitorProbe
+        command: ["which", "dbus-monitor"]
+        running: root.initialized && root.widgetEnabled
+        stdout: StdioCollector {
+            onStreamFinished: root.eventMonitorExecutable = text.trim()
+        }
+    }
+
+    Process {
+        id: eventMonitor
+        command: [root.eventMonitorExecutable, "--session",
+            "type='signal',path_namespace='/modules/kdeconnect'",
+            "type='signal',path_namespace='/ca/andyholmes/Valent'",
+            "type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',member='NameOwnerChanged',arg0='org.kde.kdeconnect'",
+            "type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',member='NameOwnerChanged',arg0='ca.andyholmes.Valent'"]
+        running: root.initialized && root.widgetEnabled
+            && root.eventMonitorExecutable !== ""
+            && !eventMonitorRestart.running
+        stdout: SplitParser {
+            onRead: line => {
+                if (line.trim() !== "") eventRefresh.restart()
+            }
+        }
+        onStarted: root.eventMonitorOnline = true
+        onExited: {
+            root.eventMonitorOnline = false
+            root.eventMonitorFailed = true
+            if (root.initialized && root.widgetEnabled
+                    && root.eventMonitorExecutable !== "")
+                eventMonitorRestart.restart()
+        }
+    }
+
     Timer {
+        id: fallbackRefresh
         interval: 12000
         repeat: true
-        running: root.initialized
+        // Preserve the old behaviour only on systems without a working D-Bus
+        // monitor. Normal idle operation is signal-driven.
+        running: root.initialized && root.widgetEnabled
+            && (!root.eventMonitorOnline || root.eventMonitorFailed)
         onTriggered: root.refresh()
     }
+    Timer { id: eventRefresh; interval: 300; onTriggered: root.refresh() }
+    Timer { id: eventMonitorRestart; interval: 3000 }
     Timer {
         id: refreshDelay
         interval: 450

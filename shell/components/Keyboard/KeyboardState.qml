@@ -196,7 +196,7 @@ Singleton {
     Process {
         id: switcherProbe
         command: ["sh", "-c", "command -v xkb-switch 2>/dev/null"]
-        running: true
+        running: BarVisibility.enabled("keyboard")
         stdout: StdioCollector {
             onStreamFinished: {
                 root.switcherAvailable = text.trim() !== ""
@@ -226,14 +226,16 @@ Singleton {
     Process {
         id: groupMonitor
         command: ["xkb-switch", "-W"]
-        running: root.switcherAvailable && !monitorRestart.running
+        running: BarVisibility.enabled("keyboard")
+            && root.switcherAvailable && !monitorRestart.running
         stdout: SplitParser {
             onRead: line => {
                 const value = line.trim()
                 if (value !== "") root.currentSpec = value
             }
         }
-        onExited: if (root.switcherAvailable) monitorRestart.restart()
+        onExited: if (BarVisibility.enabled("keyboard")
+                && root.switcherAvailable) monitorRestart.restart()
     }
 
     Process {

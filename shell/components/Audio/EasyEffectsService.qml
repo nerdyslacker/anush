@@ -3,11 +3,14 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../.."
 
 // Small CLI-backed Easy Effects integration. The service is intentionally
 // optional: systems without Easy Effects keep the normal audio mixer intact.
 Singleton {
     id: root
+
+    readonly property bool widgetEnabled: BarVisibility.enabled("volume")
 
     property bool initialized: false
     property bool available: false
@@ -23,13 +26,15 @@ Singleton {
     readonly property bool busy: bypassToggle.running || presetLoader.running
 
     function initialize() {
-        if (initialized)
+        if (!widgetEnabled || initialized)
             return
         initialized = true
         availabilityCheck.running = true
     }
 
     function refresh() {
+        if (!widgetEnabled)
+            return
         initialize()
         if (!available) {
             if (!availabilityCheck.running)
@@ -210,7 +215,7 @@ Singleton {
     Timer {
         interval: 5000
         repeat: true
-        running: root.available && root.popupVisible
+        running: root.widgetEnabled && root.available && root.popupVisible
         onTriggered: root.refresh()
     }
 }

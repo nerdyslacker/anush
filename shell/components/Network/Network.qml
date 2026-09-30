@@ -5,9 +5,14 @@ import "../.."
 BarModule {
     id: root
 
-    icon: HotspotService.active ? "󰀂" : Sys.netIcon
+    readonly property string networkIcon: NetworkService.vpnOn ? "󰦝"
+        : NetworkService.primaryType.indexOf("wireless") !== -1 ? "󰤨"
+        : NetworkService.primaryType.indexOf("ethernet") !== -1 ? "󰈀" : "󰤭"
+
+    icon: HotspotService.active ? "󰀂" : networkIcon
     iconColor: HotspotService.active ? Theme.blue
-        : Sys.vpnOn ? Theme.green : Sys.online ? Theme.cyan : Theme.red
+        : NetworkService.vpnOn ? Theme.green
+        : NetworkService.online ? Theme.cyan : Theme.red
 
     onClicked: mouse => {
         if (mouse.button === Qt.RightButton) {

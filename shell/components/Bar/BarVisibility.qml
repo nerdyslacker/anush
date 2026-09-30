@@ -215,6 +215,9 @@ Singleton {
             commands: true
         })
     property var widgets: defaults
+    // Optional loaders must wait for persisted state. Otherwise every widget
+    // briefly starts with its default before a saved `enabled: false` arrives.
+    property bool stateLoaded: false
     property var clusters: defaultClusters
     property bool showOnAllMonitors: true
     property string barPosition: "top"
@@ -237,7 +240,8 @@ Singleton {
 
     function enabled(key) {
         const info = metadata(key);
-        return (info && info.mandatory === true) || widgets[key] !== false;
+        return (info && info.mandatory === true)
+            || (stateLoaded && widgets[key] !== false);
     }
 
     function setEnabled(key, enabled) {
@@ -384,6 +388,7 @@ Singleton {
         root.fitContent = saved.fitContent === true;
         root.floating = saved.floating === true;
         root.separateSections = saved.separateSections === true;
+        root.stateLoaded = true;
     }
 
     Connections {

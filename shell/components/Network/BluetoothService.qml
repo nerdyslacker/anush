@@ -4,12 +4,14 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Bluetooth as QsBluetooth
+import "../.."
 
 // BlueZ state is reactive through Quickshell. Device actions preserve the
 // previous bluetoothctl workflow; power and discovery use the native adapter.
 Singleton {
     id: root
 
+    readonly property bool widgetEnabled: BarVisibility.enabled("bluetooth")
     readonly property var adapter: QsBluetooth.Bluetooth.defaultAdapter
     readonly property bool available: adapter !== null
     readonly property bool enabled: adapter?.enabled ?? false
@@ -92,6 +94,8 @@ Singleton {
     }
 
     function togglePower() {
+        if (!widgetEnabled)
+            return
         if (!adapter) {
             error = "No Bluetooth adapter available"
             return
@@ -101,7 +105,7 @@ Singleton {
     }
 
     function toggleScan() {
-        if (!adapter || !adapter.enabled)
+        if (!widgetEnabled || !adapter || !adapter.enabled)
             return
         error = ""
         if (adapter.discovering) {
@@ -120,7 +124,7 @@ Singleton {
     }
 
     function toggleDevice(device) {
-        if (!device || device.pairing || busy)
+        if (!widgetEnabled || !device || device.pairing || busy)
             return
         runSteps([["bluetoothctl", device.connected ? "disconnect" : "connect",
             device.address]], (device.connected ? "Disconnecting " : "Connecting ")
@@ -128,14 +132,14 @@ Singleton {
     }
 
     function forgetDevice(device) {
-        if (!device || device.pairing || busy)
+        if (!widgetEnabled || !device || device.pairing || busy)
             return
         runSteps([["bluetoothctl", "remove", device.address]],
             "Forgetting " + (device.name || device.deviceName) + "…")
     }
 
     function pairDevice(device) {
-        if (!device || device.pairing || busy)
+        if (!widgetEnabled || !device || device.pairing || busy)
             return
         // Preserve the old PIN-less pair -> trust -> connect workflow. More
         // involved agent/PIN exchanges remain outside this quick popup.
@@ -147,7 +151,7 @@ Singleton {
     }
 
     function runSteps(steps, message) {
-        if (busy || !steps.length)
+        if (!widgetEnabled || busy || !steps.length)
             return
         error = ""
         status = message
@@ -158,7 +162,7 @@ Singleton {
     }
 
     function runNextStep() {
-        if (!_steps.length)
+        if (!widgetEnabled || !_steps.length)
             return
         const remaining = _steps.slice()
         const next = remaining.shift()
@@ -175,6 +179,14 @@ Singleton {
         target: root.adapter
         function onDiscoveringChanged() {
             if (!root.adapter.discovering) root.ownsDiscovery = false
+        }
+    }
+
+    onWidgetEnabledChanged: {
+        if (!widgetEnabled) {
+            nextStep.stop()
+            _steps = []
+            stopOwnedScan()
         }
     }
 

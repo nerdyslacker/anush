@@ -15,6 +15,7 @@ import "../.."
 Singleton {
     id: root
 
+    readonly property bool widgetEnabled: BarVisibility.enabled("network")
     readonly property string helperPath: ShellState.scriptsDir + "/hotspot/hotspot-control"
     property bool available: false
     property bool supported: false
@@ -116,7 +117,7 @@ Singleton {
     }
 
     function refresh() {
-        if (statusProcess.running || busy)
+        if (!widgetEnabled || statusProcess.running || busy)
             return
         _statusErrors = []
         statusProcess.running = true
@@ -140,7 +141,7 @@ Singleton {
     }
 
     function runAction(name, payload) {
-        if (busy)
+        if (!widgetEnabled || busy)
             return
         busy = true
         action = name
@@ -164,7 +165,7 @@ Singleton {
     function toggle() { active ? turnOff() : turnOn() }
 
     function limitShouldRun() {
-        return active && maxClients > 0 && clientLimitSupported
+        return widgetEnabled && active && maxClients > 0 && clientLimitSupported
             && clientLimitHelper !== "" && clientLimitRootRunner !== ""
             && apInterface !== ""
     }
@@ -188,6 +189,11 @@ Singleton {
     onClientLimitRootRunnerChanged: syncLimitEnforcer()
     onWifiDeviceChanged: syncLimitEnforcer()
     onApInterfaceChanged: syncLimitEnforcer()
+    onWidgetEnabledChanged: {
+        if (!widgetEnabled)
+            popupActive = false
+        syncLimitEnforcer()
+    }
 
     Process {
         id: statusProcess
@@ -335,7 +341,7 @@ Singleton {
     Timer {
         interval: 5000
         repeat: true
-        running: root.popupActive
+        running: root.widgetEnabled && root.popupActive
         onTriggered: root.refresh()
     }
 
@@ -375,5 +381,5 @@ Singleton {
         }
     }
 
-    Component.onCompleted: refresh()
+    Component.onCompleted: if (widgetEnabled) refresh()
 }

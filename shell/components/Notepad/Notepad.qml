@@ -12,5 +12,7 @@ BarModule {
         : NotepadState.dirty ? Theme.warning : Theme.accent
     label: NotepadState.dirty ? "•" : ""
 
+    Component.onCompleted: NotepadState.initialize()
+
     onClicked: NotepadState.toggleForScreen(root.barScreen)
 }

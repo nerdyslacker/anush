@@ -11,6 +11,8 @@ import Quickshell.Networking as QsNetwork
 Singleton {
     id: root
 
+    readonly property bool widgetEnabled: BarVisibility.enabled("network")
+
     // Shared invalidation stream for every NetworkManager-backed service.
     // Keeping this here avoids one persistent `nmcli monitor` per consumer.
     signal networkStateInvalidated()
@@ -129,7 +131,7 @@ Singleton {
     function refreshVpns() {
         // Metadata enrichment is optional and must never block the primary
         // NetworkManager profile refresh or its loading indicator.
-        if (vpnList.running)
+        if (!widgetEnabled || vpnList.running)
             return
         if (vpnMetadata.running)
             vpnMetadata.running = false
@@ -245,7 +247,8 @@ Singleton {
     }
 
     function refreshOpenvpn3() {
-        if (!openvpn3Configs.running && !openvpn3Sessions.running) {
+        if (widgetEnabled && !openvpn3Configs.running
+                && !openvpn3Sessions.running) {
             _openvpn3Configs = ""
             _openvpn3Sessions = ""
             openvpn3Configs.running = true
@@ -643,7 +646,7 @@ Singleton {
     // NetworkManager restarts; if the monitor exits, retry at a low cadence.
     Process {
         id: nmMonitor
-        running: true
+        running: root.widgetEnabled && !monitorRestart.running
         command: ["nmcli", "monitor"]
         stdout: SplitParser {
             onRead: line => {
@@ -651,7 +654,7 @@ Singleton {
                 vpnRefreshDebounce.restart()
             }
         }
-        onExited: monitorRestart.restart()
+        onExited: if (root.widgetEnabled) monitorRestart.restart()
     }
 
     Timer {
@@ -663,7 +666,6 @@ Singleton {
     Timer {
         id: monitorRestart
         interval: 3000
-        onTriggered: nmMonitor.running = true
     }
 
     Connections {
@@ -678,5 +680,5 @@ Singleton {
         function onValuesChanged() { root.updateScanning() }
     }
 
-    Component.onCompleted: refreshVpns()
+    Component.onCompleted: if (widgetEnabled) refreshVpns()
 }

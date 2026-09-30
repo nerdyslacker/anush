@@ -11,6 +11,8 @@ import Quickshell.Io
 Singleton {
     id: root
 
+    readonly property bool widgetEnabled: BarVisibility.enabled("clipboard")
+
     property var entries: []
     property bool available: false
     property bool busy: false
@@ -49,14 +51,14 @@ Singleton {
     }
 
     function refresh() {
-        if (available && !busy && !listProcess.running) {
+        if (widgetEnabled && available && !busy && !listProcess.running) {
             busy = true
             listProcess.running = true
         }
     }
 
     function clear() {
-        if (!available || busy)
+        if (!widgetEnabled || !available || busy)
             return
         busy = true
         clearProcess.running = true
@@ -75,7 +77,7 @@ Singleton {
             "command -v clipmenu >/dev/null 2>&1 "
             + "&& command -v clipmenud >/dev/null 2>&1 "
             + "&& command -v clipdel >/dev/null 2>&1"]
-        running: true
+        running: root.widgetEnabled
         onExited: exitCode => {
             root.available = exitCode === 0
             if (root.available)
@@ -125,7 +127,7 @@ Singleton {
     Timer {
         interval: 1000
         repeat: true
-        running: root.available
+        running: root.widgetEnabled && root.available
         onTriggered: root.refresh()
     }
 }

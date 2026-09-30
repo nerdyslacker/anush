@@ -19,19 +19,6 @@ Singleton {
     property bool batteryChargeLimitChanging: false
     property string batteryChargeLimitError: ""
     property bool keepAwake: false
-    readonly property string netName: NetworkService.primaryName
-    readonly property string netType: NetworkService.primaryType
-    readonly property bool vpnOn: NetworkService.vpnOn
-    readonly property string vpnName: NetworkService.vpnName
-    readonly property bool bluetoothOn: BluetoothService.enabled
-    readonly property bool bluetoothConnected: BluetoothService.connected
-
-    readonly property string netIcon: vpnOn ? "󰦝"
-                                    : netType.indexOf("wireless") !== -1 ? "󰤨"
-                                    : netType.indexOf("ethernet") !== -1 ? "󰈀"
-                                    : "󰤭"
-    readonly property bool online: netName !== ""
-
     property var _prev: ({ idle: 0, total: 0 })
 
     Timer {
@@ -141,7 +128,8 @@ Singleton {
 
     Timer {
         interval: 5000
-        running: root.dunstExecutable !== ""
+        running: BarVisibility.enabled("notifications")
+            && root.dunstExecutable !== ""
         repeat: true
         triggeredOnStart: true
         onTriggered: root.refreshDnd()
@@ -155,6 +143,13 @@ Singleton {
     function refreshDnd() {
         if (dunstExecutable !== "")
             restartQuery(dndProc)
+    }
+
+    function ensureDnd() {
+        if (dunstExecutable === "")
+            restartQuery(dunstProbe)
+        else
+            refreshDnd()
     }
 
     Process {
@@ -189,7 +184,7 @@ Singleton {
     Process {
         id: dunstProbe
         command: ["which", "dunstctl"]
-        running: true
+        running: BarVisibility.enabled("notifications")
         stdout: StdioCollector {
             onStreamFinished: {
                 root.dunstExecutable = text.trim()

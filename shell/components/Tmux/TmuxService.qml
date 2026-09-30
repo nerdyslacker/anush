@@ -3,11 +3,14 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../.."
 
 // Optional tmux integration shared by every bar. All tmux arguments are passed
 // as argv entries; session names never pass through shell interpolation.
 Singleton {
     id: root
+
+    readonly property bool widgetEnabled: BarVisibility.enabled("tmux")
 
     property bool initialized: false
     property bool available: false
@@ -21,13 +24,15 @@ Singleton {
         || killProcess.running
 
     function initialize() {
-        if (initialized)
+        if (!widgetEnabled || initialized)
             return
         initialized = true
         availabilityCheck.running = true
     }
 
     function refresh() {
+        if (!widgetEnabled)
+            return
         initialize()
         if (available && !sessionList.running)
             sessionList.running = true
@@ -193,7 +198,7 @@ Singleton {
     Timer {
         interval: 5000
         repeat: true
-        running: root.available && root.popupVisible
+        running: root.widgetEnabled && root.available && root.popupVisible
         onTriggered: root.refresh()
     }
 }

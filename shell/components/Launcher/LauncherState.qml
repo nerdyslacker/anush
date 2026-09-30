@@ -90,9 +90,15 @@ Singleton {
 
     IpcHandler {
         target: "launcher"
-        function toggle(): void { root.centeredRequested() }
-        function show(): void { root.centeredRequested() }
-        function toggleCentered(): void { root.centeredRequested() }
+        function toggle(): void {
+            if (BarVisibility.enabled("launcher")) root.centeredRequested()
+        }
+        function show(): void {
+            if (BarVisibility.enabled("launcher")) root.centeredRequested()
+        }
+        function toggleCentered(): void {
+            if (BarVisibility.enabled("launcher")) root.centeredRequested()
+        }
     }
 
     Connections {
