@@ -3,6 +3,19 @@ import QtQuick
 import Quickshell
 
 ShellRoot {
+    Timer {
+        id: screenHotplugReload
+        interval: 350
+        onTriggered: Quickshell.reload(true)
+    }
+
+    Connections {
+        target: Wm
+        function onPhysicalOutputsChanged() {
+            screenHotplugReload.restart()
+        }
+    }
+
     // Keep global actions alive even when their bar buttons are disabled.
     Component.onCompleted: {
         ShellControl.protocolVersion
