@@ -36,7 +36,8 @@ Singleton {
 
     Timer {
         interval: 3000
-        running: true
+        running: BarVisibility.enabled("metrics")
+            || BarVisibility.enabled("battery")
         repeat: true
         triggeredOnStart: true
         onTriggered: statProc.running = true
@@ -127,13 +128,23 @@ Singleton {
     property bool capsOn: false
     property bool dndOn: false
     property bool dndTarget: false
+    property string dunstExecutable: ""
 
     Timer {
         interval: 1000
-        running: true
+        running: BarVisibility.enabled("capsLock")
+            || BarVisibility.enabled("battery")
         repeat: true
         triggeredOnStart: true
-        onTriggered: root.refreshIndicators()
+        onTriggered: root.restartQuery(capsProc)
+    }
+
+    Timer {
+        interval: 5000
+        running: root.dunstExecutable !== ""
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: root.refreshDnd()
     }
 
     function restartQuery(proc) {
@@ -141,25 +152,23 @@ Singleton {
         proc.running = true
     }
 
-    function refreshIndicators() {
-        restartQuery(capsProc)
-        restartQuery(dndProc)
+    function refreshDnd() {
+        if (dunstExecutable !== "")
+            restartQuery(dndProc)
     }
 
     Process {
         id: capsProc
         // One xset query supplies both keyboard-lock and screen-blanking state.
-        command: ["sh", "-c",
-            "xset q 2>/dev/null | awk '" +
-            "/timeout:/{timeout=$2} /Caps Lock:/{caps=$4} " +
-            "END{print caps, timeout}'"]
+        command: ["xset", "q"]
         stdout: StdioCollector {
             onStreamFinished: {
-                const values = text.trim().split(/\s+/)
-                if (values[0] === "on" || values[0] === "off")
-                    root.capsOn = values[0] === "on"
-                if (values[1] === "0" || Number(values[1]) > 0)
-                    root.keepAwake = values[1] === "0"
+                const caps = text.match(/Caps Lock:\s+(on|off)/)
+                const timeout = text.match(/timeout:\s+(\d+)/)
+                if (caps)
+                    root.capsOn = caps[1] === "on"
+                if (timeout)
+                    root.keepAwake = Number(timeout[1]) === 0
             }
         }
     }
@@ -178,8 +187,20 @@ Singleton {
     }
 
     Process {
+        id: dunstProbe
+        command: ["which", "dunstctl"]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root.dunstExecutable = text.trim()
+                root.refreshDnd()
+            }
+        }
+    }
+
+    Process {
         id: dndProc
-        command: ["sh", "-c", "dunstctl is-paused 2>/dev/null"]
+        command: [root.dunstExecutable, "is-paused"]
         stdout: StdioCollector {
             onStreamFinished: {
                 const state = text.trim()
@@ -192,7 +213,7 @@ Singleton {
     Timer {
         id: dndRefresh
         interval: 300
-        onTriggered: root.refreshIndicators()
+        onTriggered: root.refreshDnd()
     }
 
     Process {
@@ -204,15 +225,16 @@ Singleton {
                     root.dndOn = state === "true"
             }
         }
-        onExited: root.restartQuery(dndProc)
+        onExited: dndRefresh.restart()
     }
 
     function toggleDnd() {
+        if (dunstExecutable === "") return
         dndTarget = !dndOn
+        dndOn = dndTarget
         dndToggleProc.running = false
-        dndToggleProc.command = ["sh", "-c",
-            "dunstctl set-paused " + (dndTarget ? "true" : "false") +
-            " 2>/dev/null && dunstctl is-paused 2>/dev/null"]
+        dndToggleProc.command = [dunstExecutable, "set-paused",
+            dndTarget ? "true" : "false"]
         dndToggleProc.running = true
     }
     function popNotification() {

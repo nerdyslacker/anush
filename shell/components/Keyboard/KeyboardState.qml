@@ -216,6 +216,24 @@ Singleton {
                     root.currentSpec = value
             }
         }
+        onExited: exitCode => {
+            if (exitCode !== 0) root.switcherAvailable = false
+        }
+    }
+
+    // xkb-switch exposes the XKB group-change event stream directly. Keep one
+    // sleeping subscriber instead of spawning a query every 750 ms.
+    Process {
+        id: groupMonitor
+        command: ["xkb-switch", "-W"]
+        running: root.switcherAvailable && !monitorRestart.running
+        stdout: SplitParser {
+            onRead: line => {
+                const value = line.trim()
+                if (value !== "") root.currentSpec = value
+            }
+        }
+        onExited: if (root.switcherAvailable) monitorRestart.restart()
     }
 
     Process {
@@ -229,10 +247,5 @@ Singleton {
         onTriggered: root.refreshCurrent()
     }
 
-    Timer {
-        interval: 750
-        repeat: true
-        running: root.switcherAvailable
-        onTriggered: root.refreshCurrent()
-    }
+    Timer { id: monitorRestart; interval: 3000 }
 }

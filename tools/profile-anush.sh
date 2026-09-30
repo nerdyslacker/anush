@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -u
+shopt -s nullglob
 
 usage() {
     cat <<'EOF'
@@ -93,8 +94,16 @@ previous_ticks=""
 
 process_tree() {
     local -a queue=("$root_pid") result=()
-    local cursor=0 pid child ppid
+    local cursor=0 pid child parent
     declare -A seen=()
+    declare -A children=()
+
+    # Snapshot the process table once. The previous implementation rescanned
+    # every /proc status file once per discovered descendant, which made a
+    # nominal one-second sample take roughly seven seconds on a busy desktop.
+    while read -r child parent; do
+        [[ -n $child && -n $parent ]] && children[$parent]+=" $child"
+    done < <(ps -eo pid=,ppid=)
 
     while ((cursor < ${#queue[@]})); do
         pid=${queue[$cursor]}
@@ -103,22 +112,12 @@ process_tree() {
         seen[$pid]=1
         result+=("$pid")
 
-        for status in /proc/[0-9]*/status; do
-            [[ -r $status ]] || continue
-            child=${status#/proc/}
-            child=${child%/status}
-            [[ -z ${seen[$child]+present} ]] || continue
-            ppid=$(awk '/^PPid:/ { print $2; exit }' "$status" 2>/dev/null)
-            [[ $ppid == "$pid" ]] && queue+=("$child")
+        for child in ${children[$pid]-}; do
+            [[ -z ${seen[$child]+present} ]] && queue+=("$child")
         done
     done
 
     printf '%s\n' "${result[@]}"
-}
-
-read_status_value() {
-    local key=$1 file=$2
-    awk -v wanted="$key" '$1 == wanted ":" { print $2; exit }' "$file" 2>/dev/null
 }
 
 printf 'timestamp,elapsed_s,root_pid,processes,children,rss_kib,pss_kib,private_dirty_kib,threads,fds,cpu_pct,voluntary_cs,nonvoluntary_cs\n' >"$output"
@@ -143,19 +142,32 @@ while ((count == 0 || sample < count)); do
     for pid in "${pids[@]}"; do
         status=/proc/$pid/status
         [[ -r $status ]] || continue
-        value=$(read_status_value VmRSS "$status"); rss=$((rss + ${value:-0}))
-        value=$(read_status_value Threads "$status"); threads=$((threads + ${value:-0}))
-        value=$(read_status_value voluntary_ctxt_switches "$status"); voluntary=$((voluntary + ${value:-0}))
-        value=$(read_status_value nonvoluntary_ctxt_switches "$status"); nonvoluntary=$((nonvoluntary + ${value:-0}))
+        read -r process_rss process_threads process_voluntary process_nonvoluntary \
+            < <(awk '
+                /^VmRSS:/ { rss=$2 }
+                /^Threads:/ { threads=$2 }
+                /^voluntary_ctxt_switches:/ { voluntary=$2 }
+                /^nonvoluntary_ctxt_switches:/ { nonvoluntary=$2 }
+                END { print rss+0, threads+0, voluntary+0, nonvoluntary+0 }
+            ' "$status" 2>/dev/null)
+        rss=$((rss + process_rss))
+        threads=$((threads + process_threads))
+        voluntary=$((voluntary + process_voluntary))
+        nonvoluntary=$((nonvoluntary + process_nonvoluntary))
 
         if [[ -r /proc/$pid/smaps_rollup ]]; then
-            value=$(read_status_value Pss /proc/$pid/smaps_rollup); pss=$((pss + ${value:-0}))
-            value=$(read_status_value Private_Dirty /proc/$pid/smaps_rollup); private_dirty=$((private_dirty + ${value:-0}))
+            read -r process_pss process_private_dirty < <(awk '
+                /^Pss:/ { pss=$2 }
+                /^Private_Dirty:/ { dirty=$2 }
+                END { print pss+0, dirty+0 }
+            ' "/proc/$pid/smaps_rollup" 2>/dev/null)
+            pss=$((pss + process_pss))
+            private_dirty=$((private_dirty + process_private_dirty))
         fi
 
         if [[ -d /proc/$pid/fd ]]; then
-            value=$(find "/proc/$pid/fd" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)
-            fds=$((fds + value))
+            fd_entries=(/proc/"$pid"/fd/*)
+            fds=$((fds + ${#fd_entries[@]}))
         fi
 
         if [[ -r /proc/$pid/stat ]]; then
