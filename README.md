@@ -7,7 +7,7 @@
 **anush** (_[ɑˈnuʃ]_) is a desktop shell named after my wife (_Անուշ_) currently integrated with
 [skarwm](https://github.com/nerdyslacker/skarwm) to make it as beautiful as she
 makes my life. It owns the bar, launchers,
-clipboard, tray, weather, notifications, wallpaper tooling, desktop
+clipboard, tray, weather, RSS feeds, notifications, wallpaper tooling, desktop
 configuration, and persistent shell state. It does not own or launch a window
 manager; a WM configuration starts the shell by pointing Quickshell at
 `anush/shell`.
@@ -79,12 +79,22 @@ sudo xbps-install -S quickshell picom dunst feh kitty fastfetch xss-lock \
 
 Package availability depends on the enabled Void repositories; the Nerd Font may need separate installation.
 
-Every Kitty launch provided by anush passes the writable
-`skarwm/anush/kitty/kitty.conf` explicitly, so it does not depend on a separate
-system or user Kitty configuration. `anushctl start` also exports that location
-to applications launched by the shell. Its selection, URL, active-tab, border,
-and primary ANSI colors follow the current anush accent. The focused skarwm
-window border is updated in the live skarwm configuration at the same time.
+## RSS reader
+
+Enable **RSS reader** from the bar settings, then right-click its bar icon (or
+open the reader and choose **Feeds**) to add RSS or Atom URLs. Left-click opens
+the themed article list, middle-click refreshes, and opening an article marks
+it read before handing its URL to `xdg-open`. Search and All/Unread filters are
+local and do not make additional requests.
+
+The widget is disabled by default. While disabled it owns no timer and performs
+no feed requests. When enabled, one shared service refreshes the configured
+feeds at the selected interval regardless of the number of monitors. Feed
+configuration stays in `shell-state.json`; the bounded article/read cache is
+stored with mode `0600` at `${XDG_STATE_HOME:-$HOME/.local/state}/anush/rss-items.json`.
+Fetching accepts only public HTTP(S) destinations, limits each response to 4
+MiB, and never executes feed content. The initial import does not announce old
+posts; later refreshes use anush's themed notice overlay for new-item counts.
 
 `anushctl start` seeds the anush Fastfetch configuration when it is missing and
 makes Fastfetch's standard

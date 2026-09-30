@@ -22,6 +22,7 @@ singleton BluetoothService components/Network/BluetoothService.qml
 singleton PhoneService components/Phone/PhoneService.qml
 singleton EasyEffectsService components/Audio/EasyEffectsService.qml
 singleton TmuxService components/Tmux/TmuxService.qml
+singleton RssService components/Rss/RssService.qml
 singleton NotepadState components/Notepad/NotepadState.qml
 Bar components/Bar/Bar.qml
 BarModule components/Bar/BarModule.qml
@@ -80,6 +81,8 @@ WallpaperPicker components/Wallpaper/WallpaperPicker.qml
 Weather components/Weather/Weather.qml
 WeatherPopup components/Weather/WeatherPopup.qml
 WeatherSettings components/Weather/WeatherSettings.qml
+Rss components/Rss/Rss.qml
+RssPopup components/Rss/RssPopup.qml
 Tags components/Workspaces/Tags.qml
 LayoutButton components/Workspaces/LayoutButton.qml
 LayoutPicker components/Workspaces/LayoutPicker.qml

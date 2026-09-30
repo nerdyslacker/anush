@@ -16,6 +16,7 @@ cat >"$user" <<'EOF'
   "bar": {"height": 40, "widgets": {"clock": false}},
   "theme": {"accent": "custom", "customAccent": "#89b4fa"},
   "launcher": {"favorites": ["one.desktop"]},
+  "rss": {"refreshMinutes": 30, "feeds": [{"name": "Example", "url": "https://example.com/feed.xml"}]},
   "unknownSection": true
 }
 EOF
@@ -36,6 +37,8 @@ assert value["bar"]["scale"] == 1.25
 assert value["bar"]["position"] == "top"
 assert value["bar"]["widgets"] == {"clock": False}
 assert value["launcher"]["favorites"] == ["runtime.desktop"]
+assert value["rss"]["refreshMinutes"] == 30
+assert value["rss"]["feeds"][0]["name"] == "Example"
 assert value["theme"]["mode"] == "dark"
 assert "unknownSection" not in value
 PY

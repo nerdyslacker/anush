@@ -70,6 +70,11 @@ Singleton {
                 location: "",
                 units: "c"
             },
+            rss: {
+                feeds: [],
+                refreshMinutes: 15,
+                maxItems: 100
+            },
             launcher: {
                 icon: "",
                 favorites: []

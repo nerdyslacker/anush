@@ -39,6 +39,7 @@ grep -Fq '&& (!root.eventMonitorOnline || root.eventMonitorFailed)' \
 grep -Fq '|| (stateLoaded && widgets[key] !== false)' \
     shell/components/Bar/BarVisibility.qml
 grep -Fq 'model: barScreens' shell/shell.qml
+grep -Fq 'rss: false' shell/components/Bar/BarVisibility.qml
 for ownership in \
     'Network/NetworkService.qml:widgetEnabled: BarVisibility.enabled("network")' \
     'Network/HotspotService.qml:widgetEnabled: BarVisibility.enabled("network")' \
@@ -49,6 +50,7 @@ for ownership in \
     'Keyboard/KeyboardState.qml:BarVisibility.enabled("keyboard")' \
     'ColorPicker/ColorPickerState.qml:widgetEnabled: BarVisibility.enabled("colorPicker")' \
     'Tmux/TmuxService.qml:widgetEnabled: BarVisibility.enabled("tmux")' \
+    'Rss/RssService.qml:widgetEnabled: BarVisibility.enabled("rss")' \
     'Audio/EasyEffectsService.qml:widgetEnabled: BarVisibility.enabled("volume")' \
     'Workspaces/WindowListState.qml:widgetEnabled: BarVisibility.enabled("windowList")'
 do

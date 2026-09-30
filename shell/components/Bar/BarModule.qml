@@ -24,6 +24,7 @@ Rectangle {
     property int labelPixelSize: Theme.fontSize
     property int compactLabelPixelSize: Math.max(8, Theme.fontSize - 2)
     property bool interactive: true
+    property bool tooltipSuppressed: false
     readonly property bool hovered: mouse.containsMouse
 
     // No hover-expanding labels: the right cluster is right-anchored, so
@@ -180,13 +181,15 @@ Rectangle {
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+        onPressed: root.tooltipSuppressed = true
+        onExited: root.tooltipSuppressed = false
         onClicked: m => root.clicked(m)
         onWheel: w => root.scrolled(w.angleDelta.y > 0 ? 1 : -1)
     }
 
     Controls.ToolTip {
         parent: root
-        visible: root.hovered && root.tooltip !== ""
+        visible: root.hovered && !root.tooltipSuppressed && root.tooltip !== ""
         text: root.tooltip
         delay: 350
         popupType: Controls.Popup.Window

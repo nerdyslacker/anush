@@ -57,6 +57,12 @@ Singleton {
             defaultCluster: "right"
         },
         {
+            key: "rss",
+            label: "RSS reader",
+            icon: "",
+            defaultCluster: "right"
+        },
+        {
             key: "metrics",
             label: "System metrics",
             icon: "󰍛",
@@ -174,15 +180,14 @@ Singleton {
             key: "commands",
             label: "Commands",
             icon: "󰀄",
-            defaultCluster: "right",
-            mandatory: true
+            defaultCluster: "right"
         }
     ]
     readonly property var clusterNames: ["left", "center", "right"]
     readonly property var defaultClusters: ({
             left: ["launcher", "tags", "layout"],
             center: ["windowList", "title", "scratchpads"],
-            right: ["media", "weather", "metrics", "battery", "brightness", "volume", "tmux", "micIndicator", "network", "tailscale", "bluetooth", "phone", "keyboard", "clipboard", "colorPicker", "notepad", "tray", "notifications", "clock", "capsLock", "screenshot", "commands"]
+            right: ["media", "weather", "rss", "metrics", "battery", "brightness", "volume", "tmux", "micIndicator", "network", "tailscale", "bluetooth", "phone", "keyboard", "clipboard", "colorPicker", "notepad", "tray", "notifications", "clock", "capsLock", "screenshot", "commands"]
         })
     readonly property var defaults: ({
             launcher: true,
@@ -193,6 +198,7 @@ Singleton {
             scratchpads: true,
             media: true,
             weather: true,
+            rss: false,
             metrics: true,
             battery: true,
             brightness: true,
@@ -238,15 +244,20 @@ Singleton {
         return Array.isArray(value) ? value : [];
     }
 
+    function available(key) {
+        return key !== "title" || !Wm.decorationsEnabled;
+    }
+
     function enabled(key) {
         const info = metadata(key);
-        return (info && info.mandatory === true)
-            || (stateLoaded && widgets[key] !== false);
+        return available(key) && ((info && info.mandatory === true)
+            || (stateLoaded && widgets[key] !== false));
     }
 
     function setEnabled(key, enabled) {
         const info = metadata(key);
-        if (defaults[key] === undefined || (info && info.mandatory === true))
+        if (!available(key) || defaults[key] === undefined
+                || (info && info.mandatory === true))
             return;
         const next = ({});
         for (const name in defaults)
@@ -379,7 +390,10 @@ Singleton {
         const next = ({});
         for (const name in root.defaults) {
             const info = root.metadata(name);
-            next[name] = (info && info.mandatory === true) || saved.widgets[name] !== false;
+            const savedValue = saved.widgets[name];
+            next[name] = (info && info.mandatory === true)
+                || (savedValue === undefined
+                    ? root.defaults[name] !== false : savedValue !== false);
         }
         root.widgets = next;
         root.clusters = root.normalizedClusters(saved.clusters);

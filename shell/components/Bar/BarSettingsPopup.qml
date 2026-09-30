@@ -7,8 +7,11 @@ import "../.."
 Popout {
     id: root
 
+    property real availableScreenHeight: 1080
+    readonly property real heightLimit: Math.min(680, Math.max(1, availableScreenHeight - 2 * screenMargin))
+
     cardWidth: 790
-    cardHeight: content.implicitHeight + 2 * cardPadding
+    cardHeight: Math.min(content.implicitHeight + 2 * cardPadding, heightLimit)
     alignRight: true
 
     component ToggleSwitch: Rectangle {
@@ -43,6 +46,7 @@ Popout {
 
         MouseArea {
             anchors.fill: parent
+            enabled: control.enabled
             onClicked: control.toggled()
         }
     }
@@ -107,6 +111,7 @@ Popout {
         id: widgetRow
         required property string widgetKey
         readonly property var info: BarVisibility.metadata(widgetKey)
+        readonly property bool isAvailable: BarVisibility.available(widgetKey)
         readonly property bool isEnabled: BarVisibility.enabled(widgetKey)
         readonly property bool mandatory: info && info.mandatory === true
         property bool dragging: false
@@ -119,6 +124,10 @@ Popout {
         border.color: dragging ? Theme.accent : Theme.gray5
         z: dragging ? 100 : 1
         opacity: dragging ? 0.82 : 1
+
+        HoverHandler {
+            cursorShape: widgetRow.dragging ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+        }
 
         DragHandler {
             id: dragHandler
@@ -202,8 +211,7 @@ Popout {
             TailscaleLogo {
                 visible: widgetRow.widgetKey === "tailscale"
                 anchors.fill: parent
-                dotColor: widgetRow.isEnabled
-                    ? Theme.accent : Theme.brightBlack
+                dotColor: widgetRow.isEnabled ? Theme.accent : Theme.brightBlack
             }
         }
 
@@ -227,96 +235,97 @@ Popout {
             anchors.verticalCenter: parent.verticalCenter
             checked: widgetRow.isEnabled
             visible: !widgetRow.mandatory
+            enabled: widgetRow.isAvailable
+            opacity: enabled ? 1 : 0.45
             onToggled: BarVisibility.setEnabled(widgetRow.widgetKey, !widgetRow.isEnabled)
         }
     }
 
-    component ClusterSection: Column {
-        id: section
+    component ClusterHeading: Row {
+        id: headingRow
         required property string clusterName
         required property string heading
         width: (parent.width - 16) / 3
-        spacing: 6
+        height: 24
+        spacing: 7
 
-        Row {
-            width: parent.width
-            height: 24
-            spacing: 7
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: section.clusterName === "left" ? "󰁍" : section.clusterName === "center" ? "󰘖" : "󰁔"
-                color: Theme.accent
-                font.family: Theme.iconFontFamily
-                font.pixelSize: Theme.iconSize
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: headingRow.clusterName === "left" ? "󰁍" : headingRow.clusterName === "center" ? "󰘖" : "󰁔"
+            color: Theme.accent
+            font.family: Theme.iconFontFamily
+            font.pixelSize: Theme.iconSize
+        }
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: headingRow.heading
+            color: Theme.fg
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize
+            font.bold: true
+        }
+    }
+
+    component ClusterSection: Rectangle {
+        id: section
+        required property string clusterName
+        required property real panelHeight
+        readonly property real requiredHeight: Math.max(64, rows.implicitHeight + 8)
+        width: (parent.width - 16) / 3
+        height: panelHeight
+        radius: Theme.radiusMedium
+        color: dropArea.containsDrag ? Qt.alpha(Theme.accent, 0.09) : "transparent"
+        border.width: 1
+        border.color: dropArea.containsDrag ? Theme.accent : Theme.gray5
+        Behavior on color {
+            ColorAnimation {
+                duration: 100
             }
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: section.heading
-                color: Theme.fg
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
-                font.bold: true
+        }
+        Behavior on border.color {
+            ColorAnimation {
+                duration: 100
             }
         }
 
-        Rectangle {
-            id: dropPanel
-            width: parent.width
-            height: Math.max(64, rows.implicitHeight + 8)
-            radius: Theme.radiusMedium
-            color: dropArea.containsDrag ? Qt.alpha(Theme.accent, 0.09) : "transparent"
-            border.width: 1
-            border.color: dropArea.containsDrag ? Theme.accent : Theme.gray5
-            Behavior on color {
-                ColorAnimation {
-                    duration: 100
+        Column {
+            id: rows
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: 4
+            spacing: 4
+
+            Repeater {
+                model: BarVisibility.cluster(section.clusterName)
+                WidgetRow {
+                    required property string modelData
+                    widgetKey: modelData
                 }
             }
-            Behavior on border.color {
-                ColorAnimation {
-                    duration: 100
-                }
-            }
+        }
 
-            Column {
-                id: rows
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: 4
-                spacing: 4
+        Text {
+            anchors.centerIn: parent
+            visible: rows.children.length === 1
+            text: "Drop widgets here"
+            color: Theme.gray6
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize - 2
+        }
 
-                Repeater {
-                    model: BarVisibility.cluster(section.clusterName)
-                    WidgetRow {
-                        required property string modelData
-                        widgetKey: modelData
-                    }
-                }
-            }
-
-            Text {
-                anchors.centerIn: parent
-                visible: rows.children.length === 1
-                text: "Drop widgets here"
-                color: Theme.gray6
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize - 2
-            }
-
-            DropArea {
-                id: dropArea
-                anchors.fill: parent
-                keys: ["bar-widget"]
-                onDropped: drop => {
-                    const source = drop.source;
-                    if (!source || source.widgetKey === undefined)
-                        return;
-                    const rowPitch = 40;
-                    const index = Math.round(Math.max(0, drop.y - 4) / rowPitch);
-                    BarVisibility.moveWidget(source.widgetKey, section.clusterName, index);
-                    drop.acceptProposedAction();
-                }
+        DropArea {
+            id: dropArea
+            anchors.fill: parent
+            keys: ["bar-widget"]
+            onDropped: drop => {
+                const source = drop.source;
+                if (!source || source.widgetKey === undefined)
+                    return;
+                const rowPitch = 40;
+                const index = Math.round(Math.max(0, drop.y - 4) / rowPitch);
+                BarVisibility.moveWidget(source.widgetKey, section.clusterName, index);
+                drop.acceptProposedAction();
             }
         }
     }
@@ -328,6 +337,7 @@ Popout {
         spacing: 9
 
         Text {
+            id: layoutTitle
             text: "Bar layout"
             color: Theme.fg
             font.family: Theme.fontFamily
@@ -336,6 +346,7 @@ Popout {
         }
 
         Text {
+            id: layoutDescription
             text: "Drag widgets between sections or within a section to reorder them"
             color: Theme.brightBlack
             font.family: Theme.fontFamily
@@ -524,19 +535,74 @@ Popout {
         }
 
         Row {
-            width: parent.width
+            id: widgetHeadings
+            width: parent.width - (layoutScrollBar.visible ? 12 : 0)
             spacing: 8
-            ClusterSection {
+
+            ClusterHeading {
                 clusterName: "left"
                 heading: BarVisibility.verticalBar ? "Top" : "Left"
             }
-            ClusterSection {
+            ClusterHeading {
                 clusterName: "center"
                 heading: "Center"
             }
-            ClusterSection {
+            ClusterHeading {
                 clusterName: "right"
                 heading: BarVisibility.verticalBar ? "Bottom" : "Right"
+            }
+        }
+
+        Flickable {
+            id: widgetLayoutFlick
+            width: parent.width
+            height: Math.min(widgetSections.implicitHeight, Math.max(96, root.heightLimit - 2 * root.cardPadding - layoutTitle.implicitHeight - layoutDescription.implicitHeight - barOptions.height - appearanceControls.height - widgetHeadings.height - content.spacing * 5))
+            contentWidth: width
+            contentHeight: widgetSections.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+
+            Controls.ScrollBar.vertical: Controls.ScrollBar {
+                id: layoutScrollBar
+                width: 8
+                policy: Controls.ScrollBar.AsNeeded
+                interactive: true
+
+                background: Rectangle {
+                    radius: Math.min(width / 2, Theme.radiusSmall)
+                    color: Theme.gray2
+                    border.width: 1
+                    border.color: Theme.gray5
+                }
+
+                contentItem: Rectangle {
+                    implicitWidth: 6
+                    implicitHeight: 28
+                    radius: Math.min(width / 2, Theme.radiusSmall)
+                    color: layoutScrollBar.pressed ? Theme.brightOrange : layoutScrollBar.hovered ? Theme.orange : Theme.gray6
+                }
+            }
+
+            Row {
+                id: widgetSections
+                readonly property real largestPanelHeight: Math.max(leftSection.requiredHeight, centerSection.requiredHeight, rightSection.requiredHeight)
+                width: widgetLayoutFlick.width - (layoutScrollBar.visible ? 12 : 0)
+                spacing: 8
+                ClusterSection {
+                    id: leftSection
+                    clusterName: "left"
+                    panelHeight: widgetSections.largestPanelHeight
+                }
+                ClusterSection {
+                    id: centerSection
+                    clusterName: "center"
+                    panelHeight: widgetSections.largestPanelHeight
+                }
+                ClusterSection {
+                    id: rightSection
+                    clusterName: "right"
+                    panelHeight: widgetSections.largestPanelHeight
+                }
             }
         }
     }

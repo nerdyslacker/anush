@@ -14,6 +14,21 @@ Installed defaults are otherwise
 located relative to the active QML shell, so alternate installation prefixes do
 not require `/usr/share/anush` to be embedded in user files.
 
+RSS subscriptions may be supplied in the optional user configuration instead
+of through the popup. Runtime read/unread state remains separate:
+
+```json
+{
+  "rss": {
+    "feeds": [
+      {"name": "Example", "url": "https://example.com/feed.xml"}
+    ],
+    "refreshMinutes": 15,
+    "maxItems": 100
+  }
+}
+```
+
 ## Shell configuration model
 
 There was no separate configuration parser before this model. The shell read

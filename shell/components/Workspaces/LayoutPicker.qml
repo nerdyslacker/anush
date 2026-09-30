@@ -10,20 +10,19 @@ Popout {
 
     readonly property var accents: Theme.accentNames
 
-    cardWidth: 360
+    cardWidth: 740
     cardHeight: content.implicitHeight + 2 * cardPadding
 
     onVisibleChanged: if (visible) {
-        AppearanceService.refresh()
-        Wm.refreshPicomState()
+        AppearanceService.refresh();
+        Wm.refreshPicomState();
     }
 
     Connections {
         target: ShellActions
         function onLayoutsRequested(action) {
-            if (action === "toggle"
-                    && ShellActions.ownsFocusedOutput(root.anchorItem))
-                root.visible = !root.visible
+            if (action === "toggle" && ShellActions.ownsFocusedOutput(root.anchorItem))
+                root.visible = !root.visible;
         }
     }
 
@@ -38,14 +37,17 @@ Popout {
     component SettingSwitch: Rectangle {
         id: control
         property bool checked: false
-        signal toggled()
+        signal toggled
 
         width: 34
         height: 18
         radius: Math.min(height / 2, Theme.radiusSmall)
-        color: checked ? Theme.activeBackground
-            : Qt.alpha(Theme.foreground, 0.15)
-        Behavior on color { ColorAnimation { duration: 150 } }
+        color: checked ? Theme.activeBackground : Qt.alpha(Theme.foreground, 0.15)
+        Behavior on color {
+            ColorAnimation {
+                duration: 150
+            }
+        }
 
         Rectangle {
             x: control.checked ? parent.width - width - 2 : 2
@@ -53,10 +55,12 @@ Popout {
             width: 14
             height: 14
             radius: Math.min(width / 2, Theme.radiusSmall)
-            color: control.checked ? Theme.background
-                : Qt.alpha(Theme.foreground, 0.7)
+            color: control.checked ? Theme.background : Qt.alpha(Theme.foreground, 0.7)
             Behavior on x {
-                NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+                NumberAnimation {
+                    duration: 150
+                    easing.type: Easing.OutCubic
+                }
             }
         }
 
@@ -69,12 +73,11 @@ Popout {
     component ActionButton: Rectangle {
         id: actionButton
         required property string label
-        signal clicked()
+        signal clicked
 
         height: 32
         radius: Theme.radiusSmall
-        color: !enabled ? Theme.surfaceSubtle
-            : actionMouse.containsMouse ? Theme.surfaceVariant : Theme.surface
+        color: !enabled ? Theme.surfaceSubtle : actionMouse.containsMouse ? Theme.surfaceVariant : Theme.surface
         border.width: 1
         border.color: actionMouse.containsMouse ? Theme.accent : Theme.outline
         opacity: enabled ? 1 : 0.55
@@ -151,8 +154,7 @@ Popout {
                 elide: Text.ElideRight
             }
             background: Rectangle {
-                color: option.highlighted ? Theme.activeBackground
-                    : option.hovered ? Theme.hover : Theme.surface
+                color: option.highlighted ? Theme.activeBackground : option.hovered ? Theme.hover : Theme.surface
             }
         }
 
@@ -187,38 +189,35 @@ Popout {
         property bool syncing: false
 
         function normalize(value) {
-            const match = String(value ?? "").trim()
-                .match(/^#?([0-9a-fA-F]{6})$/)
-            return match ? ("#" + match[1]).toUpperCase() : ""
+            const match = String(value ?? "").trim().match(/^#?([0-9a-fA-F]{6})$/);
+            return match ? ("#" + match[1]).toUpperCase() : "";
         }
 
         function loadColor(value) {
-            const normalized = normalize(value)
+            const normalized = normalize(value);
             if (normalized === "")
-                return
-            syncing = true
-            draftColor = normalized
-            hueSlider.value = draftColor.hslHue >= 0
-                ? draftColor.hslHue : 0
-            saturationSlider.value = draftColor.hslSaturation
-            lightnessSlider.value = draftColor.hslLightness
-            hexInput.text = normalized
-            syncing = false
+                return;
+            syncing = true;
+            draftColor = normalized;
+            hueSlider.value = draftColor.hslHue >= 0 ? draftColor.hslHue : 0;
+            saturationSlider.value = draftColor.hslSaturation;
+            lightnessSlider.value = draftColor.hslLightness;
+            hexInput.text = normalized;
+            syncing = false;
         }
 
         function syncFromSliders() {
             if (syncing)
-                return
-            draftColor = Qt.hsla(hueSlider.value,
-                saturationSlider.value, lightnessSlider.value, 1)
-            hexInput.text = draftColor.toString().toUpperCase()
+                return;
+            draftColor = Qt.hsla(hueSlider.value, saturationSlider.value, lightnessSlider.value, 1);
+            hexInput.text = draftColor.toString().toUpperCase();
         }
 
         function showFor(value) {
-            loadColor(value)
-            open()
-            hexInput.forceActiveFocus()
-            hexInput.selectAll()
+            loadColor(value);
+            open();
+            hexInput.forceActiveFocus();
+            hexInput.selectAll();
         }
 
         width: Math.min(326, root.width - 20)
@@ -228,8 +227,7 @@ Popout {
         padding: 12
         modal: false
         focus: true
-        closePolicy: Controls.Popup.CloseOnEscape
-            | Controls.Popup.CloseOnPressOutside
+        closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
 
         background: Rectangle {
             radius: Theme.radiusMedium
@@ -269,8 +267,7 @@ Popout {
                     radius: Theme.radiusSmall
                     color: Theme.background
                     border.width: 1
-                    border.color: hexInput.activeFocus
-                        ? Theme.accent : Theme.outline
+                    border.color: hexInput.activeFocus ? Theme.accent : Theme.outline
 
                     TextInput {
                         id: hexInput
@@ -288,14 +285,14 @@ Popout {
                             regularExpression: /^#[0-9A-Fa-f]{6}$/
                         }
                         onAccepted: {
-                            const normalized = customAccentPicker.normalize(text)
+                            const normalized = customAccentPicker.normalize(text);
                             if (normalized !== "")
-                                customAccentPicker.loadColor(normalized)
+                                customAccentPicker.loadColor(normalized);
                         }
                         onEditingFinished: {
-                            const normalized = customAccentPicker.normalize(text)
+                            const normalized = customAccentPicker.normalize(text);
                             if (normalized !== "")
-                                customAccentPicker.loadColor(normalized)
+                                customAccentPicker.loadColor(normalized);
                         }
                     }
                 }
@@ -318,28 +315,46 @@ Popout {
 
                 background: Rectangle {
                     x: hueSlider.leftPadding
-                    y: hueSlider.topPadding
-                        + hueSlider.availableHeight / 2 - height / 2
+                    y: hueSlider.topPadding + hueSlider.availableHeight / 2 - height / 2
                     width: hueSlider.availableWidth
                     height: 9
                     radius: Math.min(height / 2, Theme.radiusSmall)
                     gradient: Gradient {
                         orientation: Gradient.Horizontal
-                        GradientStop { position: 0; color: "#FF0000" }
-                        GradientStop { position: 0.17; color: "#FFFF00" }
-                        GradientStop { position: 0.33; color: "#00FF00" }
-                        GradientStop { position: 0.5; color: "#00FFFF" }
-                        GradientStop { position: 0.67; color: "#0000FF" }
-                        GradientStop { position: 0.83; color: "#FF00FF" }
-                        GradientStop { position: 1; color: "#FF0000" }
+                        GradientStop {
+                            position: 0
+                            color: "#FF0000"
+                        }
+                        GradientStop {
+                            position: 0.17
+                            color: "#FFFF00"
+                        }
+                        GradientStop {
+                            position: 0.33
+                            color: "#00FF00"
+                        }
+                        GradientStop {
+                            position: 0.5
+                            color: "#00FFFF"
+                        }
+                        GradientStop {
+                            position: 0.67
+                            color: "#0000FF"
+                        }
+                        GradientStop {
+                            position: 0.83
+                            color: "#FF00FF"
+                        }
+                        GradientStop {
+                            position: 1
+                            color: "#FF0000"
+                        }
                     }
                 }
 
                 handle: Rectangle {
-                    x: hueSlider.leftPadding + hueSlider.visualPosition
-                        * (hueSlider.availableWidth - width)
-                    y: hueSlider.topPadding
-                        + hueSlider.availableHeight / 2 - height / 2
+                    x: hueSlider.leftPadding + hueSlider.visualPosition * (hueSlider.availableWidth - width)
+                    y: hueSlider.topPadding + hueSlider.availableHeight / 2 - height / 2
                     width: 16
                     height: 16
                     radius: 8
@@ -407,410 +422,433 @@ Popout {
                     label: "Apply"
                     enabled: customAccentPicker.normalize(hexInput.text) !== ""
                     onClicked: {
-                        Theme.setCustomAccent(hexInput.text)
-                        customAccentPicker.close()
+                        Theme.setCustomAccent(hexInput.text);
+                        customAccentPicker.close();
                     }
                 }
             }
         }
     }
 
-    Column {
+    Row {
         id: content
         anchors.left: parent.left
         anchors.right: parent.right
-        spacing: 7
+        spacing: 14
 
-        SectionLabel { text: "Workspace layout" }
+        readonly property real columnWidth: (width - middleSeparator.width - spacing * 2) / 2
 
-        Grid {
-            id: layoutGrid
-            width: parent.width
-            columns: 2
-            spacing: 5
+        Column {
+            id: layoutColumn
+            width: content.columnWidth
+            spacing: 7
 
-            Repeater {
-                model: Wm.layouts
+            SectionLabel {
+                text: "Workspace layout"
+            }
 
-                Rectangle {
-                    id: layoutTile
-                    required property var modelData
-                    required property int index
-                    readonly property bool current: Wm.layoutIndex === index
+            Grid {
+                id: layoutGrid
+                width: parent.width
+                columns: 2
+                spacing: 5
 
-                    width: (layoutGrid.width - layoutGrid.spacing) / 2
-                    height: 52
-                    radius: Theme.radiusSmall
-                    color: current ? Theme.selbg
-                        : layoutMouse.containsMouse ? Qt.alpha(Theme.fg, 0.12)
-                        : Qt.alpha(Theme.fg, 0.05)
-                    border.width: 1
-                    border.color: current ? Theme.accent : Theme.gray5
-                    Behavior on color { ColorAnimation { duration: 120 } }
+                Repeater {
+                    model: Wm.layouts
 
-                    Column {
-                        anchors.centerIn: parent
-                        spacing: 2
-                        Text {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: layoutTile.modelData.glyph
-                            color: layoutTile.current ? Theme.selfg : Theme.cyan
-                            font.family: Theme.iconFontFamily
-                            font.pixelSize: Theme.iconSize
+                    Rectangle {
+                        id: layoutTile
+                        required property var modelData
+                        required property int index
+                        readonly property bool current: Wm.layoutIndex === index
+
+                        width: (layoutGrid.width - layoutGrid.spacing) / 2
+                        height: 52
+                        radius: Theme.radiusSmall
+                        color: current ? Theme.selbg : layoutMouse.containsMouse ? Qt.alpha(Theme.fg, 0.12) : Qt.alpha(Theme.fg, 0.05)
+                        border.width: 1
+                        border.color: current ? Theme.accent : Theme.gray5
+                        Behavior on color {
+                            ColorAnimation {
+                                duration: 120
+                            }
                         }
-                        Text {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: layoutTile.modelData.name
-                            color: layoutTile.current ? Theme.selfg : Theme.fg
-                            font.family: Theme.fontFamily
-                            font.pixelSize: 10
-                            font.bold: layoutTile.current
-                        }
-                    }
 
-                    MouseArea {
-                        id: layoutMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: Wm.setLayout(layoutTile.index)
+                        Column {
+                            anchors.centerIn: parent
+                            spacing: 2
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: layoutTile.modelData.glyph
+                                color: layoutTile.current ? Theme.selfg : Theme.cyan
+                                font.family: Theme.iconFontFamily
+                                font.pixelSize: Theme.iconSize
+                            }
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: layoutTile.modelData.name
+                                color: layoutTile.current ? Theme.selfg : Theme.fg
+                                font.family: Theme.fontFamily
+                                font.pixelSize: 10
+                                font.bold: layoutTile.current
+                            }
+                        }
+
+                        MouseArea {
+                            id: layoutMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: Wm.setLayout(layoutTile.index)
+                        }
                     }
                 }
             }
-        }
-
-        SectionLabel { text: "Desktop" }
-
-        Item {
-            width: parent.width
-            height: visible ? 30 : 0
-            visible: Wm.picomAvailable
-
-            Text {
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                text: "picom compositor"
-                color: Theme.foreground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
-            }
-
-            SettingSwitch {
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                checked: Wm.picomEnabled
-                enabled: !Wm.picomBusy
-                opacity: enabled ? 1 : 0.55
-                onToggled: Wm.setPicomEnabled(!Wm.picomEnabled)
-            }
-        }
-
-        Item {
-            width: parent.width
-            height: 30
-
-            Text {
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                text: "window decorations"
-                color: Theme.foreground
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
-            }
-
-            SettingSwitch {
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                checked: Wm.decorationsEnabled
-                onToggled: Wm.setDecorationsEnabled(!Wm.decorationsEnabled)
-            }
-        }
-
-        TweakSlider {
-            label: "window gap"
-            from: 0
-            to: 40
-            value: Wm.gaps
-            suffix: " px"
-            applyFn: value => Wm.setGaps(value, false)
-            persistFn: value => Wm.persistGaps(value)
-        }
-
-        TweakSlider {
-            label: "corner radius"
-            from: 0
-            to: 24
-            value: Theme.cornerRadius
-            suffix: " px"
-            applyFn: value => Theme.cornerRadius = Math.max(0, Math.round(value))
-            persistFn: value => Theme.persistCornerRadius(value)
-        }
-
-        Item {
-            width: parent.width
-            height: 25
 
             SectionLabel {
-                text: "Theme preset"
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                topPadding: 0
+                text: "Desktop"
             }
 
-            Row {
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 7
+            Item {
+                width: parent.width
+                height: visible ? 30 : 0
+                visible: Wm.picomAvailable
 
                 Text {
+                    anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "Dark"
-                    color: Theme.light ? Theme.foregroundMuted : Theme.accent
+                    text: "picom compositor"
+                    color: Theme.foreground
                     font.family: Theme.fontFamily
-                    font.pixelSize: Math.max(9, Theme.fontSize - 2)
-                    font.bold: !Theme.light
+                    font.pixelSize: Theme.fontSize
                 }
 
                 SettingSwitch {
+                    anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    checked: Theme.light
-                    onToggled: Theme.persistThemeMode(
-                        Theme.light ? "dark" : "light")
+                    checked: Wm.picomEnabled
+                    enabled: !Wm.picomBusy
+                    opacity: enabled ? 1 : 0.55
+                    onToggled: Wm.setPicomEnabled(!Wm.picomEnabled)
                 }
+            }
+
+            Item {
+                width: parent.width
+                height: 30
 
                 Text {
+                    anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "Light"
-                    color: Theme.light ? Theme.accent : Theme.foregroundMuted
+                    text: "window decorations"
+                    color: Theme.foreground
                     font.family: Theme.fontFamily
-                    font.pixelSize: Math.max(9, Theme.fontSize - 2)
-                    font.bold: Theme.light
+                    font.pixelSize: Theme.fontSize
                 }
+
+                SettingSwitch {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: Wm.decorationsEnabled
+                    onToggled: Wm.setDecorationsEnabled(!Wm.decorationsEnabled)
+                }
+            }
+
+            TweakSlider {
+                label: "window gap"
+                from: 0
+                to: 40
+                value: Wm.gaps
+                suffix: " px"
+                applyFn: value => Wm.setGaps(value, false)
+                persistFn: value => Wm.persistGaps(value)
+            }
+
+            TweakSlider {
+                label: "corner radius"
+                from: 0
+                to: 24
+                value: Theme.cornerRadius
+                suffix: " px"
+                applyFn: value => Theme.cornerRadius = Math.max(0, Math.round(value))
+                persistFn: value => Theme.persistCornerRadius(value)
             }
         }
 
-        GridView {
-            id: themeGrid
-            width: parent.width
-            height: cellHeight * 2
-            cellWidth: (width - 8) / 3
-            cellHeight: 57
-            clip: true
-            model: Theme.themePresets
-            boundsBehavior: Flickable.StopAtBounds
-            flickableDirection: Flickable.VerticalFlick
-
-            Controls.ScrollBar.vertical: Controls.ScrollBar {
-                id: themeScrollbar
-                width: 8
-                policy: themeGrid.contentHeight > themeGrid.height
-                    ? Controls.ScrollBar.AsNeeded : Controls.ScrollBar.AlwaysOff
-                interactive: true
-
-                background: Rectangle {
-                    color: Theme.gray2
-                    border.width: 1
-                    border.color: Theme.gray5
-                    radius: Math.min(width / 2, Theme.radiusSmall)
-                }
-
-                contentItem: Rectangle {
-                    implicitWidth: 6
-                    implicitHeight: 28
-                    color: themeScrollbar.pressed ? Theme.brightOrange
-                        : themeScrollbar.hovered ? Theme.orange : Theme.gray6
-                    radius: Math.min(width / 2, Theme.radiusSmall)
-
-                    Behavior on color { ColorAnimation { duration: 100 } }
-                }
-            }
-
-            delegate: Item {
-                id: themeCell
-                required property var modelData
-                width: themeGrid.cellWidth
-                height: themeGrid.cellHeight
-
-                Rectangle {
-                    id: themeTile
-                    readonly property bool current:
-                        Theme.presetId === themeCell.modelData.id
-
-                    anchors.fill: parent
-                    anchors.rightMargin: 5
-                    anchors.bottomMargin: 5
-                    radius: Theme.radiusSmall
-                    color: current ? Theme.activeBackground
-                        : themeMouse.containsMouse ? Theme.gray3 : Theme.gray2
-                    border.width: current ? 2 : 1
-                    border.color: current ? Theme.activeBorder : Theme.gray5
-
-                    Column {
-                        anchors.centerIn: parent
-                        spacing: 5
-
-                        Row {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            spacing: 3
-                            Repeater {
-                                model: themeCell.modelData.preview
-                                Rectangle {
-                                    required property string modelData
-                                    width: 20
-                                    height: 12
-                                    radius: Math.min(3, Theme.radiusSmall)
-                                    color: modelData
-                                    border.width: 1
-                                    border.color: Qt.alpha(Theme.fg, 0.35)
-                                }
-                            }
-                        }
-
-                        Text {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            width: themeTile.width - 8
-                            horizontalAlignment: Text.AlignHCenter
-                            elide: Text.ElideRight
-                            text: themeCell.modelData.name
-                            color: themeTile.current ? Theme.selfg : Theme.fg
-                            font.family: Theme.fontFamily
-                            font.pixelSize: 9
-                            font.bold: themeTile.current
-                        }
-                    }
-
-                    MouseArea {
-                        id: themeMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: Theme.setThemePreset(themeCell.modelData.id)
-                    }
-                }
-            }
+        Rectangle {
+            id: middleSeparator
+            width: 1
+            height: Math.max(layoutColumn.implicitHeight, appearanceColumn.implicitHeight)
+            color: Theme.foregroundMuted
+            opacity: 0.32
         }
 
-        SectionLabel { text: "Accent color" }
+        Column {
+            id: appearanceColumn
+            width: content.columnWidth
+            spacing: 7
 
-        Grid {
-            id: accentGrid
-            width: parent.width
-            columns: 8
-            spacing: 4
+            Item {
+                width: parent.width
+                height: 25
 
-            Repeater {
-                model: root.accents
+                SectionLabel {
+                    text: "Theme preset"
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    topPadding: 0
+                }
 
-                Rectangle {
-                    id: swatch
-                    required property string modelData
-                    readonly property bool current:
-                        Theme.accentName === modelData
-                    readonly property color swatchColor:
-                        Theme.mutedAccentColor(modelData)
+                Row {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 7
 
-                    width: (accentGrid.width - accentGrid.spacing * 7) / 8
-                    height: 31
-                    radius: Theme.radiusSmall
-                    color: swatchMouse.containsMouse
-                        ? Theme.gray3 : Theme.gray2
-                    border.width: swatch.current ? 2 : 1
-                    border.color: swatch.current
-                        ? swatch.swatchColor : Theme.gray5
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Dark"
+                        color: Theme.light ? Theme.foregroundMuted : Theme.accent
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Math.max(9, Theme.fontSize - 2)
+                        font.bold: !Theme.light
+                    }
 
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: swatch.current ? 5 : 6
-                        radius: Theme.radiusSmall
-                        color: swatch.swatchColor
-                        border.width: 1
-                        border.color: Qt.alpha(Theme.fg, 0.35)
+                    SettingSwitch {
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: Theme.light
+                        onToggled: Theme.persistThemeMode(Theme.light ? "dark" : "light")
                     }
 
                     Text {
-                        anchors.centerIn: parent
-                        visible: swatch.modelData === "custom"
-                        text: "󰏫"
-                        color: Theme.accentForeground
-                        font.family: Theme.iconFontFamily
-                        font.pixelSize: Theme.iconSizeSmall
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Light"
+                        color: Theme.light ? Theme.accent : Theme.foregroundMuted
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Math.max(9, Theme.fontSize - 2)
+                        font.bold: Theme.light
+                    }
+                }
+            }
+
+            GridView {
+                id: themeGrid
+                width: parent.width
+                height: cellHeight * 2
+                cellWidth: (width - 8) / 3
+                cellHeight: 57
+                clip: true
+                model: Theme.themePresets
+                boundsBehavior: Flickable.StopAtBounds
+                flickableDirection: Flickable.VerticalFlick
+
+                Controls.ScrollBar.vertical: Controls.ScrollBar {
+                    id: themeScrollbar
+                    width: 8
+                    policy: themeGrid.contentHeight > themeGrid.height ? Controls.ScrollBar.AsNeeded : Controls.ScrollBar.AlwaysOff
+                    interactive: true
+
+                    background: Rectangle {
+                        color: Theme.gray2
+                        border.width: 1
+                        border.color: Theme.gray5
+                        radius: Math.min(width / 2, Theme.radiusSmall)
                     }
 
-                    MouseArea {
-                        id: swatchMouse
+                    contentItem: Rectangle {
+                        implicitWidth: 6
+                        implicitHeight: 28
+                        color: themeScrollbar.pressed ? Theme.brightOrange : themeScrollbar.hovered ? Theme.orange : Theme.gray6
+                        radius: Math.min(width / 2, Theme.radiusSmall)
+
+                        Behavior on color {
+                            ColorAnimation {
+                                duration: 100
+                            }
+                        }
+                    }
+                }
+
+                delegate: Item {
+                    id: themeCell
+                    required property var modelData
+                    width: themeGrid.cellWidth
+                    height: themeGrid.cellHeight
+
+                    Rectangle {
+                        id: themeTile
+                        readonly property bool current: Theme.presetId === themeCell.modelData.id
+
                         anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: {
-                            if (swatch.modelData === "custom") {
-                                customAccentPicker.showFor(Theme.customAccent)
-                            } else {
-                                Theme.setAccent(swatch.modelData)
+                        anchors.rightMargin: 5
+                        anchors.bottomMargin: 5
+                        radius: Theme.radiusSmall
+                        color: current ? Theme.activeBackground : themeMouse.containsMouse ? Theme.gray3 : Theme.gray2
+                        border.width: current ? 2 : 1
+                        border.color: current ? Theme.activeBorder : Theme.gray5
+
+                        Column {
+                            anchors.centerIn: parent
+                            spacing: 5
+
+                            Row {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                spacing: 3
+                                Repeater {
+                                    model: themeCell.modelData.preview
+                                    Rectangle {
+                                        required property string modelData
+                                        width: 20
+                                        height: 12
+                                        radius: Math.min(3, Theme.radiusSmall)
+                                        color: modelData
+                                        border.width: 1
+                                        border.color: Qt.alpha(Theme.fg, 0.35)
+                                    }
+                                }
+                            }
+
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: themeTile.width - 8
+                                horizontalAlignment: Text.AlignHCenter
+                                elide: Text.ElideRight
+                                text: themeCell.modelData.name
+                                color: themeTile.current ? Theme.selfg : Theme.fg
+                                font.family: Theme.fontFamily
+                                font.pixelSize: 9
+                                font.bold: themeTile.current
+                            }
+                        }
+
+                        MouseArea {
+                            id: themeMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: Theme.setThemePreset(themeCell.modelData.id)
+                        }
+                    }
+                }
+            }
+
+            SectionLabel {
+                text: "Accent color"
+            }
+
+            Grid {
+                id: accentGrid
+                width: parent.width
+                columns: 8
+                spacing: 4
+
+                Repeater {
+                    model: root.accents
+
+                    Rectangle {
+                        id: swatch
+                        required property string modelData
+                        readonly property bool current: Theme.accentName === modelData
+                        readonly property color swatchColor: Theme.mutedAccentColor(modelData)
+
+                        width: (accentGrid.width - accentGrid.spacing * 7) / 8
+                        height: 31
+                        radius: Theme.radiusSmall
+                        color: swatchMouse.containsMouse ? Theme.gray3 : Theme.gray2
+                        border.width: swatch.current ? 2 : 1
+                        border.color: swatch.current ? swatch.swatchColor : Theme.gray5
+
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: swatch.current ? 5 : 6
+                            radius: Theme.radiusSmall
+                            color: swatch.swatchColor
+                            border.width: 1
+                            border.color: Qt.alpha(Theme.fg, 0.35)
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            visible: swatch.modelData === "custom"
+                            text: "󰏫"
+                            color: Theme.accentForeground
+                            font.family: Theme.iconFontFamily
+                            font.pixelSize: Theme.iconSizeSmall
+                        }
+
+                        MouseArea {
+                            id: swatchMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                if (swatch.modelData === "custom") {
+                                    customAccentPicker.showFor(Theme.customAccent);
+                                } else {
+                                    Theme.setAccent(swatch.modelData);
+                                }
                             }
                         }
                     }
                 }
             }
-        }
 
-        SectionLabel { text: "Icon theme" }
-
-        ThemeSelector {
-            selectedValue: AppearanceService.iconTheme
-            model: AppearanceService.iconThemes
-            onSelected: value => AppearanceService.setIconTheme(value)
-        }
-
-        Text {
-            width: parent.width
-            text: "Folder colors follow the accent when the selected theme supports it."
-            color: Theme.foregroundMuted
-            font.family: Theme.fontFamily
-            font.pixelSize: Math.max(8, Theme.fontSize - 2)
-            wrapMode: Text.WordWrap
-        }
-
-        SectionLabel { text: "Cursor theme" }
-
-        ThemeSelector {
-            selectedValue: AppearanceService.cursorTheme
-            model: AppearanceService.cursorThemes
-            onSelected: value => AppearanceService.setCursorTheme(value)
-        }
-
-        SectionLabel {
-            text: "Application themes"
-        }
-
-        Row {
-            width: parent.width
-            spacing: 6
-
-            ActionButton {
-                width: (parent.width - parent.spacing) / 2
-                label: "Apply GTK Themes"
-                enabled: Theme.matugenThemeGenerated
-                    && !Theme.applicationThemeApplying
-                onClicked: Theme.applyApplicationTheme("gtk")
+            SectionLabel {
+                text: "Icon theme"
             }
 
-            ActionButton {
-                width: (parent.width - parent.spacing) / 2
-                label: "Apply Qt Themes"
-                enabled: Theme.matugenThemeGenerated
-                    && !Theme.applicationThemeApplying
-                onClicked: Theme.applyApplicationTheme("qt")
+            ThemeSelector {
+                selectedValue: AppearanceService.iconTheme
+                model: AppearanceService.iconThemes
+                onSelected: value => AppearanceService.setIconTheme(value)
+            }
+
+            Text {
+                width: parent.width
+                text: "Folder colors follow the accent when the selected theme supports it."
+                color: Theme.foregroundMuted
+                font.family: Theme.fontFamily
+                font.pixelSize: Math.max(8, Theme.fontSize - 2)
+                wrapMode: Text.WordWrap
+            }
+
+            SectionLabel {
+                text: "Cursor theme"
+            }
+
+            ThemeSelector {
+                selectedValue: AppearanceService.cursorTheme
+                model: AppearanceService.cursorThemes
+                onSelected: value => AppearanceService.setCursorTheme(value)
+            }
+
+            SectionLabel {
+                text: "Application themes"
+            }
+
+            Row {
+                width: parent.width
+                spacing: 6
+
+                ActionButton {
+                    width: (parent.width - parent.spacing) / 2
+                    label: "Apply GTK Themes"
+                    enabled: Theme.matugenThemeGenerated && !Theme.applicationThemeApplying
+                    onClicked: Theme.applyApplicationTheme("gtk")
+                }
+
+                ActionButton {
+                    width: (parent.width - parent.spacing) / 2
+                    label: "Apply Qt Themes"
+                    enabled: Theme.matugenThemeGenerated && !Theme.applicationThemeApplying
+                    onClicked: Theme.applyApplicationTheme("qt")
+                }
+            }
+
+            Text {
+                width: parent.width
+                text: Theme.applicationThemeStatus !== "" ? Theme.applicationThemeStatus : Theme.matugenThemeGenerated ? "Install adw-gtk-theme (adw-gtk3) for GTK theming. Qt applications need Qt5ct or Qt6ct." : "Generate a wallpaper palette with matugen to enable application themes."
+                color: Theme.foregroundMuted
+                font.family: Theme.fontFamily
+                font.pixelSize: Math.max(8, Theme.fontSize - 2)
+                wrapMode: Text.WordWrap
             }
         }
-
-        Text {
-            width: parent.width
-            text: Theme.applicationThemeStatus !== ""
-                ? Theme.applicationThemeStatus
-                : Theme.matugenThemeGenerated
-                    ? "Install adw-gtk-theme (adw-gtk3) for GTK theming. Qt applications need Qt5ct or Qt6ct."
-                    : "Generate a wallpaper palette with matugen to enable application themes."
-            color: Theme.foregroundMuted
-            font.family: Theme.fontFamily
-            font.pixelSize: Math.max(8, Theme.fontSize - 2)
-            wrapMode: Text.WordWrap
-        }        
     }
 }

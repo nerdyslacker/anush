@@ -37,6 +37,7 @@ PanelWindow {
             scratchpads: Qt.resolvedUrl("../Workspaces/Scratchpads.qml"),
             media: Qt.resolvedUrl("../Media/Media.qml"),
             weather: Qt.resolvedUrl("../Weather/Weather.qml"),
+            rss: Qt.resolvedUrl("../Rss/Rss.qml"),
             metrics: Qt.resolvedUrl("../Metrics/Metrics.qml"),
             battery: Qt.resolvedUrl("../Battery/Battery.qml"),
             brightness: Qt.resolvedUrl("../Battery/Brightness.qml"),
@@ -104,6 +105,8 @@ PanelWindow {
     BarSettingsPopup {
         id: persistentBarSettings
         anchorItem: barSettingsAnchor
+        availableScreenHeight: root.screen.height
+            - (root.vertical ? 0 : Theme.effectiveBarHeight + Theme.surfaceGap)
     }
 
     // Modules provide their own compact upright representation on side bars.
@@ -202,6 +205,27 @@ PanelWindow {
         // The panel is flush with screen edges, so only round it when the
         // configured radius can be shown without changing its geometry.
         radius: Theme.radiusMedium
+
+        // Widget mouse areas sit above this one and keep their own actions.
+        // Right-clicking any otherwise empty part of the bar remains a stable
+        // way to recover the layout editor even when Commands is hidden.
+        MouseArea {
+            id: emptyBarMouse
+            anchors.fill: parent
+            acceptedButtons: Qt.RightButton
+            onClicked: mouse => {
+                const point = emptyBarMouse.mapToItem(
+                    barSettingsAnchor.parent, mouse.x, mouse.y)
+                barSettingsAnchor.x = point.x
+                barSettingsAnchor.y = point.y
+                barSettingsAnchor.width = 1
+                barSettingsAnchor.height = 1
+                if (persistentBarSettings.visible)
+                    persistentBarSettings.updatePlacement()
+                else
+                    persistentBarSettings.showAtAnchor()
+            }
+        }
 
         // This single measurement row is the canonical natural width for all
         // three sections. Proxies mirror cluster implicit sizes without

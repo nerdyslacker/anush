@@ -18,6 +18,10 @@ BarModule {
         if (mouse.button === Qt.RightButton) {
             picker.visible = false
             settings.openSettings()
+        } else if (mouse.button === Qt.MiddleButton) {
+            picker.visible = false
+            settings.visible = false
+            KeyboardState.advanceGroup()
         } else {
             settings.visible = false
             picker.visible = !picker.visible
