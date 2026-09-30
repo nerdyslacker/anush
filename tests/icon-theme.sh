@@ -25,14 +25,25 @@ printf '%s\n' 'Inherits=Papirus,hicolor' \
 cat >"$XDG_DATA_HOME/icons/Papirus/index.theme" <<'EOF'
 [Icon Theme]
 Name=Papirus
-Directories=48x48/apps,48x48/places
+Directories=48x48/apps,48x48/places,96x96/places
 EOF
 places="$XDG_DATA_HOME/icons/Papirus/48x48/places"
-mkdir -p "$places"
-for icon in folder-blue folder-blue-documents user-blue-home; do
+large_places="$XDG_DATA_HOME/icons/Papirus/96x96/places"
+mkdir -p "$places" "$large_places"
+for icon in folder-blue folder-blue-desktop folder-blue-documents \
+        folder-blue-download folder-blue-music folder-blue-pictures \
+        folder-blue-image-people folder-blue-templates folder-blue-video \
+        user-blue-home; do
     printf '%s\n' '<svg fill="#5294e2"><path fill="#4877b1"/></svg>' \
         >"$places/$icon.svg"
 done
+printf '%s\n' '<svg fill="#5294e2"><path fill="#4877b1"/></svg>' \
+    >"$large_places/folder-blue.svg"
+ln -s folder-blue-video.svg "$places/folder-blue-videos.svg"
+ln -s folder-blue-video.svg "$places/folder-videos.svg"
+ln -s folder-blue-image-people.svg "$places/folder-blue-public.svg"
+ln -s folder-blue-image-people.svg "$places/folder-publicshare.svg"
+ln -s folder-blue.svg "$large_places/folder.svg"
 
 cat >"$tmp/bin/desktop-helper" <<'EOF'
 #!/bin/sh
@@ -62,6 +73,13 @@ grep -q '^gtk-icon-theme-name=anush-papirus-folders$' \
 grep -qi '#b8817d' "$overlay/48x48/places/folder-documents.svg"
 grep -qi '#976a66' "$overlay/48x48/places/folder-documents.svg"
 grep -qi '#b8817d' "$overlay/48x48/places/inode-directory.svg"
+for icon in folder.svg folder-desktop.svg folder-documents.svg \
+        folder-download.svg folder-music.svg folder-pictures.svg \
+        folder-public.svg folder-publicshare.svg folder-templates.svg \
+        folder-video.svg folder-videos.svg user-home.svg; do
+    grep -qi '#b8817d' "$overlay/48x48/places/$icon"
+done
+grep -qi '#b8817d' "$overlay/96x96/places/folder.svg"
 ! grep -q '^papirus-folders ' "$ICON_HELPER_LOG"
 [ "$("$helper" --current)" = "Papirus" ]
 
@@ -72,6 +90,8 @@ for accent in '#b8817d' '#6db869' '#bbb169' '#6d7eb7' '#bb6bb7' \
     "$helper" --accent Papirus "$accent"
     grep -qi "$accent" "$overlay/48x48/places/folder-documents.svg"
     grep -qi "$accent" "$overlay/48x48/places/inode-directory.svg"
+    grep -qi "$accent" "$overlay/48x48/places/folder-videos.svg"
+    grep -qi "$accent" "$overlay/48x48/places/folder-publicshare.svg"
 done
 
 # Migrate settings left by the old overlay implementation on the next accent

@@ -16,7 +16,7 @@ import sys
 # it; no new overlay is created or selected.
 LEGACY_OVERLAY_NAME = "anush-Papirus"
 MANAGED_OVERLAY_PREFIX = "anush-"
-MANAGED_OVERLAY_SUFFIX = "-Folders"
+MANAGED_OVERLAY_SUFFIX = "-folders"
 
 def run(*command: str) -> None:
     try:
@@ -107,9 +107,10 @@ def current_theme() -> str:
 
 
 def is_managed_overlay(name: str) -> bool:
-    return name == LEGACY_OVERLAY_NAME or (
-        name.startswith(MANAGED_OVERLAY_PREFIX)
-        and name.endswith(MANAGED_OVERLAY_SUFFIX))
+    folded = name.casefold()
+    return folded == LEGACY_OVERLAY_NAME.casefold() or (
+        folded.startswith(MANAGED_OVERLAY_PREFIX)
+        and folded.endswith(MANAGED_OVERLAY_SUFFIX))
 
 
 def atomic_write(text: str, destination: Path) -> None:
@@ -143,42 +144,86 @@ def recolour_svg(text: str, accent: str) -> str:
 
 
 def overlay_name(theme: str) -> str:
-    safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", theme).strip("-.")
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", theme).strip("-.").casefold()
     return f"{MANAGED_OVERLAY_PREFIX}{safe or 'Papirus'}{MANAGED_OVERLAY_SUFFIX}"
+
+
+def fixed_place_directories(path: Path) -> list[tuple[int, Path]]:
+    directories = []
+    try:
+        children = list(path.iterdir())
+    except OSError:
+        return directories
+    for child in children:
+        match = re.fullmatch(r"(\d+)x(\d+)", child.name)
+        places = child / "places"
+        if match and places.is_dir():
+            directories.append((int(match.group(1)), places))
+    return sorted(directories, key=lambda item: (item[0], item[1].parent.name))
+
+
+def write_recoloured(source: Path, target: Path, accent: str,
+                     require_change: bool = False) -> bool:
+    try:
+        original = source.read_text(errors="replace")
+        generated = recolour_svg(original, accent)
+        if require_change and generated == original:
+            return False
+        atomic_write(generated, target)
+        return True
+    except (OSError, RuntimeError):
+        # RuntimeError covers pathological symlink loops in third-party themes.
+        return False
 
 
 def create_papirus_overlay(path: Path, theme: str, accent: str) -> str | None:
     """Generate Papirus folder SVGs using the exact active accent."""
-    name = overlay_name(theme)
+    managed_name = overlay_name(theme)
     data_home = Path(os.environ.get(
         "XDG_DATA_HOME", Path.home() / ".local/share"))
-    destination = data_home / "icons" / name
+    destination = data_home / "icons" / managed_name
     directories = []
 
-    for size in ("16x16", "22x22", "24x24", "32x32", "48x48", "64x64"):
-        source_places = path / size / "places"
-        if not source_places.is_dir():
-            continue
-        target_places = destination / size / "places"
+    for size, source_places in fixed_place_directories(path):
+        target_places = destination / source_places.parent.name / "places"
         linked = False
         for prefix in ("folder-blue", "user-blue"):
-            sources = list(source_places.glob(prefix + "-*.svg"))
+            sources = sorted(source_places.glob(prefix + "-*.svg"))
             direct = source_places / (prefix + ".svg")
             if direct.is_file():
                 sources.append(direct)
             for source in sources:
-                if source.is_symlink() or not source.is_file():
+                # Follow Papirus aliases such as folder-blue-videos.svg. The
+                # alias name is just as important as its resolved SVG because
+                # icon lookup does not return to this overlay after following
+                # a symlink in the inherited theme.
+                if not source.is_file():
                     continue
                 target_places.mkdir(parents=True, exist_ok=True)
                 generic = source.name.replace("-blue", "", 1)
                 target = target_places / generic
-                try:
-                    generated = recolour_svg(
-                        source.read_text(errors="replace"), accent)
-                    atomic_write(generated, target)
+                if write_recoloured(source, target, accent):
                     linked = True
-                except OSError:
-                    pass
+
+        # Preserve every generic folder alias that resolves to a blue Papirus
+        # source. This covers XDG names whose blue variant has a different
+        # basename, notably folder-publicshare -> folder-blue-image-people.
+        aliases = sorted(source_places.glob("*.svg"))
+        for source in aliases:
+            alias_name = source.name
+            generic_user_folder = alias_name in {
+                "user-desktop.svg", "user-home.svg", "user-home-open.svg"
+            }
+            if "-blue" in alias_name or not (
+                    alias_name.startswith("folder")
+                    or alias_name == "inode-directory.svg"
+                    or generic_user_folder):
+                continue
+            target_places.mkdir(parents=True, exist_ok=True)
+            if write_recoloured(source, target_places / alias_name, accent,
+                                require_change=True):
+                linked = True
+
         if linked:
             # File managers commonly request the MIME icon name for newly
             # created directories. Papirus normally inherits this symlink
@@ -190,7 +235,7 @@ def create_papirus_overlay(path: Path, theme: str, accent: str) -> str | None:
                                  target_places / "inode-directory.svg")
                 except OSError:
                     pass
-            directories.append(f"{size}/places")
+            directories.append(f"{source_places.parent.name}/places")
 
     if not directories:
         return None
@@ -213,7 +258,7 @@ Directories={','.join(directories)}
 {sections_text}"""
     destination.mkdir(parents=True, exist_ok=True)
     atomic_write(index, destination / "index.theme")
-    return name
+    return managed_name
 
 
 def recolour_folders(theme: str, accent: str) -> str:
