@@ -11,6 +11,8 @@ Rectangle {
 
     readonly property var visibleItems: SystemTray.items.values.filter(
         item => !TrayState.isHidden(item))
+    readonly property var hiddenItems: SystemTray.items.values.filter(
+        item => TrayState.isHidden(item))
 
     visible: BarVisibility.enabled("tray") && TrayState.ready
         && SystemTray.items.values.length > 0
@@ -86,7 +88,7 @@ Rectangle {
                 : overflowLabel.implicitWidth + Math.round(8 * Theme.barScale)
             height: Theme.moduleHeight
             hoverEnabled: true
-            acceptedButtons: Qt.LeftButton
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
 
             Rectangle {
                 anchors.fill: parent
@@ -105,12 +107,27 @@ Rectangle {
                 font.pixelSize: Theme.iconSizeSmall
             }
 
-            onClicked: overflowPopup.visible = !overflowPopup.visible
+            onClicked: mouse => {
+                if (mouse.button === Qt.LeftButton) {
+                    traySettingsPopup.visible = false
+                    if (root.hiddenItems.length > 0)
+                        hiddenItemsPopup.visible = !hiddenItemsPopup.visible
+                } else {
+                    hiddenItemsPopup.visible = false
+                    traySettingsPopup.visible = !traySettingsPopup.visible
+                }
+            }
         }
     }
 
+    TrayOverflowPopup {
+        id: hiddenItemsPopup
+        anchorItem: overflowButton
+        items: root.hiddenItems
+    }
+
     TrayPopup {
-        id: overflowPopup
+        id: traySettingsPopup
         anchorItem: overflowButton
     }
 }

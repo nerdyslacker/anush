@@ -15,6 +15,7 @@ singleton BarVisibility components/Bar/BarVisibility.qml
 singleton WindowListState components/Workspaces/WindowListState.qml
 singleton TrayState components/Tray/TrayState.qml
 singleton DisplayConfigurationService components/Displays/DisplayConfigurationService.qml
+singleton SkarwmConfigService components/Skarwm/SkarwmConfigService.qml
 singleton NetworkService components/Network/NetworkService.qml
 singleton TailscaleService components/Tailscale/TailscaleService.qml
 singleton HotspotService components/Network/HotspotService.qml
@@ -40,6 +41,7 @@ BatteryPopup components/Battery/BatteryPopup.qml
 Brightness components/Battery/Brightness.qml
 BrightnessPopup components/Battery/BrightnessPopup.qml
 DisplayPopup components/Displays/DisplayPopup.qml
+SkarwmConfigPopup components/Skarwm/SkarwmConfigPopup.qml
 Clipboard components/Clipboard/Clipboard.qml
 ClipboardPopup components/Clipboard/ClipboardPopup.qml
 ColorPicker components/ColorPicker/ColorPicker.qml
@@ -77,6 +79,7 @@ Commands components/Session/Commands.qml
 Screenshot components/Session/Screenshot.qml
 Tray components/Tray/Tray.qml
 TrayPopup components/Tray/TrayPopup.qml
+TrayOverflowPopup components/Tray/TrayOverflowPopup.qml
 WallpaperPicker components/Wallpaper/WallpaperPicker.qml
 Weather components/Weather/Weather.qml
 WeatherPopup components/Weather/WeatherPopup.qml

@@ -10,6 +10,17 @@ trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 
 grep -Fq 'selectedCategory = LauncherState.favorites.length > 0' "$launcher"
 grep -Fq '? "Favorites" : ""' "$launcher"
+grep -Fq 'command: ["xdotool", "getmouselocation", "--shell"]' "$launcher"
+grep -Fq 'root.showCenteredForPointer(' "$launcher"
+python3 - "$launcher" <<'PY'
+import pathlib, sys
+
+source = pathlib.Path(sys.argv[1]).read_text()
+empty_query = source.index('if (root.lowerQuery === "") {')
+favorite_filter = source.index('if (root.selectedCategory === "Favorites"')
+text_search = source.index('const searchable = [app.name, app.genericName, app.comment]')
+assert empty_query < favorite_filter < text_search
+PY
 
 mkdir -p "$tmp/home/.ssh/conf.d" "$tmp/bin"
 cat >"$tmp/home/.ssh/config" <<'EOF'

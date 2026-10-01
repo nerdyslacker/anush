@@ -1,6 +1,7 @@
 # Launcher
 
-Searches installed desktop applications, filters them by category, and keeps a
+Searches all installed desktop applications regardless of the selected category.
+With an empty search, applications are filtered by category, including a
 persistent Favorites category. Prefix searches add these sources:
 
 - `f:` or `file:` searches filenames with both the system `plocate` index and

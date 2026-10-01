@@ -6,7 +6,7 @@ import Quickshell
 import Quickshell.Io
 
 // One IPC endpoint fans the request out to the launcher attached to each bar.
-// Each instance then checks whether its screen is the focused skarwm output.
+// Each instance then checks whether the pointer is on its screen.
 Singleton {
     id: root
 

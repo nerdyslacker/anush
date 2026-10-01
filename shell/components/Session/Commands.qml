@@ -333,6 +333,11 @@ BarModule {
         anchorItem: root
     }
 
+    SkarwmConfigPopup {
+        id: skarwmSettings
+        anchorItem: root
+    }
+
     Popout {
         id: powerConfirmation
         property string action: ""
@@ -551,21 +556,30 @@ BarModule {
             Rectangle { width: parent.width; height: 1; color: Theme.gray5 }
 
             Repeater {
-                model: [
-                    { icon: "󰍹", label: "Display settings",
-                      run: () => {
-                          menu.visible = false
-                          displaySettings.openCentered()
-                      } },
-                    { icon: "󰚰", label: "Check updates",
-                      run: () => root.run(["sh", "-c",
-                          "if command -v kitty >/dev/null 2>&1; then " +
-                          "config=${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/skarwm/anush}; " +
-                          "exec kitty --config \"$config/kitty/kitty.conf\" --hold sh -c 'xbps-install -Mun'; " +
-                          "else exec xterm -hold -e sh -c 'xbps-install -Mun'; fi"]) },
-                    { icon: "󰌌", label: "Keybindings",
-                      run: () => root.run([Wm.msgPath, "show-bindings"]) }
-                ]
+                model: {
+                    const commands = [
+                        { icon: "󰍹", label: "Display settings",
+                          run: () => {
+                              menu.visible = false
+                              displaySettings.openCentered()
+                          } },
+                        { icon: "󰚰", label: "Check updates",
+                          run: () => root.run(["sh", "-c",
+                              "if command -v kitty >/dev/null 2>&1; then " +
+                              "config=${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/skarwm/anush}; " +
+                              "exec kitty --config \"$config/kitty/kitty.conf\" --hold sh -c 'xbps-install -Mun'; " +
+                              "else exec xterm -hold -e sh -c 'xbps-install -Mun'; fi"]) },
+                        { icon: "󰌌", label: "Keybindings",
+                          run: () => root.run([Wm.msgPath, "show-bindings"]) }
+                    ]
+                    if (Wm.isSkarwm)
+                        commands.push({ icon: "󰒓", label: "skarwm settings",
+                            run: () => {
+                                menu.visible = false
+                                skarwmSettings.openCentered()
+                            } })
+                    return commands
+                }
                 CommandRow {}
             }
         }

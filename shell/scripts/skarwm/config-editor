@@ -1,0 +1,441 @@
+#!/usr/bin/env python3
+"""Read and atomically update skarwm's complete rc configuration."""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+
+
+SETTINGS = {
+    "mod_key": "super",
+    "outer_gap": 8,
+    "inner_gap": 8,
+    "border_width": 2,
+    "corner_radius": 0,
+    "norm_outer_border": "#3A3A3A",
+    "sel_outer_border": "#E0AF68",
+    "decorations_enabled": False,
+    "decoration_titlebar_height": 20,
+    "decoration_border_width": 1,
+    "decoration_resize_hit_width": 4,
+    "decoration_show_title": True,
+    "decoration_color_source": "active-border",
+    "decoration_accent": "#89B4FA",
+    "decoration_active_background": "#313244",
+    "decoration_inactive_background": "#1E1E2E",
+    "decoration_active_foreground": "#FFFFFF",
+    "decoration_inactive_foreground": "#A6ADC8",
+    "decoration_active_border": "#89B4FA",
+    "decoration_inactive_border": "#45475A",
+    "focus_follows_mouse": True,
+    "preview_hover_delay_ms": 250,
+    "animations": True,
+    "animation_duration_ms": 180,
+    "animation_fps": 60,
+    "animation_easing": "ease_out_cubic",
+    "bar_enabled": False,
+    "bar_position": "top",
+    "bar_height": 26,
+    "bar_font": "monospace",
+    "bar_font_size": 11,
+    "bar_font_weight": "normal",
+    "bar_foreground": "#E6E6E6",
+    "bar_background": "#1E1E2E",
+    "bar_tag_count": 8,
+    "bar_tag_foreground": "#262626",
+    "bar_tag_background": "#5F87AF",
+    "bar_block_foreground": "#262626",
+    "bar_block_background": "#AF5F5F",
+}
+
+BOOL_KEYS = {
+    "decorations_enabled", "decoration_show_title", "focus_follows_mouse",
+    "animations", "bar_enabled",
+}
+INT_RANGES = {
+    "outer_gap": (-4096, 4096), "inner_gap": (-4096, 4096),
+    "border_width": (0, 4096), "corner_radius": (0, 4096),
+    "decoration_titlebar_height": (16, 128),
+    "decoration_border_width": (0, 32),
+    "decoration_resize_hit_width": (1, 32),
+    "preview_hover_delay_ms": (0, 5000),
+    "animation_duration_ms": (0, 5000), "animation_fps": (1, 240),
+    "bar_height": (1, 512), "bar_font_size": (6, 72),
+    "bar_tag_count": (1, 64),
+}
+COLOR_KEYS = {
+    "norm_outer_border", "sel_outer_border", "decoration_accent",
+    "decoration_active_background", "decoration_inactive_background",
+    "decoration_active_foreground", "decoration_inactive_foreground",
+    "decoration_active_border", "decoration_inactive_border", "bar_foreground",
+    "bar_background", "bar_tag_foreground", "bar_tag_background",
+    "bar_block_foreground", "bar_block_background",
+}
+ALIASES = {
+    "modkey": "mod_key", "titlebar_height": "decoration_titlebar_height",
+    "bar_workspace_count": "bar_tag_count",
+    "bar_workspace_foreground": "bar_tag_foreground",
+    "bar_workspace_background": "bar_tag_background",
+}
+DIRECTIVES = {"bind", "call", "workspace", "autostart", "rule", "bar_block",
+              "virtual_screen", "workspace_layout", "tag_layout"}
+
+
+def default_bindings() -> list[dict]:
+    actions = [
+        ("h", "focusleft"), ("j", "focusdown"), ("k", "focusup"),
+        ("l", "focusright"), ("Shift + h", "moveleft"),
+        ("Shift + j", "movedown"), ("Shift + k", "moveup"),
+        ("Shift + l", "moveright"), ("Control + h", "resizeleft"),
+        ("Control + j", "resizedown"), ("Control + k", "resizeup"),
+        ("Control + l", "resizeright"), ("space", "togglefloating"),
+        ("f", "togglefullscreen"), ("t", "toggle_tabbed"),
+        ("g", "layout_next"), ("slash", "show_bindings"),
+        ("Control + Alt + h", "show_bindings"),
+        ("Control + Alt + t", "show_datetime"),
+        ("Control + Alt + b", "show_battery"),
+        ("Control + r", "reminder_new"),
+        ("Control + Alt + r", "reminder_show_all"),
+        ("Control + Shift + r", "reminder_clear_all"),
+        ("grave", "scratchpad_toggle 1"),
+        ("Shift + grave", "scratchpad_toggle_float 2"),
+        ("Control + grave", "scratchpad_remove 1"),
+        ("Shift + q", "close_window"), ("Shift + r", "reload_config"),
+        ("n", "ws_next"), ("p", "ws_prev"),
+        ("Control + n", "tag_next"), ("Control + p", "tag_prev"),
+        ("comma", "focus_output_prev"), ("period", "focus_output_next"),
+        ("Shift + comma", "move_to_output_prev"),
+        ("Shift + period", "move_to_output_next"),
+    ]
+    result = [{"type": "call", "combo": "mod + " + combo, "value": action}
+              for combo, action in actions]
+    for number in range(1, 10):
+        result.append({"type": "workspace", "combo": f"mod + {number}",
+                       "value": f"view {number}"})
+        result.append({"type": "workspace", "combo": f"mod + Shift + {number}",
+                       "value": f"tag {number}"})
+    terminal = os.environ.get("TERMINAL", "").strip()
+    if not terminal:
+        terminal = next((name for name in ("kitty", "foot", "alacritty", "xterm")
+                         if shutil.which(name)), "")
+    if terminal:
+        result.insert(0, {"type": "bind", "combo": "mod + Return", "value": terminal})
+    return result
+
+
+def unquote(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        return value[1:-1].strip()
+    return value
+
+
+def quote(value: object) -> str:
+    # skarwm removes one surrounding quote pair; it intentionally does not use
+    # shell/JSON escaping, so embedded quotes must remain byte-for-byte intact.
+    return '"' + str(value) + '"'
+
+
+def active_path() -> Path | None:
+    command = shutil.which("skarwm-msg")
+    if command:
+        try:
+            result = subprocess.run([command, "get-version"], text=True,
+                                    capture_output=True, timeout=2, check=False)
+            data = json.loads(result.stdout)
+            loaded = data.get("loaded_config_file_name")
+            if loaded:
+                return Path(loaded).expanduser()
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            pass
+    configured = os.environ.get("SKARWM_CONFIG")
+    if configured:
+        return Path(configured).expanduser()
+    root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    user_path = root / "skarwm/config.rc"
+    if user_path.exists():
+        return user_path
+    system_path = Path("/etc/skarwm/config.rc")
+    if system_path.exists():
+        return system_path
+    return user_path
+
+
+def empty_document(path: Path) -> dict:
+    return {
+        "path": str(path), "exists": path.exists(), "settings": dict(SETTINGS),
+        "barBlocks": [], "autostart": ["anushctl start"],
+        "bindings": default_bindings(), "rules": [],
+        "workspaceLayouts": [], "virtualScreens": [], "extras": [],
+    }
+
+
+def parse(path: Path) -> dict:
+    document = empty_document(path)
+    if not path.exists():
+        return document
+    # An existing rc file replaces the built-in lists completely.
+    document["barBlocks"] = []
+    document["autostart"] = []
+    document["bindings"] = []
+    for original in path.read_text(encoding="utf-8").splitlines():
+        line = original.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" not in line:
+            document["extras"].append(line)
+            continue
+        key, rest = (part.strip() for part in line.split(":", 1))
+        canonical = ALIASES.get(key, "workspace_layout" if key == "tag_layout" else key)
+        if key == "gap":
+            try:
+                document["settings"]["outer_gap"] = int(unquote(rest))
+                document["settings"]["inner_gap"] = int(unquote(rest))
+            except ValueError:
+                document["extras"].append(line)
+            continue
+        if canonical in SETTINGS:
+            value = unquote(rest)
+            if canonical in BOOL_KEYS:
+                document["settings"][canonical] = value.lower() in ("true", "1")
+            elif canonical in INT_RANGES:
+                try:
+                    document["settings"][canonical] = int(value)
+                except ValueError:
+                    document["settings"][canonical] = value
+            else:
+                document["settings"][canonical] = value
+        elif key in ("bind", "call", "workspace"):
+            parts = rest.split(":", 1)
+            if len(parts) == 2:
+                document["bindings"].append({
+                    "type": key, "combo": parts[0].strip(),
+                    "value": unquote(parts[1]),
+                })
+            else:
+                document["extras"].append(line)
+        elif key == "autostart":
+            document["autostart"].append(unquote(rest))
+        elif key == "rule":
+            parts = rest.split(":", 2)
+            if len(parts) == 3:
+                document["rules"].append({"field": parts[0].strip(),
+                    "pattern": unquote(parts[1]), "effects": parts[2].strip()})
+            else:
+                document["extras"].append(line)
+        elif key == "bar_block":
+            parts = [part.strip() for part in rest.split(":")]
+            kind = parts[0] if parts else "workspaces"
+            item = {"kind": kind, "alignment": parts[1] if len(parts) > 1 else "left",
+                    "name": "", "interval": 1, "timeout": 1, "command": ""}
+            if kind == "script" and len(parts) >= 6:
+                item.update(name=parts[2], interval=parts[3], timeout=parts[4],
+                            command=unquote(":".join(parts[5:])))
+            elif kind == "button" and len(parts) >= 4:
+                item.update(name=parts[2], command=unquote(":".join(parts[3:])))
+            elif kind not in ("workspaces", "systray"):
+                document["extras"].append(line)
+                continue
+            document["barBlocks"].append(item)
+        elif key == "virtual_screen":
+            parts = [part.strip() for part in rest.split(":")]
+            if len(parts) in (3, 4) and parts[1] == "split":
+                document["virtualScreens"].append({"output": parts[0],
+                    "ratio": parts[2], "offset": parts[3] if len(parts) == 4 else "0"})
+            else:
+                document["extras"].append(line)
+        elif key in ("workspace_layout", "tag_layout"):
+            parts = [part.strip() for part in rest.split(":", 1)]
+            if len(parts) == 2:
+                document["workspaceLayouts"].append({"workspace": parts[0], "layout": parts[1]})
+            else:
+                document["extras"].append(line)
+        else:
+            document["extras"].append(line)
+    return document
+
+
+def require_text(value: object, label: str, limit: int = 1024) -> str:
+    text = str(value).strip()
+    if not text or "\n" in text or "\r" in text or len(text) >= limit:
+        raise ValueError(f"{label} is empty or too long")
+    return text
+
+
+def integer(value: object, label: str, low: int, high: int) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError) as failure:
+        raise ValueError(f"{label} must be a number") from failure
+    if number < low or number > high:
+        raise ValueError(f"{label} must be between {low} and {high}")
+    return number
+
+
+def serialize(document: dict) -> str:
+    settings = document.get("settings", {})
+    lines = ["# skarwm configuration — managed by anush", "",
+             "# General and window appearance"]
+    for key, default in SETTINGS.items():
+        value = settings.get(key, default)
+        if key in BOOL_KEYS:
+            value = "true" if value is True else "false"
+        elif key in INT_RANGES:
+            value = integer(value, key, *INT_RANGES[key])
+        elif key in COLOR_KEYS:
+            value = require_text(value, key, 16).upper()
+            if len(value) != 7 or value[0] != "#" or any(c not in "0123456789ABCDEF" for c in value[1:]):
+                raise ValueError(f"{key} must be a #RRGGBB color")
+        elif key == "mod_key":
+            value = require_text(value, key, 32)
+        elif key == "animation_easing" and value not in ("linear", "ease_out_cubic"):
+            raise ValueError("animation_easing must be linear or ease_out_cubic")
+        elif key == "decoration_color_source" and value not in ("active-border", "accent", "explicit"):
+            raise ValueError("invalid decoration color source")
+        elif key == "bar_position" and value not in ("top", "bottom"):
+            raise ValueError("bar_position must be top or bottom")
+        elif key == "bar_font_weight" and value not in ("normal", "medium", "bold"):
+            raise ValueError("invalid bar font weight")
+        elif key == "bar_font":
+            value = quote(require_text(value, key, 128))
+        lines.append(f"{key} : {value}")
+
+    lines.extend(["", "# Built-in bar blocks"])
+    for item in document.get("barBlocks", []):
+        kind = require_text(item.get("kind"), "bar block kind", 20)
+        align = item.get("alignment", "left")
+        if align not in ("left", "center", "right"):
+            raise ValueError("bar block alignment must be left, center, or right")
+        if kind in ("workspaces", "systray"):
+            lines.append(f"bar_block : {kind} : {align}")
+        elif kind == "button":
+            name = require_text(item.get("name"), "button label", 65)
+            command = require_text(item.get("command"), "button command")
+            lines.append(f"bar_block : button : {align} : {name} : {quote(command)}")
+        elif kind == "script":
+            name = require_text(item.get("name"), "script name", 65)
+            interval = integer(item.get("interval"), "script interval", 1, 86400)
+            timeout = integer(item.get("timeout"), "script timeout", 1, 60)
+            command = require_text(item.get("command"), "script command")
+            lines.append(f"bar_block : script : {align} : {name} : {interval} : {timeout} : {quote(command)}")
+        else:
+            raise ValueError(f"unknown bar block kind: {kind}")
+
+    lines.extend(["", "# Autostart"])
+    for command in document.get("autostart", []):
+        lines.append("autostart : " + quote(require_text(command, "autostart command")))
+
+    lines.extend(["", "# Key bindings and workspace bindings"])
+    for item in document.get("bindings", []):
+        kind = item.get("type")
+        if kind not in ("bind", "call", "workspace"):
+            raise ValueError("binding type must be bind, call, or workspace")
+        combo = require_text(item.get("combo"), "binding combo", 256)
+        value = require_text(item.get("value"), "binding action")
+        lines.append(f"{kind} : {combo} : {quote(value) if kind == 'bind' else value}")
+
+    lines.extend(["", "# Workspace layouts and virtual screens"])
+    seen_workspaces = set()
+    for item in document.get("workspaceLayouts", []):
+        workspace = integer(item.get("workspace"), "workspace", 1, 2147483647)
+        if workspace in seen_workspaces:
+            raise ValueError(f"duplicate workspace layout: {workspace}")
+        seen_workspaces.add(workspace)
+        layout = item.get("layout")
+        if layout not in ("scrolling-tile", "vertical-scrolling-tile", "dwindle", "monocle", "floating"):
+            raise ValueError(f"invalid workspace layout: {layout}")
+        lines.append(f"workspace_layout : {workspace} : {layout}")
+    seen_outputs = set()
+    for item in document.get("virtualScreens", []):
+        output = require_text(item.get("output"), "virtual screen output", 128)
+        if output in seen_outputs:
+            raise ValueError(f"duplicate virtual screen output: {output}")
+        seen_outputs.add(output)
+        ratio = integer(item.get("ratio"), "split ratio", 10, 90)
+        offset = integer(item.get("offset", 0), "split offset", -100000, 100000)
+        lines.append(f"virtual_screen : {output} : split : {ratio} : {offset}")
+
+    lines.extend(["", "# Window rules"])
+    for item in document.get("rules", []):
+        field = item.get("field")
+        if field not in ("class", "instance", "title"):
+            raise ValueError("rule field must be class, instance, or title")
+        pattern = require_text(item.get("pattern"), "rule pattern", 512)
+        effects = require_text(item.get("effects"), "rule effects", 512)
+        lines.append(f"rule : {field} : {quote(pattern)} : {effects}")
+
+    extras = document.get("extras", [])
+    if extras:
+        lines.extend(["", "# Advanced entries preserved by anush"])
+        for raw in extras:
+            lines.append(require_text(raw, "advanced entry", 4096))
+    return "\n".join(lines) + "\n"
+
+
+def save(document: dict, reload_wm: bool) -> dict:
+    path = active_path()
+    if path is None:
+        raise ValueError("No user configuration path is available")
+    content = serialize(document)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    previous = path.read_bytes() if path.exists() else None
+    mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".config.rc.", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, mode)
+        os.replace(temporary, path)
+        if reload_wm:
+            command = shutil.which("skarwm-msg")
+            if not command:
+                raise RuntimeError("Saved, but skarwm-msg was not found")
+            result = subprocess.run([command, "reload"], text=True,
+                                    capture_output=True, timeout=8, check=False)
+            if result.returncode != 0:
+                detail = (result.stderr or result.stdout).strip()
+                raise RuntimeError(detail or "skarwm rejected the configuration")
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        if path.exists() and previous is None:
+            path.unlink()
+        elif previous is not None:
+            path.write_bytes(previous)
+            os.chmod(path, mode)
+        if reload_wm and shutil.which("skarwm-msg"):
+            subprocess.run([shutil.which("skarwm-msg"), "reload"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        raise
+    return parse(path)
+
+
+def main() -> int:
+    try:
+        command = sys.argv[1] if len(sys.argv) > 1 else "read"
+        path = active_path()
+        if path is None:
+            raise ValueError("Cannot determine skarwm configuration path")
+        if command == "read":
+            result = parse(path)
+        elif command in ("save", "save-reload"):
+            result = save(json.loads(sys.stdin.readline()), command == "save-reload")
+        else:
+            raise ValueError(f"Unknown command: {command}")
+        print(json.dumps({"success": True, "document": result}, ensure_ascii=False))
+        return 0
+    except Exception as failure:
+        print(json.dumps({"success": False, "error": str(failure)}, ensure_ascii=False))
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

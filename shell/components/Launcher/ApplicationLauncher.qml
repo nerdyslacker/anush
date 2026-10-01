@@ -60,17 +60,18 @@ Popout {
         const entries = DesktopEntries.applications.values.filter(app => {
             if (app.noDisplay)
                 return false
-            if (root.selectedCategory === "Favorites"
-                    && !LauncherState.isFavorite(app.id))
-                return false
-            if (root.selectedCategory !== ""
-                    && root.selectedCategory !== "Favorites"
-                    && root.categoryFor(app) !== root.selectedCategory)
-                return false
             if (root.searchMode !== "applications")
                 return false
-            if (root.lowerQuery === "")
+            if (root.lowerQuery === "") {
+                if (root.selectedCategory === "Favorites"
+                        && !LauncherState.isFavorite(app.id))
+                    return false
+                if (root.selectedCategory !== ""
+                        && root.selectedCategory !== "Favorites"
+                        && root.categoryFor(app) !== root.selectedCategory)
+                    return false
                 return true
+            }
             const searchable = [app.name, app.genericName, app.comment]
                 .concat(app.keywords).join(" ").toLowerCase()
             return searchable.indexOf(root.lowerQuery) !== -1
@@ -91,18 +92,27 @@ Popout {
             visible = false
             return
         }
-        if (!focusedOutputQuery.running)
-            focusedOutputQuery.running = true
+        if (!pointerPositionQuery.running)
+            pointerPositionQuery.running = true
     }
 
-    function anchorBelongsTo(rect) {
-        if (!anchorItem || !rect)
+    function showCenteredForPointer(x, y) {
+        if (!anchorItem)
             return false
         const anchorPosition = anchorItem.mapToGlobal(0, 0)
-        return anchorPosition.x >= rect.x
-            && anchorPosition.x < rect.x + rect.width
-            && anchorPosition.y >= rect.y
-            && anchorPosition.y < rect.y + rect.height
+        for (const screen of Quickshell.screens) {
+            const ownsAnchor = anchorPosition.x >= screen.x
+                && anchorPosition.x < screen.x + screen.width
+                && anchorPosition.y >= screen.y
+                && anchorPosition.y < screen.y + screen.height
+            const ownsPointer = x >= screen.x && x < screen.x + screen.width
+                && y >= screen.y && y < screen.y + screen.height
+            if (ownsAnchor && ownsPointer) {
+                showCenteredInRect(screen.x, screen.y, screen.width, screen.height)
+                return true
+            }
+        }
+        return false
     }
 
     function focusSearch() {
@@ -232,21 +242,18 @@ Popout {
     }
 
     Process {
-        id: focusedOutputQuery
-        command: [Wm.msgPath, "get-outputs"]
+        id: pointerPositionQuery
+        command: ["xdotool", "getmouselocation", "--shell"]
         stdout: StdioCollector {
             onStreamFinished: {
-                try {
-                    const outputs = JSON.parse(text)
-                    const focused = outputs.find(output => output.focused === true)
-                    if (focused && root.anchorBelongsTo(focused.rect)) {
-                        const rect = focused.rect
-                        root.showCenteredInRect(
-                            rect.x, rect.y, rect.width, rect.height)
-                    }
-                } catch (error) {
-                    console.warn("application launcher output query:", error)
+                const xMatch = text.match(/(?:^|\n)X=(-?\d+)/)
+                const yMatch = text.match(/(?:^|\n)Y=(-?\d+)/)
+                if (!xMatch || !yMatch) {
+                    console.warn("application launcher pointer query failed")
+                    return
                 }
+                root.showCenteredForPointer(
+                    Number(xMatch[1]), Number(yMatch[1]))
             }
         }
     }

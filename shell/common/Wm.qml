@@ -32,6 +32,7 @@ Singleton {
     property string title: ""
     property string activeWinId: ""
     readonly property string msgPath: "skarwm-msg"
+    property bool isSkarwm: false
 
     readonly property var layouts: [
         { name: "Scrolling Tile", glyph: "󰙀", command: "scrolling-tile" },
@@ -226,6 +227,23 @@ Singleton {
         }
     }
 
+    Process {
+        id: versionQuery
+        command: [root.msgPath, "get-version"]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const value = JSON.parse(text)
+                    root.isSkarwm = String(value?.human_readable ?? "")
+                        .toLowerCase().indexOf("skarwm") !== -1
+                } catch (failure) {
+                    root.isSkarwm = false
+                }
+            }
+        }
+        onExited: code => { if (code !== 0) root.isSkarwm = false }
+    }
     Process {
         id: workspaceQuery
         command: [root.msgPath, "get-workspaces"]

@@ -345,263 +345,279 @@ Popout {
             font.bold: true
         }
 
-        Text {
-            id: layoutDescription
-            text: "Drag widgets between sections or within a section to reorder them"
-            color: Theme.brightBlack
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize - 1
-        }
-
         Row {
-            id: barOptions
+            id: settingsLayout
             width: parent.width
-            height: 48
-            spacing: 8
+            spacing: 14
+            readonly property real usableWidth: width - middleSeparator.width - spacing * 2
+            readonly property real controlsWidth: usableWidth * 0.3
+            readonly property real widgetsWidth: usableWidth - controlsWidth
 
-            Controls.ComboBox {
-                id: positionSelector
-                width: (barOptions.width - barOptions.spacing * 4) / 5
-                height: parent.height
-                textRole: "label"
-                model: [
-                    {
-                        key: "top",
-                        label: "Top"
-                    },
-                    {
-                        key: "bottom",
-                        label: "Bottom"
-                    },
-                    {
-                        key: "left",
-                        label: "Left"
-                    },
-                    {
-                        key: "right",
-                        label: "Right"
+            Column {
+                id: controlsColumn
+                width: settingsLayout.controlsWidth
+                spacing: 8
+
+                Controls.ComboBox {
+                    id: positionSelector
+                    width: parent.width
+                    height: 48
+                    textRole: "label"
+                    model: [
+                        {
+                            key: "top",
+                            label: "Top"
+                        },
+                        {
+                            key: "bottom",
+                            label: "Bottom"
+                        },
+                        {
+                            key: "left",
+                            label: "Left"
+                        },
+                        {
+                            key: "right",
+                            label: "Right"
+                        }
+                    ]
+                    currentIndex: ["top", "bottom", "left", "right"].indexOf(BarVisibility.barPosition)
+                    onActivated: index => BarVisibility.setBarPosition(positionSelector.model[index].key)
+
+                    delegate: Controls.ItemDelegate {
+                        id: positionOption
+                        required property int index
+                        required property var modelData
+                        width: positionSelector.width - 8
+                        height: 30
+                        highlighted: positionSelector.highlightedIndex === index
+
+                        contentItem: Text {
+                            leftPadding: 7
+                            text: positionOption.modelData.label
+                            color: positionOption.highlighted || positionOption.index === positionSelector.currentIndex ? Theme.accent : Theme.fg
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize - 1
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        background: Rectangle {
+                            radius: Theme.radiusSmall
+                            color: positionOption.highlighted ? Theme.gray3 : positionOption.index === positionSelector.currentIndex ? Qt.alpha(Theme.accent, 0.16) : "transparent"
+                        }
                     }
-                ]
-                currentIndex: ["top", "bottom", "left", "right"].indexOf(BarVisibility.barPosition)
-                onActivated: index => BarVisibility.setBarPosition(positionSelector.model[index].key)
 
-                delegate: Controls.ItemDelegate {
-                    id: positionOption
-                    required property int index
-                    required property var modelData
-                    width: positionSelector.width - 8
-                    height: 30
-                    highlighted: positionSelector.highlightedIndex === index
+                    popup: Controls.Popup {
+                        y: positionSelector.height + 4
+                        width: positionSelector.width
+                        implicitHeight: positionList.contentHeight + 8
+                        padding: 4
+
+                        contentItem: ListView {
+                            id: positionList
+                            clip: true
+                            implicitHeight: contentHeight
+                            model: positionSelector.popup.visible ? positionSelector.delegateModel : null
+                            currentIndex: positionSelector.highlightedIndex
+                        }
+                        background: Rectangle {
+                            radius: Theme.radiusMedium
+                            color: Theme.gray2
+                            border.width: 1
+                            border.color: Theme.gray5
+                        }
+                    }
 
                     contentItem: Text {
-                        leftPadding: 7
-                        text: positionOption.modelData.label
-                        color: positionOption.highlighted || positionOption.index === positionSelector.currentIndex ? Theme.accent : Theme.fg
+                        leftPadding: 10
+                        rightPadding: 25
+                        text: "Position · " + positionSelector.displayText
+                        color: Theme.fg
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSize - 1
                         verticalAlignment: Text.AlignVCenter
+                        elide: Text.ElideRight
                     }
-                    background: Rectangle {
-                        radius: Theme.radiusSmall
-                        color: positionOption.highlighted ? Theme.gray3 : positionOption.index === positionSelector.currentIndex ? Qt.alpha(Theme.accent, 0.16) : "transparent"
-                    }
-                }
 
-                popup: Controls.Popup {
-                    y: positionSelector.height + 4
-                    width: positionSelector.width
-                    implicitHeight: positionList.contentHeight + 8
-                    padding: 4
-
-                    contentItem: ListView {
-                        id: positionList
-                        clip: true
-                        implicitHeight: contentHeight
-                        model: positionSelector.popup.visible ? positionSelector.delegateModel : null
-                        currentIndex: positionSelector.highlightedIndex
+                    indicator: Text {
+                        x: positionSelector.width - width - 9
+                        y: (positionSelector.height - height) / 2
+                        text: positionSelector.popup.visible ? "󰅀" : "󰅂"
+                        color: Theme.brightBlack
+                        font.family: Theme.iconFontFamily
+                        font.pixelSize: Theme.iconSizeSmall
                     }
+
                     background: Rectangle {
                         radius: Theme.radiusMedium
-                        color: Theme.gray2
+                        color: positionSelector.pressed ? Theme.gray4 : positionSelector.hovered ? Theme.gray3 : "transparent"
                         border.width: 1
-                        border.color: Theme.gray5
+                        border.color: positionSelector.popup.visible ? Theme.accent : Theme.gray5
                     }
                 }
 
-                contentItem: Text {
-                    leftPadding: 10
-                    rightPadding: 25
-                    text: "Position · " + positionSelector.displayText
-                    color: Theme.fg
+                CompactSetting {
+                    width: parent.width
+                    iconText: "󰍹"
+                    title: "Monitors"
+                    detail: BarVisibility.showOnAllMonitors ? "All" : "Main only"
+                    checked: BarVisibility.showOnAllMonitors
+                    onToggled: BarVisibility.setShowOnAllMonitors(!BarVisibility.showOnAllMonitors)
+                }
+
+                CompactSetting {
+                    width: parent.width
+                    iconText: "󰘖"
+                    title: "Fit content"
+                    detail: BarVisibility.fitContent ? "Compact" : BarVisibility.verticalBar ? "Full height" : "Full width"
+                    checked: BarVisibility.fitContent
+                    onToggled: BarVisibility.setFitContent(!BarVisibility.fitContent)
+                }
+
+                CompactSetting {
+                    width: parent.width
+                    iconText: "󰖝"
+                    title: "Floating"
+                    detail: BarVisibility.floating ? Theme.surfaceGap + " px inset" : "Flush"
+                    checked: BarVisibility.floating
+                    onToggled: BarVisibility.setFloating(!BarVisibility.floating)
+                }
+
+                CompactSetting {
+                    width: parent.width
+                    iconText: "󰧞"
+                    title: "Sections"
+                    detail: BarVisibility.fitContent ? "Full bar only" : BarVisibility.separateSections ? "3 pillows" : "Joined"
+                    checked: BarVisibility.separateSections
+                    onToggled: BarVisibility.setSeparateSections(!BarVisibility.separateSections)
+                }
+
+                TweakSlider {
+                    label: "Height"
+                    from: 28
+                    to: 80
+                    value: Theme.barHeight
+                    suffix: " px"
+                    applyFn: value => Theme.barHeight = value
+                    persistFn: value => Theme.persistBarHeight(value)
+                }
+
+                TweakSlider {
+                    label: "Item scale"
+                    from: 0.7
+                    to: 2.0
+                    value: Theme.barUserScale
+                    isInt: false
+                    suffix: "×"
+                    applyFn: value => Theme.barUserScale = value
+                    persistFn: value => Theme.persistBarScale(value)
+                }
+
+                TweakSlider {
+                    label: "Background opacity"
+                    from: 0
+                    to: 100
+                    value: Math.round(Theme.barBackgroundOpacity * 100)
+                    suffix: "%"
+                    applyFn: value => Theme.barBackgroundOpacity = value / 100
+                    persistFn: value => Theme.persistBarBackgroundOpacity(value / 100)
+                }
+            }
+
+            Rectangle {
+                id: middleSeparator
+                width: 1
+                height: Math.max(controlsColumn.implicitHeight, widgetsColumn.implicitHeight)
+                color: Theme.fg
+                opacity: 0.18
+            }
+
+            Column {
+                id: widgetsColumn
+                width: settingsLayout.widgetsWidth
+                spacing: 8
+
+                Text {
+                    id: layoutDescription
+                    width: parent.width
+                    text: "Drag widgets between sections or within a section to reorder them"
+                    wrapMode: Text.WordWrap
+                    color: Theme.brightBlack
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSize - 1
-                    verticalAlignment: Text.AlignVCenter
-                    elide: Text.ElideRight
                 }
 
-                indicator: Text {
-                    x: positionSelector.width - width - 9
-                    y: (positionSelector.height - height) / 2
-                    text: positionSelector.popup.visible ? "󰅀" : "󰅂"
-                    color: Theme.brightBlack
-                    font.family: Theme.iconFontFamily
-                    font.pixelSize: Theme.iconSizeSmall
+                Row {
+                    id: widgetHeadings
+                    width: parent.width - (layoutScrollBar.visible ? 12 : 0)
+                    spacing: 8
+
+                    ClusterHeading {
+                        clusterName: "left"
+                        heading: BarVisibility.verticalBar ? "Top" : "Left"
+                    }
+                    ClusterHeading {
+                        clusterName: "center"
+                        heading: "Center"
+                    }
+                    ClusterHeading {
+                        clusterName: "right"
+                        heading: BarVisibility.verticalBar ? "Bottom" : "Right"
+                    }
                 }
 
-                background: Rectangle {
-                    radius: Theme.radiusMedium
-                    color: positionSelector.pressed ? Theme.gray4 : positionSelector.hovered ? Theme.gray3 : "transparent"
-                    border.width: 1
-                    border.color: positionSelector.popup.visible ? Theme.accent : Theme.gray5
-                }
-            }
+                Flickable {
+                    id: widgetLayoutFlick
+                    width: parent.width
+                    height: Math.min(widgetSections.implicitHeight, Math.max(96,
+                        controlsColumn.implicitHeight - layoutDescription.implicitHeight
+                        - widgetHeadings.height - widgetsColumn.spacing * 2))
+                    contentWidth: width
+                    contentHeight: widgetSections.implicitHeight
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
 
-            CompactSetting {
-                width: (barOptions.width - barOptions.spacing * 4) / 5
-                iconText: "󰍹"
-                title: "Monitors"
-                detail: BarVisibility.showOnAllMonitors ? "All" : "Main only"
-                checked: BarVisibility.showOnAllMonitors
-                onToggled: BarVisibility.setShowOnAllMonitors(!BarVisibility.showOnAllMonitors)
-            }
+                    Controls.ScrollBar.vertical: Controls.ScrollBar {
+                        id: layoutScrollBar
+                        width: 8
+                        policy: Controls.ScrollBar.AsNeeded
+                        interactive: true
 
-            CompactSetting {
-                width: (barOptions.width - barOptions.spacing * 4) / 5
-                iconText: "󰘖"
-                title: "Fit content"
-                detail: BarVisibility.fitContent ? "Compact" : BarVisibility.verticalBar ? "Full height" : "Full width"
-                checked: BarVisibility.fitContent
-                onToggled: BarVisibility.setFitContent(!BarVisibility.fitContent)
-            }
+                        background: Rectangle {
+                            radius: Math.min(width / 2, Theme.radiusSmall)
+                            color: Theme.gray2
+                            border.width: 1
+                            border.color: Theme.gray5
+                        }
 
-            CompactSetting {
-                width: (barOptions.width - barOptions.spacing * 4) / 5
-                iconText: "󰖝"
-                title: "Floating"
-                detail: BarVisibility.floating ? Theme.surfaceGap + " px inset" : "Flush"
-                checked: BarVisibility.floating
-                onToggled: BarVisibility.setFloating(!BarVisibility.floating)
-            }
+                        contentItem: Rectangle {
+                            implicitWidth: 6
+                            implicitHeight: 28
+                            radius: Math.min(width / 2, Theme.radiusSmall)
+                            color: layoutScrollBar.pressed ? Theme.brightOrange : layoutScrollBar.hovered ? Theme.orange : Theme.gray6
+                        }
+                    }
 
-            CompactSetting {
-                width: (barOptions.width - barOptions.spacing * 4) / 5
-                iconText: "󰧞"
-                title: "Sections"
-                detail: BarVisibility.fitContent ? "Full bar only" : BarVisibility.separateSections ? "3 pillows" : "Joined"
-                checked: BarVisibility.separateSections
-                onToggled: BarVisibility.setSeparateSections(!BarVisibility.separateSections)
-            }
-        }
-
-        Row {
-            id: appearanceControls
-            width: parent.width
-            height: 40
-            spacing: 14
-
-            TweakSlider {
-                width: (appearanceControls.width - appearanceControls.spacing * 2) / 3
-                label: "Height"
-                from: 28
-                to: 80
-                value: Theme.barHeight
-                suffix: " px"
-                applyFn: value => Theme.barHeight = value
-                persistFn: value => Theme.persistBarHeight(value)
-            }
-
-            TweakSlider {
-                width: (appearanceControls.width - appearanceControls.spacing * 2) / 3
-                label: "Item scale"
-                from: 0.7
-                to: 2.0
-                value: Theme.barUserScale
-                isInt: false
-                suffix: "×"
-                applyFn: value => Theme.barUserScale = value
-                persistFn: value => Theme.persistBarScale(value)
-            }
-
-            TweakSlider {
-                width: (appearanceControls.width - appearanceControls.spacing * 2) / 3
-                label: "Background opacity"
-                from: 0
-                to: 100
-                value: Math.round(Theme.barBackgroundOpacity * 100)
-                suffix: "%"
-                applyFn: value => Theme.barBackgroundOpacity = value / 100
-                persistFn: value => Theme.persistBarBackgroundOpacity(value / 100)
-            }
-        }
-
-        Row {
-            id: widgetHeadings
-            width: parent.width - (layoutScrollBar.visible ? 12 : 0)
-            spacing: 8
-
-            ClusterHeading {
-                clusterName: "left"
-                heading: BarVisibility.verticalBar ? "Top" : "Left"
-            }
-            ClusterHeading {
-                clusterName: "center"
-                heading: "Center"
-            }
-            ClusterHeading {
-                clusterName: "right"
-                heading: BarVisibility.verticalBar ? "Bottom" : "Right"
-            }
-        }
-
-        Flickable {
-            id: widgetLayoutFlick
-            width: parent.width
-            height: Math.min(widgetSections.implicitHeight, Math.max(96, root.heightLimit - 2 * root.cardPadding - layoutTitle.implicitHeight - layoutDescription.implicitHeight - barOptions.height - appearanceControls.height - widgetHeadings.height - content.spacing * 5))
-            contentWidth: width
-            contentHeight: widgetSections.implicitHeight
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-
-            Controls.ScrollBar.vertical: Controls.ScrollBar {
-                id: layoutScrollBar
-                width: 8
-                policy: Controls.ScrollBar.AsNeeded
-                interactive: true
-
-                background: Rectangle {
-                    radius: Math.min(width / 2, Theme.radiusSmall)
-                    color: Theme.gray2
-                    border.width: 1
-                    border.color: Theme.gray5
-                }
-
-                contentItem: Rectangle {
-                    implicitWidth: 6
-                    implicitHeight: 28
-                    radius: Math.min(width / 2, Theme.radiusSmall)
-                    color: layoutScrollBar.pressed ? Theme.brightOrange : layoutScrollBar.hovered ? Theme.orange : Theme.gray6
-                }
-            }
-
-            Row {
-                id: widgetSections
-                readonly property real largestPanelHeight: Math.max(leftSection.requiredHeight, centerSection.requiredHeight, rightSection.requiredHeight)
-                width: widgetLayoutFlick.width - (layoutScrollBar.visible ? 12 : 0)
-                spacing: 8
-                ClusterSection {
-                    id: leftSection
-                    clusterName: "left"
-                    panelHeight: widgetSections.largestPanelHeight
-                }
-                ClusterSection {
-                    id: centerSection
-                    clusterName: "center"
-                    panelHeight: widgetSections.largestPanelHeight
-                }
-                ClusterSection {
-                    id: rightSection
-                    clusterName: "right"
-                    panelHeight: widgetSections.largestPanelHeight
+                    Row {
+                        id: widgetSections
+                        readonly property real largestPanelHeight: Math.max(leftSection.requiredHeight, centerSection.requiredHeight, rightSection.requiredHeight)
+                        width: widgetLayoutFlick.width - (layoutScrollBar.visible ? 12 : 0)
+                        spacing: 8
+                        ClusterSection {
+                            id: leftSection
+                            clusterName: "left"
+                            panelHeight: widgetSections.largestPanelHeight
+                        }
+                        ClusterSection {
+                            id: centerSection
+                            clusterName: "center"
+                            panelHeight: widgetSections.largestPanelHeight
+                        }
+                        ClusterSection {
+                            id: rightSection
+                            clusterName: "right"
+                            panelHeight: widgetSections.largestPanelHeight
+                        }
+                    }
                 }
             }
         }
