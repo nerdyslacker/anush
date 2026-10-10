@@ -59,10 +59,14 @@ Column {
             id: selectorMouse
             anchors.fill: parent
             hoverEnabled: true
-            ToolTip.visible: containsMouse && selectedLabel.truncated
-            ToolTip.text: selectedLabel.text
-            ToolTip.delay: 350
             onClicked: root.expanded = !root.expanded
+        }
+        ThemedToolTip {
+            parent: selectorMouse
+            visible: selectorMouse.containsMouse && selectedLabel.truncated
+            text: selectedLabel.text
+            x: (selectorMouse.width - width) / 2
+            y: selectorMouse.height + 6
         }
     }
 
@@ -101,13 +105,17 @@ Column {
                 id: optionMouse
                 anchors.fill: parent
                 hoverEnabled: true
-                ToolTip.visible: containsMouse && optionLabel.truncated
-                ToolTip.text: optionLabel.text
-                ToolTip.delay: 350
                 onClicked: {
                     root.selected(option.modelData)
                     root.expanded = false
                 }
+            }
+            ThemedToolTip {
+                parent: optionMouse
+                visible: optionMouse.containsMouse && optionLabel.truncated
+                text: optionLabel.text
+                x: (optionMouse.width - width) / 2
+                y: optionMouse.height + 6
             }
         }
     }

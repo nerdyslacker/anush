@@ -19,6 +19,10 @@ Singleton {
     property bool loading: false
     property bool applying: false
     property bool confirmationPending: false
+    // A short-lived overlay rendered by DisplayIdentifier.qml on every active
+    // screen. Keeping this in the service lets the Display popup trigger it
+    // without owning windows on the other monitors.
+    property bool identifying: false
     property int secondsRemaining: 0
     property string rollbackToken: ""
     property string error: ""
@@ -38,6 +42,13 @@ Singleton {
     function resetPending() {
         pendingOutputs = clone(currentOutputs)
         error = ""
+    }
+
+    function identify() {
+        identifying = true
+        identifyTimer.restart()
+        if (currentOutputs.filter(output => output.enabled).length === 0)
+            refresh()
     }
 
     function output(name) {
@@ -174,6 +185,11 @@ Singleton {
     }
     Timer { id: refreshDelay; interval: 700; onTriggered: root.refresh() }
     Timer { id: hotplugDelay; interval: 250; onTriggered: root.refresh() }
+    Timer {
+        id: identifyTimer
+        interval: 4000
+        onTriggered: root.identifying = false
+    }
     Connections {
         target: Wm
         function onOutputsChanged() { hotplugDelay.restart() }

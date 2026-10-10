@@ -10,6 +10,7 @@ Singleton {
     property var workspaces: []
     property var windows: []
     property var outputs: []
+    property var workspaceConfigurations: ({})
     property var lastFocusedWindowByOutput: ({})
     property var registeredScratchpads: []
     signal overviewCommand(string action)
@@ -120,6 +121,12 @@ Singleton {
         const ws = workspaceAt(index, outputName)
         return ws !== null && ws.urgent
     }
+    function workspaceIcon(index) {
+        return String(workspaceConfigurations[String(index + 1)]?.icon ?? "")
+    }
+    function workspaceName(index) {
+        return String(workspaceConfigurations[String(index + 1)]?.name ?? "")
+    }
 
     function windowForOutput(outputName) {
         const wantedOutput = String(outputName ?? "")
@@ -160,8 +167,30 @@ Singleton {
     function refreshAll() {
         refreshWorkspaces()
         refreshWindows()
+        workspaceConfigQuery.running = false
+        workspaceConfigQuery.running = true
         outputQuery.running = false
         outputQuery.running = true
+    }
+
+    function acceptWorkspaceConfig(line) {
+        try {
+            const value = JSON.parse(line)
+            const entries = value?.document?.workspaceLayouts
+            if (!Array.isArray(entries)) return
+            const next = ({})
+            for (const entry of entries) {
+                const id = Number(entry?.workspace)
+                const icon = String(entry?.icon ?? "")
+                if (isFinite(id) && id >= 1 && icon !== "")
+                    next[String(Math.round(id))] = {
+                        icon: icon, name: String(entry?.name ?? "")
+                    }
+            }
+            workspaceConfigurations = next
+        } catch (e) {
+            console.warn("skarwm workspace configuration:", e)
+        }
     }
 
     function acceptWorkspaces(line) {
@@ -249,6 +278,12 @@ Singleton {
         command: [root.msgPath, "get-workspaces"]
         running: true
         stdout: SplitParser { onRead: line => root.acceptWorkspaces(line) }
+    }
+    Process {
+        id: workspaceConfigQuery
+        command: [Theme.scriptsDir + "/skarwm/config-editor", "read"]
+        running: true
+        stdout: SplitParser { onRead: line => root.acceptWorkspaceConfig(line) }
     }
     Process {
         id: windowQuery

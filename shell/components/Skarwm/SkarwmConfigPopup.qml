@@ -97,7 +97,7 @@ Popout {
                 { output: "DP-1", ratio: 75, offset: 0 })
         else if (index === 6)
             SkarwmConfigService.addItem("workspaceLayouts",
-                { workspace: 1, layout: "scrolling-tile" })
+                { workspace: 1, layout: "scrolling-tile", icon: "1", name: "" })
         else if (index === 7)
             SkarwmConfigService.addItem("extras", "mousebind : …")
     }
@@ -382,14 +382,16 @@ Popout {
         id: workspacesPage
         Column {
             width: parent.width; spacing: 10
-            Text { text: "Workspace layouts"; color: Theme.fg; font.family: Theme.fontFamily; font.bold: true }
+            Text { text: "Workspace configuration"; color: Theme.fg; font.family: Theme.fontFamily; font.bold: true }
             Repeater {
                 model: SkarwmConfigService.pending.workspaceLayouts
                 Row {
                     required property int index; required property var modelData
                     width: parent.width; spacing: 7
-                    StyledField { width: 120; text: String(modelData.workspace); placeholderText: "Workspace"; onEditingFinished: SkarwmConfigService.updateItem("workspaceLayouts", index, { workspace: text }) }
-                    StyledCombo { width: 260; model: ["scrolling-tile", "vertical-scrolling-tile", "dwindle", "monocle", "floating"]; currentIndex: model.indexOf(modelData.layout); onActivated: i => SkarwmConfigService.updateItem("workspaceLayouts", index, { layout: model[i] }) }
+                    StyledField { width: 90; text: String(modelData.workspace); placeholderText: "ID"; onEditingFinished: SkarwmConfigService.updateItem("workspaceLayouts", index, { workspace: text }) }
+                    StyledCombo { width: 205; model: ["scrolling-tile", "vertical-scrolling-tile", "dwindle", "monocle", "floating"]; currentIndex: model.indexOf(modelData.layout); onActivated: i => SkarwmConfigService.updateItem("workspaceLayouts", index, { layout: model[i] }) }
+                    StyledField { width: 90; text: modelData.icon ?? ""; placeholderText: "Icon"; onEditingFinished: SkarwmConfigService.updateItem("workspaceLayouts", index, { icon: text }) }
+                    StyledField { width: parent.width - 480; text: modelData.name ?? ""; placeholderText: "Hover name"; onEditingFinished: SkarwmConfigService.updateItem("workspaceLayouts", index, { name: text }) }
                     RemoveButton { onActivated: SkarwmConfigService.removeItem("workspaceLayouts", index) }
                 }
             }

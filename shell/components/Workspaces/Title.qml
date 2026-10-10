@@ -55,7 +55,7 @@ Item {
             acceptedButtons: Qt.NoButton
         }
 
-        ToolTip {
+        ThemedToolTip {
             id: titleTooltip
             parent: titleBox
             visible: titleMouse.containsMouse && root.hasTitle

@@ -179,8 +179,28 @@ Popout {
         anchors.fill: parent
         spacing: 10
         Row {
-            width: parent.width; height: 28
-            Text { width: parent.width - closeSettings.width; text: "Display settings"; color: Theme.fg; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize + 2; font.bold: true }
+            width: parent.width; height: 28; spacing: 8
+            Text {
+                width: parent.width - identifyDisplays.width - closeSettings.width - 16
+                text: "Display settings"; color: Theme.fg; font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize + 2; font.bold: true
+            }
+            Rectangle {
+                id: identifyDisplays
+                width: 92; height: 28; radius: Theme.radiusSmall
+                color: identifyDisplaysMouse.containsMouse ? Theme.gray4 : Theme.gray2
+                border.width: 1; border.color: Theme.gray5
+                Row {
+                    anchors.centerIn: parent; spacing: 5
+                    Text { text: "󰍹"; color: Theme.accent; font.family: Theme.iconFontFamily; font.pixelSize: Theme.iconSizeSmall }
+                    Text { text: "Identify"; color: Theme.fg; font.family: Theme.fontFamily; font.pixelSize: Theme.fontSize - 1 }
+                }
+                MouseArea {
+                    id: identifyDisplaysMouse
+                    anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                    onClicked: DisplayConfigurationService.identify()
+                }
+            }
             Rectangle {
                 id: closeSettings
                 width: 28; height: 28; radius: Theme.radiusSmall

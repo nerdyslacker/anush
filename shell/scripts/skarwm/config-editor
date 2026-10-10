@@ -84,7 +84,7 @@ ALIASES = {
     "bar_workspace_background": "bar_tag_background",
 }
 DIRECTIVES = {"bind", "call", "workspace", "autostart", "rule", "bar_block",
-              "virtual_screen", "workspace_layout", "tag_layout"}
+              "virtual_screen"}
 
 
 def default_bindings() -> list[dict]:
@@ -192,7 +192,7 @@ def parse(path: Path) -> dict:
             document["extras"].append(line)
             continue
         key, rest = (part.strip() for part in line.split(":", 1))
-        canonical = ALIASES.get(key, "workspace_layout" if key == "tag_layout" else key)
+        canonical = ALIASES.get(key, key)
         if key == "gap":
             try:
                 document["settings"]["outer_gap"] = int(unquote(rest))
@@ -211,6 +211,20 @@ def parse(path: Path) -> dict:
                     document["settings"][canonical] = value
             else:
                 document["settings"][canonical] = value
+        elif key.startswith(("workspace-", "workspace_")):
+            prefix = "workspace-" if key.startswith("workspace-") else "workspace_"
+            try:
+                workspace = int(key[len(prefix):])
+            except ValueError:
+                document["extras"].append(line)
+                continue
+            parts = [part.strip() for part in rest.split(":")]
+            if 1 <= workspace <= 64 and len(parts) in (2, 3):
+                document["workspaceLayouts"].append({"workspace": workspace,
+                    "layout": parts[0], "icon": unquote(parts[1]),
+                    "name": unquote(parts[2]) if len(parts) == 3 else ""})
+            else:
+                document["extras"].append(line)
         elif key in ("bind", "call", "workspace"):
             parts = rest.split(":", 1)
             if len(parts) == 2:
@@ -253,7 +267,10 @@ def parse(path: Path) -> dict:
         elif key in ("workspace_layout", "tag_layout"):
             parts = [part.strip() for part in rest.split(":", 1)]
             if len(parts) == 2:
-                document["workspaceLayouts"].append({"workspace": parts[0], "layout": parts[1]})
+                # Migrate legacy layout-only entries to the current unified
+                # declaration. The number remains visible until an icon is set.
+                document["workspaceLayouts"].append({"workspace": parts[0],
+                    "layout": parts[1], "icon": parts[0], "name": ""})
             else:
                 document["extras"].append(line)
         else:
@@ -340,7 +357,7 @@ def serialize(document: dict) -> str:
         value = require_text(item.get("value"), "binding action")
         lines.append(f"{kind} : {combo} : {quote(value) if kind == 'bind' else value}")
 
-    lines.extend(["", "# Workspace layouts and virtual screens"])
+    lines.extend(["", "# Workspace configuration and virtual screens"])
     seen_workspaces = set()
     for item in document.get("workspaceLayouts", []):
         workspace = integer(item.get("workspace"), "workspace", 1, 2147483647)
@@ -350,7 +367,14 @@ def serialize(document: dict) -> str:
         layout = item.get("layout")
         if layout not in ("scrolling-tile", "vertical-scrolling-tile", "dwindle", "monocle", "floating"):
             raise ValueError(f"invalid workspace layout: {layout}")
-        lines.append(f"workspace_layout : {workspace} : {layout}")
+        icon = require_text(item.get("icon", str(workspace)), "workspace icon", 65)
+        name = str(item.get("name", "")).strip()
+        if len(name) >= 129 or "\n" in name or "\r" in name:
+            raise ValueError("workspace name is too long")
+        line = f"workspace-{workspace} : {layout} : {icon}"
+        if name:
+            line += " : " + name
+        lines.append(line)
     seen_outputs = set()
     for item in document.get("virtualScreens", []):
         output = require_text(item.get("output"), "virtual screen output", 128)

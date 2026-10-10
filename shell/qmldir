@@ -27,6 +27,7 @@ singleton RssService components/Rss/RssService.qml
 singleton NotepadState components/Notepad/NotepadState.qml
 Bar components/Bar/Bar.qml
 BarModule components/Bar/BarModule.qml
+ThemedToolTip ThemedToolTip.qml
 BarSettingsPopup components/Bar/BarSettingsPopup.qml
 Volume components/Audio/Volume.qml
 MicMute components/Audio/MicMute.qml
@@ -41,6 +42,7 @@ BatteryPopup components/Battery/BatteryPopup.qml
 Brightness components/Battery/Brightness.qml
 BrightnessPopup components/Battery/BrightnessPopup.qml
 DisplayPopup components/Displays/DisplayPopup.qml
+DisplayIdentifier components/Displays/DisplayIdentifier.qml
 SkarwmConfigPopup components/Skarwm/SkarwmConfigPopup.qml
 Clipboard components/Clipboard/Clipboard.qml
 ClipboardPopup components/Clipboard/ClipboardPopup.qml

@@ -75,10 +75,14 @@ Popout {
                     }
                 }
 
-                Controls.ToolTip.visible: containsMouse
-                Controls.ToolTip.delay: 450
-                Controls.ToolTip.text: modelData.title || modelData.tooltipTitle
-                    || modelData.id || "Tray application"
+                ThemedToolTip {
+                    parent: trayItem
+                    visible: trayItem.containsMouse
+                    text: trayItem.modelData.title || trayItem.modelData.tooltipTitle
+                        || trayItem.modelData.id || "Tray application"
+                    x: (trayItem.width - width) / 2
+                    y: trayItem.height + 6
+                }
             }
         }
     }

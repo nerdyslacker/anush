@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls as Controls
 import "../.."
 
 Rectangle {
@@ -121,6 +122,8 @@ Rectangle {
                     readonly property bool selected: Wm.isSelected(tagIndex, root.outputName)
                     readonly property bool occupied: Wm.isOccupied(tagIndex, root.outputName)
                     readonly property bool urgent: Wm.isUrgent(tagIndex, root.outputName)
+                    readonly property string workspaceIcon: Wm.workspaceIcon(tagIndex)
+                    readonly property string workspaceName: Wm.workspaceName(tagIndex)
                     width: BarVisibility.verticalBar ? Theme.moduleHeight - 8
                         : selected ? 28 : 22
                     height: BarVisibility.verticalBar
@@ -136,19 +139,19 @@ Rectangle {
 
                     Text {
                         anchors.centerIn: parent
-                        visible: TagConfig.showNumbers
-                        text: tag.tagIndex + 1
+                        visible: TagConfig.showNumbers || tag.workspaceIcon !== ""
+                        text: tag.workspaceIcon !== "" ? tag.workspaceIcon : tag.tagIndex + 1
                         color: tag.selected || tag.urgent
                             ? Theme.accentForeground
                             : Qt.alpha(Theme.foreground,
                                 tag.occupied ? 0.62 : 0.34)
                         font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize - 1
+                        font.pixelSize: tag.workspaceIcon !== "" ? Theme.fontSize + 2 : Theme.fontSize - 1
                         font.bold: tag.selected
                     }
 
                     Rectangle {
-                        visible: !TagConfig.showNumbers
+                        visible: !TagConfig.showNumbers && tag.workspaceIcon === ""
                         anchors.centerIn: parent
                         width: tag.selected || tag.urgent ? 5 : 4
                         height: width
@@ -158,7 +161,9 @@ Rectangle {
                             : Qt.alpha(Theme.fg, tag.occupied ? 0.50 : 0.24)
                     }
                     MouseArea {
+                        id: pointer
                         anchors.fill: parent
+                        hoverEnabled: true
                         acceptedButtons: Qt.LeftButton | Qt.MiddleButton
                             | Qt.RightButton
                         onClicked: mouse => {
@@ -170,6 +175,22 @@ Rectangle {
                                 Wm.viewTag(tag.tagIndex, root.outputName)
                             }
                         }
+                    }
+                    ThemedToolTip {
+                        id: workspaceTooltip
+                        parent: tag
+                        visible: pointer.containsMouse && tag.workspaceName !== ""
+                        text: tag.workspaceName
+                        delay: 350
+                        popupType: Controls.Popup.Window
+                        x: BarVisibility.verticalBar
+                            ? (BarVisibility.barPosition === "left"
+                                ? tag.width + 6 : -width - 6)
+                            : (tag.width - width) / 2
+                        y: BarVisibility.verticalBar
+                            ? (tag.height - height) / 2
+                            : BarVisibility.barPosition === "bottom"
+                                ? -height - 6 : tag.height + 6
                     }
                 }
             }

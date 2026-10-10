@@ -543,10 +543,13 @@ Popout {
                             onCanceled: favoriteClickGuard.restart()
                         }
 
-                        Controls.ToolTip.visible: favoriteMouse.containsMouse
-                        Controls.ToolTip.delay: 350
-                        Controls.ToolTip.text: favorite
-                            ? "Remove from Favorites" : "Add to Favorites"
+                        ThemedToolTip {
+                            parent: favoriteMouse
+                            visible: favoriteMouse.containsMouse
+                            text: favorite ? "Remove from Favorites" : "Add to Favorites"
+                            x: (favoriteMouse.width - width) / 2
+                            y: favoriteMouse.height + 6
+                        }
                     }
 
                     MouseArea {
@@ -640,9 +643,13 @@ Popout {
                             }
                         }
 
-                        Controls.ToolTip.visible: categoryMouse.containsMouse
-                        Controls.ToolTip.delay: 350
-                        Controls.ToolTip.text: categoryButton.modelData.name
+                        ThemedToolTip {
+                            parent: categoryMouse
+                            visible: categoryMouse.containsMouse
+                            text: categoryButton.modelData.name
+                            x: (categoryMouse.width - width) / 2
+                            y: categoryMouse.height + 6
+                        }
                     }
                 }
             }

@@ -33,6 +33,7 @@ ShellRoot {
     Keybindings {}
     Notice {}
     Reminder {}
+    DisplayIdentifier {}
 
     Variants {
         model: barScreens

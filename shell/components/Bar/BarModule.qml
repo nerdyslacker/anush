@@ -187,7 +187,7 @@ Rectangle {
         onWheel: w => root.scrolled(w.angleDelta.y > 0 ? 1 : -1)
     }
 
-    Controls.ToolTip {
+    ThemedToolTip {
         parent: root
         visible: root.hovered && !root.tooltipSuppressed && root.tooltip !== ""
         text: root.tooltip
