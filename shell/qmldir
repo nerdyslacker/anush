@@ -8,6 +8,7 @@ SkarwmBackend common/SkarwmBackend.qml
 EwmhBackend common/EwmhBackend.qml
 BspwmBackend common/BspwmBackend.qml
 HerbstluftwmBackend common/HerbstluftwmBackend.qml
+I3Backend common/I3Backend.qml
 singleton Sys common/Sys.qml
 singleton PopupCoordinator common/PopupCoordinator.qml
 singleton ShellControl common/ShellControl.qml

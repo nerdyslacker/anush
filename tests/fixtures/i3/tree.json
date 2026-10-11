@@ -1,0 +1,117 @@
+{
+  "id": 1,
+  "name": "root",
+  "type": "root",
+  "nodes": [
+    {
+      "id": 2,
+      "name": "DP-1",
+      "type": "output",
+      "nodes": [
+        {
+          "id": 20,
+          "name": "topdock",
+          "type": "dockarea",
+          "nodes": [
+            {"id": 200, "name": "panel", "type": "con", "window": 900, "window_properties": {"class": "Panel"}, "nodes": [], "floating_nodes": []}
+          ],
+          "floating_nodes": []
+        },
+        {
+          "id": 21,
+          "name": "content",
+          "type": "con",
+          "nodes": [
+            {
+              "id": 11,
+              "name": "1: term",
+              "type": "workspace",
+              "layout": "splith",
+              "rect": {"x": 0, "y": 28, "width": 1920, "height": 1052},
+              "nodes": [
+                {
+                  "id": 100,
+                  "name": "split container",
+                  "type": "con",
+                  "window": null,
+                  "nodes": [
+                    {"id": 101, "name": "Terminal", "type": "con", "window": 6291457, "focused": false, "urgent": true, "floating": "auto_off", "fullscreen_mode": 0, "scratchpad_state": "none", "window_properties": {"class": "kitty", "instance": "kitty", "title": "Terminal"}, "nodes": [], "floating_nodes": []}
+                  ],
+                  "floating_nodes": []
+                }
+              ],
+              "floating_nodes": []
+            },
+            {
+              "id": 12,
+              "name": "2: web",
+              "type": "workspace",
+              "layout": "tabbed",
+              "rect": {"x": 0, "y": 28, "width": 1920, "height": 1052},
+              "nodes": [
+                {"id": 102, "name": "Documentation — Firefox", "type": "con", "window": 6291458, "focused": false, "urgent": false, "floating": "auto_off", "fullscreen_mode": 1, "scratchpad_state": "none", "window_properties": {"class": "Firefox", "instance": "Navigator", "title": "Documentation — Firefox"}, "nodes": [], "floating_nodes": []}
+              ],
+              "floating_nodes": []
+            }
+          ],
+          "floating_nodes": []
+        }
+      ],
+      "floating_nodes": []
+    },
+    {
+      "id": 3,
+      "name": "HDMI-1",
+      "type": "output",
+      "nodes": [
+        {
+          "id": 31,
+          "name": "content",
+          "type": "con",
+          "nodes": [
+            {
+              "id": 13,
+              "name": "3: chat",
+              "type": "workspace",
+              "layout": "splitv",
+              "rect": {"x": 1920, "y": 28, "width": 1280, "height": 996},
+              "nodes": [],
+              "floating_nodes": [
+                {"id": 1030, "name": "floating", "type": "floating_con", "nodes": [{"id": 103, "name": "Team chat", "type": "con", "window": 6291459, "focused": true, "urgent": false, "floating": "user_on", "fullscreen_mode": 0, "scratchpad_state": "none", "window_properties": {"class": "Slack", "instance": "slack", "title": "Team chat"}, "nodes": [], "floating_nodes": []}], "floating_nodes": []}
+              ]
+            },
+            {"id": 14, "name": "4", "type": "workspace", "layout": "splith", "rect": {"x": 1920, "y": 28, "width": 1280, "height": 996}, "nodes": [], "floating_nodes": []}
+          ],
+          "floating_nodes": []
+        }
+      ],
+      "floating_nodes": []
+    },
+    {
+      "id": 4,
+      "name": "__i3",
+      "type": "output",
+      "nodes": [
+        {
+          "id": 41,
+          "name": "content",
+          "type": "con",
+          "nodes": [
+            {
+              "id": 42,
+              "name": "__i3_scratch",
+              "type": "workspace",
+              "nodes": [],
+              "floating_nodes": [
+                {"id": 1040, "name": "scratch floating", "type": "floating_con", "nodes": [{"id": 104, "name": "Scratch terminal", "type": "con", "window": 6291460, "focused": false, "urgent": false, "floating": "user_on", "fullscreen_mode": 0, "scratchpad_state": "changed", "window_properties": {"class": "kitty", "instance": "scratch", "title": "Scratch terminal"}, "nodes": [], "floating_nodes": []}], "floating_nodes": []}
+              ]
+            }
+          ],
+          "floating_nodes": []
+        }
+      ],
+      "floating_nodes": []
+    }
+  ],
+  "floating_nodes": []
+}

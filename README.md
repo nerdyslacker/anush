@@ -29,6 +29,8 @@ Required:
 - for the native bspwm adapter, `bspc` available in `PATH`; Xprop supplies
   window titles.
 - for the native herbstluftwm adapter, `herbstclient` available in `PATH`.
+- the native i3 adapter connects directly to i3's IPC socket; `I3SOCK`, the
+  root `I3_SOCKET_PATH` property, or `i3 --get-socketpath` must expose it.
 
 Optional desktop integrations:
 

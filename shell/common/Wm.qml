@@ -20,12 +20,12 @@ Singleton {
     readonly property string selectedBackendName: {
         if (requestedBackend === "auto") {
             if (!detectionComplete) return "detecting"
-            if (["skarwm", "bspwm", "herbstluftwm"]
+            if (["skarwm", "bspwm", "herbstluftwm", "i3"]
                     .indexOf(detectedWmIdentity) >= 0)
                 return detectedWmIdentity
             return "ewmh"
         }
-        if (["ewmh", "dwm", "i3", "spectrwm"]
+        if (["ewmh", "dwm", "spectrwm"]
                 .indexOf(requestedBackend) >= 0)
             return "ewmh"
         return requestedBackend
@@ -34,8 +34,9 @@ Singleton {
         ? skarwmBackend : selectedBackendName === "mock"
             ? mockBackend : selectedBackendName === "bspwm"
                 ? bspwmBackend : selectedBackendName === "herbstluftwm"
-                    ? herbstluftwmBackend : selectedBackendName === "ewmh"
-                        ? ewmhBackend : unavailableBackend
+                    ? herbstluftwmBackend : selectedBackendName === "i3"
+                        ? i3Backend : selectedBackendName === "ewmh"
+                            ? ewmhBackend : unavailableBackend
     readonly property string backendName: String(backend.name)
     readonly property bool connected: backend.connected === true
     readonly property var capabilities: backend.capabilities ?? ({})
@@ -48,7 +49,16 @@ Singleton {
     readonly property var workspaceConfigurations: backend === skarwmBackend
         ? skarwmBackend.workspaceConfigurations : ({})
     readonly property var registeredScratchpads: backend === skarwmBackend
-        ? skarwmBackend.registeredScratchpads : []
+        ? skarwmBackend.registeredScratchpads
+        : capabilities.scratchpad === true ? windows
+            .filter(window => window.scratchpad === true)
+            .map(window => ({
+                register: window.id,
+                title: String(window.title ?? "Scratchpad"),
+                className: String(window.class ?? window.instance ?? ""),
+                hidden: window.screenId === null || window.screenId === undefined,
+                workspace: window.workspaceId
+            })) : []
     readonly property string msgPath: backend === skarwmBackend
         ? skarwmBackend.msgPath : ""
     readonly property bool isSkarwm: backend === skarwmBackend && connected
@@ -446,6 +456,10 @@ Singleton {
         id: herbstluftwmBackend
         active: ShellState.ready && root.selectedBackendName === "herbstluftwm"
     }
+    I3Backend {
+        id: i3Backend
+        active: ShellState.ready && root.selectedBackendName === "i3"
+    }
     WindowManagerBackend {
         id: unavailableBackend
         name: root.selectedBackendName
@@ -453,6 +467,7 @@ Singleton {
             && root.selectedBackendName !== "mock"
             && root.selectedBackendName !== "bspwm"
             && root.selectedBackendName !== "herbstluftwm"
+            && root.selectedBackendName !== "i3"
             && root.selectedBackendName !== "ewmh"
     }
 

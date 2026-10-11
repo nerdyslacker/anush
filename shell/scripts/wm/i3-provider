@@ -1,0 +1,368 @@
+#!/usr/bin/env python3
+
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import socket
+import struct
+import subprocess
+import sys
+
+
+MAGIC = b"i3-ipc"
+RUN_COMMAND = 0
+GET_WORKSPACES = 1
+SUBSCRIBE = 2
+GET_OUTPUTS = 3
+GET_TREE = 4
+EVENT_BIT = 1 << 31
+EVENT_NAMES = {0: "workspace", 1: "output", 3: "window", 6: "shutdown"}
+
+
+def fixture_dir():
+    value = os.environ.get("ANUSH_I3_FIXTURE_DIR", "")
+    return Path(value) if value else None
+
+
+def socket_candidates():
+    candidates = []
+    environment_path = os.environ.get("I3SOCK", "")
+    if environment_path:
+        candidates.append(environment_path)
+    if shutil.which("i3") is not None:
+        try:
+            result = subprocess.run(
+                ["i3", "--get-socketpath"], check=False, capture_output=True,
+                text=True, timeout=3,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                candidates.append(result.stdout.strip())
+        except (OSError, subprocess.SubprocessError):
+            pass
+    if shutil.which("xprop") is not None:
+        try:
+            result = subprocess.run(
+                ["xprop", "-root", "I3_SOCKET_PATH"], check=False,
+                capture_output=True, text=True, timeout=3,
+            )
+            if result.returncode == 0:
+                match = re.search(r'=\s*("(?:\\.|[^"\\])*")', result.stdout)
+                if match:
+                    candidates.append(json.loads(match.group(1)))
+        except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+            pass
+    return list(dict.fromkeys(candidates))
+
+
+def connect_ipc():
+    errors = []
+    for path in socket_candidates():
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        connection.settimeout(5)
+        try:
+            connection.connect(path)
+            return connection
+        except OSError as error:
+            errors.append(f"{path}: {error}")
+            connection.close()
+    detail = "; ".join(errors) if errors else "i3 IPC socket was not found"
+    raise RuntimeError(detail)
+
+
+def receive_exact(connection, size):
+    chunks = []
+    remaining = size
+    while remaining:
+        chunk = connection.recv(remaining)
+        if not chunk:
+            raise RuntimeError("i3 IPC connection closed")
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
+def send_message(connection, message_type, payload=""):
+    encoded = payload.encode("utf-8")
+    connection.sendall(MAGIC + struct.pack("=II", len(encoded), message_type)
+                       + encoded)
+
+
+def receive_message(connection):
+    header = receive_exact(connection, len(MAGIC) + 8)
+    if header[:len(MAGIC)] != MAGIC:
+        raise RuntimeError("invalid i3 IPC magic")
+    length, message_type = struct.unpack("=II", header[len(MAGIC):])
+    if length > 64 * 1024 * 1024:
+        raise RuntimeError("i3 IPC payload is too large")
+    payload = receive_exact(connection, length).decode("utf-8")
+    return message_type, json.loads(payload)
+
+
+def request(connection, message_type, payload=""):
+    send_message(connection, message_type, payload)
+    reply_type, value = receive_message(connection)
+    if reply_type != message_type:
+        raise RuntimeError(f"unexpected i3 IPC reply type {reply_type}")
+    return value
+
+
+def raw_snapshot():
+    directory = fixture_dir()
+    if directory is not None:
+        return {
+            "outputs": json.loads((directory / "outputs.json").read_text()),
+            "workspaces": json.loads((directory / "workspaces.json").read_text()),
+            "tree": json.loads((directory / "tree.json").read_text()),
+        }
+    connection = connect_ipc()
+    try:
+        return {
+            "outputs": request(connection, GET_OUTPUTS),
+            "workspaces": request(connection, GET_WORKSPACES),
+            "tree": request(connection, GET_TREE),
+        }
+    finally:
+        connection.close()
+
+
+def tree_state(tree):
+    windows = []
+    workspace_nodes = {}
+
+    def walk(node, output=None, workspace=None, floating=False, dock=False):
+        node_type = str(node.get("type", ""))
+        node_name = str(node.get("name") or "")
+        if node_type == "output":
+            output = node_name
+        elif node_type == "workspace":
+            workspace = node_name
+            workspace_nodes[node_name] = node
+        floating = floating or node_type == "floating_con"
+        dock = dock or node_type == "dockarea"
+        window = node.get("window")
+        if window is not None and not dock:
+            properties = node.get("window_properties") or {}
+            scratchpad = str(node.get("scratchpad_state", "none")) != "none" \
+                or workspace == "__i3_scratch"
+            class_name = str(properties.get("class") or "")
+            instance = str(properties.get("instance") or "")
+            floating_state = str(node.get("floating", ""))
+            windows.append({
+                "id": str(node.get("id")),
+                "title": str(node.get("name") or properties.get("title") or ""),
+                "appId": class_name or instance,
+                "class": class_name,
+                "instance": instance,
+                "workspaceId": None if scratchpad else workspace,
+                "screenId": None if scratchpad else output,
+                "focused": node.get("focused") is True,
+                "urgent": node.get("urgent") is True,
+                "floating": floating or floating_state.endswith("_on"),
+                "fullscreen": int(node.get("fullscreen_mode") or 0) > 0,
+                "maximized": None,
+                "scratchpad": scratchpad,
+                "dock": False,
+            })
+        for child in node.get("nodes", []):
+            walk(child, output, workspace, floating, dock)
+        for child in node.get("floating_nodes", []):
+            walk(child, output, workspace, True, dock)
+
+    walk(tree)
+    return windows, workspace_nodes
+
+
+def normalize(raw):
+    windows, workspace_nodes = tree_state(raw.get("tree", {}))
+    raw_workspaces = raw.get("workspaces", [])
+    focused_workspace = next(
+        (workspace for workspace in raw_workspaces
+         if workspace.get("focused") is True), None,
+    )
+    focused_output = str(focused_workspace.get("output", "")) \
+        if focused_workspace else ""
+    screens = []
+    for output in raw.get("outputs", []):
+        if output.get("active") is not True or output.get("name") == "__i3":
+            continue
+        name = str(output.get("name", ""))
+        current = str(output.get("current_workspace") or "")
+        workspace_node = workspace_nodes.get(current, {})
+        screens.append({
+            "id": name,
+            "name": name,
+            "geometry": output.get("rect"),
+            "workarea": workspace_node.get("rect"),
+            "focused": name == focused_output,
+            "physicalOutput": name,
+            "virtual": False,
+        })
+
+    indexes = {}
+    occupied = {
+        window["workspaceId"] for window in windows
+        if window["workspaceId"] is not None and window["scratchpad"] is not True
+    }
+    workspaces = []
+    for workspace in raw_workspaces:
+        output = str(workspace.get("output", ""))
+        index = indexes.get(output, 0)
+        indexes[output] = index + 1
+        name = str(workspace.get("name", ""))
+        node = workspace_nodes.get(name, {})
+        workspaces.append({
+            "id": name,
+            "name": name,
+            "index": index,
+            "screenId": output,
+            "active": workspace.get("visible") is True,
+            "focused": workspace.get("focused") is True,
+            "visible": workspace.get("visible") is True,
+            "occupied": name in occupied,
+            "urgent": workspace.get("urgent") is True,
+            "layout": str(node.get("layout") or ""),
+        })
+
+    available = True
+    return {
+        "connected": True,
+        "capabilities": {
+            "screens": True,
+            "perScreenWorkspaces": True,
+            "workspaces": True,
+            "renameWorkspace": False,
+            "windows": True,
+            "windowTitles": True,
+            "windowAppIdentity": True,
+            "focusWindow": available,
+            "closeWindow": available,
+            "moveWindowToWorkspace": available,
+            "moveWindowToScreen": available,
+            "scratchpad": available,
+            "virtualScreens": False,
+            "decorationStyling": False,
+            "eventStream": available,
+            "layouts": False,
+            "gaps": available,
+            "reload": available,
+            "sessionControl": available,
+            "keybindings": False,
+            "configurationEditor": False,
+        },
+        "screens": screens,
+        "workspaces": workspaces,
+        "windows": windows,
+    }
+
+
+def quote(value):
+    return '"' + str(value).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def container_id(value):
+    return str(int(str(value), 10))
+
+
+def run_command(command):
+    directory = fixture_dir()
+    if directory is not None:
+        log_path = os.environ.get("ANUSH_I3_ACTION_LOG", "")
+        if not log_path:
+            raise RuntimeError("ANUSH_I3_ACTION_LOG is not set")
+        Path(log_path).write_text(command)
+        return
+    connection = connect_ipc()
+    try:
+        replies = request(connection, RUN_COMMAND, command)
+    finally:
+        connection.close()
+    failures = [reply.get("error", "command failed") for reply in replies
+                if reply.get("success") is not True]
+    if failures:
+        raise RuntimeError("; ".join(failures))
+
+
+def action(args):
+    if not args:
+        raise RuntimeError("missing i3 action")
+    kind = args[0]
+    if kind == "workspace" and len(args) in (2, 3):
+        command = f"workspace --no-auto-back-and-forth {quote(args[1])}"
+        if len(args) == 3 and args[2]:
+            command = f"focus output {quote(args[2])}; {command}"
+    elif kind == "focus" and len(args) == 2:
+        command = f'[con_id="{container_id(args[1])}"] focus'
+    elif kind == "focus-screen" and len(args) == 2:
+        command = f"focus output {quote(args[1])}"
+    elif kind == "close" and len(args) == 2:
+        command = f'[con_id="{container_id(args[1])}"] kill'
+    elif kind == "move-workspace" and len(args) == 3:
+        command = (f'[con_id="{container_id(args[1])}"] move container '
+                   f"to workspace {quote(args[2])}")
+    elif kind == "move-screen" and len(args) == 3:
+        command = (f'[con_id="{container_id(args[1])}"] move container '
+                   f"to output {quote(args[2])}")
+    elif kind == "send-scratchpad" and len(args) == 2:
+        command = f'[con_id="{container_id(args[1])}"] move scratchpad'
+    elif kind == "toggle-scratchpad" and len(args) == 2:
+        command = f'[con_id="{container_id(args[1])}"] scratchpad show'
+    elif kind == "gaps" and len(args) == 2:
+        command = f"gaps inner all set {max(0, int(args[1]))}"
+    elif kind == "reload" and len(args) == 1:
+        command = "reload"
+    elif kind == "quit" and len(args) == 1:
+        command = "exit"
+    else:
+        raise RuntimeError(f"unknown i3 action {kind}")
+    run_command(command)
+
+
+def monitor():
+    directory = fixture_dir()
+    if directory is not None:
+        path = directory / "events.jsonl"
+        if path.exists():
+            print(path.read_text(), end="")
+        return
+    connection = connect_ipc()
+    try:
+        subscriptions = json.dumps(["workspace", "output", "window", "shutdown"])
+        reply = request(connection, SUBSCRIBE, subscriptions)
+        if reply.get("success") is not True:
+            raise RuntimeError("i3 IPC subscription failed")
+        connection.settimeout(None)
+        while True:
+            message_type, payload = receive_message(connection)
+            if not message_type & EVENT_BIT:
+                continue
+            event_code = message_type & 0x7FFFFFFF
+            event_name = EVENT_NAMES.get(event_code, str(event_code))
+            print(json.dumps({"event": event_name, "payload": payload}), flush=True)
+            if event_name == "shutdown":
+                break
+    finally:
+        connection.close()
+
+
+def main():
+    try:
+        command = sys.argv[1] if len(sys.argv) > 1 else "snapshot"
+        if command == "snapshot":
+            print(json.dumps(normalize(raw_snapshot())))
+        elif command == "monitor":
+            monitor()
+        elif command == "action":
+            action(sys.argv[2:])
+        else:
+            raise RuntimeError(f"unknown command {command}")
+    except (OSError, RuntimeError, ValueError, UnicodeError,
+            subprocess.SubprocessError, json.JSONDecodeError) as error:
+        print(json.dumps({"error": str(error)}), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

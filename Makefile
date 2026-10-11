@@ -50,6 +50,7 @@ test: build/anushctl
 	./tests/config-loading.sh
 	python3 ./tests/ewmh-provider.py
 	python3 ./tests/herbstluftwm-provider.py
+	python3 ./tests/i3-provider.py
 	./tests/hotspot-control.sh
 	./tests/icon-theme.sh
 	./tests/launcher-search.sh

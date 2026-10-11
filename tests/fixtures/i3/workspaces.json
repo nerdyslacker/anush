@@ -1,0 +1,6 @@
+[
+  {"id": 11, "num": 1, "name": "1: term", "visible": true, "focused": false, "urgent": true, "rect": {"x": 0, "y": 0, "width": 1920, "height": 1080}, "output": "DP-1"},
+  {"id": 12, "num": 2, "name": "2: web", "visible": false, "focused": false, "urgent": false, "rect": {"x": 0, "y": 0, "width": 1920, "height": 1080}, "output": "DP-1"},
+  {"id": 13, "num": 3, "name": "3: chat", "visible": true, "focused": true, "urgent": false, "rect": {"x": 1920, "y": 0, "width": 1280, "height": 1024}, "output": "HDMI-1"},
+  {"id": 14, "num": 4, "name": "4", "visible": false, "focused": false, "urgent": false, "rect": {"x": 1920, "y": 0, "width": 1280, "height": 1024}, "output": "HDMI-1"}
+]

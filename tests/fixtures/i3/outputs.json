@@ -1,0 +1,5 @@
+[
+  {"name": "DP-1", "active": true, "primary": true, "current_workspace": "1: term", "rect": {"x": 0, "y": 0, "width": 1920, "height": 1080}},
+  {"name": "HDMI-1", "active": true, "primary": false, "current_workspace": "3: chat", "rect": {"x": 1920, "y": 0, "width": 1280, "height": 1024}},
+  {"name": "DP-2", "active": false, "primary": false, "current_workspace": null, "rect": {"x": 0, "y": 0, "width": 0, "height": 0}}
+]
