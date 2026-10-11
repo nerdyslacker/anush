@@ -1,0 +1,61 @@
+{
+  "focusedMonitor": "1",
+  "focusedClient": "0x600003",
+  "monitors": [
+    {
+      "index": "0",
+      "name": "DP-1",
+      "tag": "term",
+      "geometry": "1920x1080+0+0",
+      "content_geometry": "1920x1052+0+28"
+    },
+    {
+      "index": "1",
+      "name": "",
+      "tag": "chat",
+      "geometry": "1280x1024-1280+0",
+      "content_geometry": "1280x996-1280+28"
+    }
+  ],
+  "tags": [
+    {"index": "0", "name": "term", "visible": "true", "client_count": "1", "urgent_count": "1"},
+    {"index": "1", "name": "web", "visible": "false", "client_count": "1", "urgent_count": "0"},
+    {"index": "2", "name": "chat", "visible": "true", "client_count": "1", "urgent_count": "0"},
+    {"index": "3", "name": "empty", "visible": "false", "client_count": "0", "urgent_count": "0"}
+  ],
+  "clients": [
+    {
+      "winid": "0x600001",
+      "title": "Terminal",
+      "tag": "term",
+      "urgent": "true",
+      "floating": "false",
+      "fullscreen": "false",
+      "minimized": "false",
+      "class": "kitty",
+      "instance": "kitty"
+    },
+    {
+      "winid": "0x600002",
+      "title": "Documentation — Firefox",
+      "tag": "web",
+      "urgent": "false",
+      "floating": "false",
+      "fullscreen": "true",
+      "minimized": "true",
+      "class": "firefox",
+      "instance": "Navigator"
+    },
+    {
+      "winid": "0x600003",
+      "title": "Team chat",
+      "tag": "chat",
+      "urgent": "false",
+      "floating": "true",
+      "fullscreen": "false",
+      "minimized": "false",
+      "class": "Slack",
+      "instance": "slack"
+    }
+  ]
+}

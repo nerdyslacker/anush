@@ -1,0 +1,340 @@
+#!/usr/bin/env python3
+
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+
+
+GEOMETRY = re.compile(r"^(\d+)x(\d+)([+-]\d+)([+-]\d+)$")
+CLIENT_PATH = re.compile(r"^clients\.0x[0-9a-fA-F]+$")
+
+
+def fixture_dir():
+    value = os.environ.get("ANUSH_HERBSTLUFTWM_FIXTURE_DIR", "")
+    return Path(value) if value else None
+
+
+class HerbstClient:
+    def __init__(self):
+        self.process = subprocess.Popen(
+            ["herbstclient", "--binary-pipe"], stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        )
+
+    def close(self):
+        if self.process.poll() is None:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait(timeout=1)
+
+    def read_field(self):
+        value = bytearray()
+        while True:
+            byte = self.process.stdout.read(1)
+            if not byte:
+                raise RuntimeError("herbstclient binary pipe closed")
+            if byte == b"\0":
+                return value.decode()
+            value.extend(byte)
+
+    def call(self, *args, check=True):
+        for arg in args:
+            self.process.stdin.write(b"ARG\0")
+            self.process.stdin.write(str(arg).encode())
+            self.process.stdin.write(b"\0")
+        self.process.stdin.write(b"RUN\0")
+        self.process.stdin.flush()
+        response = {}
+        for _ in range(3):
+            response[self.read_field()] = self.read_field()
+        status = int(response.get("STATUS", "1"))
+        if check and status != 0:
+            raise RuntimeError(response.get("STDERR", "herbstclient command failed").strip())
+        return response.get("STDOUT", "")
+
+    def children(self, object_path, pattern):
+        output = self.call(
+            "foreach", "CHILD", object_path, f"--filter-name={pattern}",
+            "echo", "CHILD",
+        )
+        return [line for line in output.splitlines() if line]
+
+    def get(self, path):
+        return self.call("get_attr", path).rstrip("\n")
+
+
+def boolean(value):
+    return str(value).lower() in ("true", "on", "1")
+
+
+def rectangle(value):
+    match = GEOMETRY.match(str(value))
+    if not match:
+        return None
+    width, height, x, y = match.groups()
+    return {
+        "x": int(x), "y": int(y),
+        "width": int(width), "height": int(height),
+    }
+
+
+def production_state(client):
+    monitor_paths = client.children("monitors.", "^[0-9]+$")
+    tag_paths = client.children("tags.", "^[0-9]+$")
+    client_paths = client.children("clients.", "^0x[0-9a-fA-F]+$")
+    monitors = []
+    for path in monitor_paths:
+        monitors.append({
+            "index": client.get(path + ".index"),
+            "name": client.get(path + ".name"),
+            "tag": client.get(path + ".tag"),
+            "geometry": client.get(path + ".geometry"),
+            "content_geometry": client.get(path + ".content_geometry"),
+        })
+    tags = []
+    for path in tag_paths:
+        tags.append({
+            "index": client.get(path + ".index"),
+            "name": client.get(path + ".name"),
+            "visible": client.get(path + ".visible"),
+            "client_count": client.get(path + ".client_count"),
+            "urgent_count": client.get(path + ".urgent_count"),
+        })
+    clients = []
+    for path in client_paths:
+        clients.append({
+            "winid": client.get(path + ".winid"),
+            "title": client.get(path + ".title"),
+            "tag": client.get(path + ".tag"),
+            "urgent": client.get(path + ".urgent"),
+            "floating": client.get(path + ".floating_effectively"),
+            "fullscreen": client.get(path + ".fullscreen"),
+            "minimized": client.get(path + ".minimized"),
+            "class": client.get(path + ".class"),
+            "instance": client.get(path + ".instance"),
+        })
+    return {
+        "focusedMonitor": client.get("monitors.focus.index"),
+        "focusedClient": client.get("clients.focus.winid")
+            if client_paths else "0x0",
+        "monitors": monitors,
+        "tags": tags,
+        "clients": clients,
+    }
+
+
+def raw_state():
+    directory = fixture_dir()
+    if directory is not None:
+        return json.loads((directory / "state.json").read_text())
+    client = HerbstClient()
+    try:
+        return production_state(client)
+    finally:
+        client.close()
+
+
+def normalize(raw):
+    focused_monitor = str(raw.get("focusedMonitor", ""))
+    monitors_by_tag = {}
+    screens = []
+    for monitor in raw.get("monitors", []):
+        monitor_id = str(monitor.get("index", ""))
+        tag = str(monitor.get("tag", ""))
+        geometry = rectangle(monitor.get("geometry", ""))
+        content_geometry = rectangle(monitor.get("content_geometry", ""))
+        if tag:
+            monitors_by_tag[tag] = monitor_id
+        screens.append({
+            "id": monitor_id,
+            "name": str(monitor.get("name") or monitor_id),
+            "geometry": geometry,
+            "workarea": content_geometry,
+            "focused": monitor_id == focused_monitor,
+            "physicalOutput": None,
+            "virtual": None,
+        })
+
+    workspaces = []
+    for tag in sorted(raw.get("tags", []), key=lambda item: int(item["index"])):
+        name = str(tag.get("name", ""))
+        screen_id = monitors_by_tag.get(name)
+        visible = boolean(tag.get("visible", False))
+        workspaces.append({
+            "id": name,
+            "name": name,
+            "index": int(tag.get("index", 0)),
+            "screenId": screen_id,
+            "active": visible,
+            "focused": visible and screen_id == focused_monitor,
+            "visible": visible,
+            "occupied": int(tag.get("client_count", 0)) > 0,
+            "urgent": int(tag.get("urgent_count", 0)) > 0,
+        })
+
+    focused_client = str(raw.get("focusedClient", "0x0")).lower()
+    windows = []
+    for item in raw.get("clients", []):
+        window_id = str(item.get("winid", "")).lower()
+        tag = str(item.get("tag", ""))
+        class_name = str(item.get("class", ""))
+        instance = str(item.get("instance", ""))
+        windows.append({
+            "id": window_id,
+            "title": str(item.get("title", "")),
+            "appId": class_name or instance,
+            "class": class_name,
+            "instance": instance,
+            "workspaceId": tag,
+            "screenId": monitors_by_tag.get(tag),
+            "focused": window_id == focused_client,
+            "urgent": boolean(item.get("urgent", False)),
+            "floating": boolean(item.get("floating", False)),
+            "fullscreen": boolean(item.get("fullscreen", False)),
+            "minimized": boolean(item.get("minimized", False)),
+            "maximized": None,
+            "scratchpad": None,
+            "dock": False,
+        })
+
+    available = fixture_dir() is not None or shutil.which("herbstclient") is not None
+    return {
+        "connected": True,
+        "capabilities": {
+            "screens": True,
+            "perScreenWorkspaces": False,
+            "workspaces": True,
+            "renameWorkspace": False,
+            "windows": True,
+            "windowTitles": True,
+            "windowAppIdentity": True,
+            "focusWindow": available,
+            "closeWindow": available,
+            "moveWindowToWorkspace": available,
+            "moveWindowToScreen": available,
+            "scratchpad": False,
+            "virtualScreens": False,
+            "decorationStyling": False,
+            "eventStream": available,
+            "layouts": False,
+            "gaps": available,
+            "reload": available,
+            "sessionControl": available,
+            "keybindings": False,
+            "configurationEditor": False,
+        },
+        "screens": screens,
+        "workspaces": workspaces,
+        "windows": windows,
+    }
+
+
+def action(args):
+    if len(args) < 1:
+        raise RuntimeError("missing herbstluftwm action")
+    kind = args[0]
+    if kind == "workspace" and len(args) in (2, 3):
+        command = ["use", args[1]]
+        if len(args) == 3 and args[2]:
+            command = ["chain", ",", "focus_monitor", args[2],
+                       ",", "use", args[1]]
+    elif kind == "focus" and len(args) == 2:
+        command = ["jumpto", args[1]]
+    elif kind == "focus-screen" and len(args) == 2:
+        command = ["focus_monitor", args[1]]
+    elif kind == "close" and len(args) == 2:
+        command = ["close", args[1]]
+    elif kind == "move-workspace" and len(args) == 3:
+        command = ["apply_tmp_rule", args[1], f"tag={args[2]}", "focus=off"]
+    elif kind == "move-screen" and len(args) == 3:
+        command = ["apply_tmp_rule", args[1], f"monitor={args[2]}", "focus=off"]
+    elif kind == "gaps" and len(args) == 2:
+        command = ["set_attr", "settings.window_gap", args[1]]
+    elif kind == "reload" and len(args) == 1:
+        command = ["reload"]
+    elif kind == "quit" and len(args) == 1:
+        command = ["quit"]
+    else:
+        raise RuntimeError(f"unknown herbstluftwm action {kind}")
+    result = subprocess.run(
+        ["herbstclient", "-n", *command], check=False,
+        capture_output=True, text=True, timeout=4,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or f"{kind} failed")
+
+
+def install_watches(client):
+    paths = client.children("clients.", "^0x[0-9a-fA-F]+$")
+    for path in paths:
+        if not CLIENT_PATH.match(path):
+            continue
+        for attribute in ("title", "tag", "floating_effectively", "minimized",
+                          "class", "instance"):
+            client.call("watch", path + "." + attribute, check=False)
+
+
+def monitor():
+    if fixture_dir() is not None:
+        return
+    ready = "__ANUSH_HERBSTLUFTWM_READY__"
+    process = subprocess.Popen(
+        ["herbstclient", "--idle", f"--hook-ready-text={ready}\n"],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+    )
+    first = process.stdout.readline().rstrip("\n")
+    if first != ready:
+        process.terminate()
+        process.wait(timeout=1)
+        raise RuntimeError("herbstclient hook stream did not become ready")
+    client = HerbstClient()
+    try:
+        install_watches(client)
+        for line in process.stdout:
+            line = line.rstrip("\n")
+            if not line:
+                continue
+            event = line.split("\t", 1)[0]
+            if event == "tag_changed":
+                focused = client.get("monitors.focus.index")
+                print("anush_" + line + "\t" + focused, flush=True)
+            else:
+                print(line, flush=True)
+            if event in ("tag_flags", "tag_added", "tag_removed", "tag_renamed"):
+                install_watches(client)
+    finally:
+        client.close()
+        if process.poll() is None:
+            process.terminate()
+        process.wait(timeout=1)
+    if process.returncode not in (0, -15):
+        raise RuntimeError("herbstclient hook stream closed")
+
+
+def main():
+    try:
+        command = sys.argv[1] if len(sys.argv) > 1 else "snapshot"
+        if command == "snapshot":
+            print(json.dumps(normalize(raw_state())))
+        elif command == "monitor":
+            monitor()
+        elif command == "action":
+            action(sys.argv[2:])
+        else:
+            raise RuntimeError(f"unknown command {command}")
+    except (OSError, RuntimeError, ValueError, subprocess.SubprocessError,
+            json.JSONDecodeError) as error:
+        print(json.dumps({"error": str(error)}), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

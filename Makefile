@@ -49,6 +49,7 @@ test: build/anushctl
 	python3 ./tests/bspwm-provider.py
 	./tests/config-loading.sh
 	python3 ./tests/ewmh-provider.py
+	python3 ./tests/herbstluftwm-provider.py
 	./tests/hotspot-control.sh
 	./tests/icon-theme.sh
 	./tests/launcher-search.sh

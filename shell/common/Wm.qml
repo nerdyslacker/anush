@@ -20,20 +20,22 @@ Singleton {
     readonly property string selectedBackendName: {
         if (requestedBackend === "auto") {
             if (!detectionComplete) return "detecting"
-            if (["skarwm", "bspwm"].indexOf(detectedWmIdentity) >= 0)
+            if (["skarwm", "bspwm", "herbstluftwm"]
+                    .indexOf(detectedWmIdentity) >= 0)
                 return detectedWmIdentity
             return "ewmh"
         }
-        if (["ewmh", "dwm", "i3", "spectrwm",
-                "herbstluftwm"].indexOf(requestedBackend) >= 0)
+        if (["ewmh", "dwm", "i3", "spectrwm"]
+                .indexOf(requestedBackend) >= 0)
             return "ewmh"
         return requestedBackend
     }
     readonly property var backend: selectedBackendName === "skarwm"
         ? skarwmBackend : selectedBackendName === "mock"
             ? mockBackend : selectedBackendName === "bspwm"
-                ? bspwmBackend : selectedBackendName === "ewmh"
-                    ? ewmhBackend : unavailableBackend
+                ? bspwmBackend : selectedBackendName === "herbstluftwm"
+                    ? herbstluftwmBackend : selectedBackendName === "ewmh"
+                        ? ewmhBackend : unavailableBackend
     readonly property string backendName: String(backend.name)
     readonly property bool connected: backend.connected === true
     readonly property var capabilities: backend.capabilities ?? ({})
@@ -174,8 +176,12 @@ Singleton {
     }
     function isSelected(index, screenId) {
         const workspace = workspaceAt(index, screenId)
-        return workspace !== null
-            && (screenId ? workspace.visible === true : workspace.focused === true)
+        if (workspace === null) return false
+        if (screenId && workspace.screenId !== null
+                && workspace.screenId !== undefined)
+            return workspace.visible === true
+                && String(workspace.screenId) === String(screenId)
+        return screenId ? workspace.visible === true : workspace.focused === true
     }
     function isOccupied(index, screenId) {
         const workspace = workspaceAt(index, screenId)
@@ -205,12 +211,15 @@ Singleton {
         return windows.filter(window => String(window.screenId ?? "") === wanted)
     }
     function focusedWorkspaceForScreen(screenId) {
+        const wanted = String(screenId ?? "")
+        const local = workspaces.find(workspace =>
+            String(workspace.screenId ?? "") === wanted
+                && workspace.visible === true)
+        if (local) return local
         if (capabilities.perScreenWorkspaces !== true)
             return workspaces.find(workspace => workspace.focused === true)
                 ?? workspaces.find(workspace => workspace.visible === true) ?? null
-        const wanted = String(screenId ?? "")
-        return workspaces.find(workspace => String(workspace.screenId ?? "") === wanted
-            && workspace.visible === true) ?? null
+        return null
     }
     function windowForScreen(screenId) {
         const wanted = String(screenId ?? "")
@@ -433,12 +442,17 @@ Singleton {
         id: bspwmBackend
         active: ShellState.ready && root.selectedBackendName === "bspwm"
     }
+    HerbstluftwmBackend {
+        id: herbstluftwmBackend
+        active: ShellState.ready && root.selectedBackendName === "herbstluftwm"
+    }
     WindowManagerBackend {
         id: unavailableBackend
         name: root.selectedBackendName
         active: ShellState.ready && root.selectedBackendName !== "skarwm"
             && root.selectedBackendName !== "mock"
             && root.selectedBackendName !== "bspwm"
+            && root.selectedBackendName !== "herbstluftwm"
             && root.selectedBackendName !== "ewmh"
     }
 

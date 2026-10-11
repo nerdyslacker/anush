@@ -28,6 +28,7 @@ Required:
 - for the current skarwm adapter, `skarwm-msg` available in `PATH`.
 - for the native bspwm adapter, `bspc` available in `PATH`; Xprop supplies
   window titles.
+- for the native herbstluftwm adapter, `herbstclient` available in `PATH`.
 
 Optional desktop integrations:
 
