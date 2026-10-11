@@ -385,14 +385,6 @@ def apply_fastfetch_colors(path, semantic):
     atomic_write(path, config)
 
 
-def set_skarwm_setting(config, key, value):
-    pattern = rf'(?m)^\s*{re.escape(key)}\s*:.*$'
-    replacement = f"{key} : {value}"
-    if re.search(pattern, config):
-        return re.sub(pattern, replacement, config)
-    return config.rstrip() + f"\n{replacement}\n"
-
-
 def apply_files(image, semantic, ansi, config_dir, state_file, mode,
                 preserve_primary=False, generator="anush", material=None,
                 mode_ready=False, shell_generator=None):
@@ -472,34 +464,34 @@ mark3_background {semantic['secondary']}
         config_paths.append(Path(os.environ["SKARWM_CONFIG"]))
     elif os.environ.get("XDG_CONFIG_HOME"):
         config_paths.append(
-            Path(os.environ["XDG_CONFIG_HOME"]) / "skarwm/config.rc")
+            Path(os.environ["XDG_CONFIG_HOME"]) / "skarwm/default.conf")
     elif os.environ.get("HOME"):
-        config_paths.append(Path(os.environ["HOME"]) / ".config/skarwm/config.rc")
+        config_paths.append(Path(os.environ["HOME"]) / ".config/skarwm/default.conf")
+    config_set = Path(__file__).resolve().parent.parent / "skarwm/config-set"
     for config_path in dict.fromkeys(config_paths):
         if not config_path.is_file() or not os.access(config_path, os.W_OK):
             continue
-        config = config_path.read_text()
-        config = re.sub(r'(?m)^(\s*norm_outer_border\s*:\s*)#[0-9a-fA-F]{6}',
-                        rf'\g<1>{semantic["disabled"]}', config)
-        config = re.sub(r'(?m)^(\s*sel_outer_border\s*:\s*)#[0-9a-fA-F]{6}',
-                        rf'\g<1>{semantic["primary"]}', config)
+        subprocess.run([str(config_set), str(config_path), "window.border",
+                        "normal", semantic["disabled"]], check=True)
+        subprocess.run([str(config_set), str(config_path), "window.border",
+                        "selected", semantic["primary"]], check=True)
         decoration_background = blend(semantic["background"],
                                       semantic["foreground"], 0.14)
         decoration_inactive_background = blend(
             semantic["background"], semantic["foreground"], 0.07)
         decoration_colors = {
-            "decoration_color_source": "explicit",
-            "decoration_accent": semantic["primary"],
-            "decoration_active_background": decoration_background,
-            "decoration_inactive_background": decoration_inactive_background,
-            "decoration_active_foreground": semantic["primary"],
-            "decoration_inactive_foreground": semantic["primary"],
-            "decoration_active_border": semantic["primary"],
-            "decoration_inactive_border": semantic["primary"],
+            "color_source": "explicit",
+            "accent": semantic["primary"],
+            "active_background": decoration_background,
+            "inactive_background": decoration_inactive_background,
+            "active_foreground": semantic["primary"],
+            "inactive_foreground": semantic["primary"],
+            "active_border": semantic["primary"],
+            "inactive_border": semantic["primary"],
         }
         for key, value in decoration_colors.items():
-            config = set_skarwm_setting(config, key, value)
-        atomic_write(config_path, config)
+            subprocess.run([str(config_set), str(config_path),
+                            "window.decoration", key, value], check=True)
 
     state.setdefault("theme", {})["palette"] = data
     atomic_write(state_file, json.dumps(state, indent=2) + "\n")

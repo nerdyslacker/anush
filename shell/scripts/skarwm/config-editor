@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Read and atomically update skarwm's complete rc configuration."""
+"""Read and atomically update skarwm's section-based configuration."""
 
 from __future__ import annotations
 
 import json
 import os
 from pathlib import Path
+import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -77,14 +79,48 @@ COLOR_KEYS = {
     "bar_background", "bar_tag_foreground", "bar_tag_background",
     "bar_block_foreground", "bar_block_background",
 }
-ALIASES = {
-    "modkey": "mod_key", "titlebar_height": "decoration_titlebar_height",
-    "bar_workspace_count": "bar_tag_count",
-    "bar_workspace_foreground": "bar_tag_foreground",
-    "bar_workspace_background": "bar_tag_background",
+SETTING_PATHS = {
+    "mod_key": ("general", "mod_key"),
+    "outer_gap": ("window", "outer_gap"),
+    "inner_gap": ("window", "inner_gap"),
+    "border_width": ("window", "border_width"),
+    "corner_radius": ("window", "corner_radius"),
+    "focus_follows_mouse": ("window", "focus_follows_mouse"),
+    "norm_outer_border": ("window.border", "normal"),
+    "sel_outer_border": ("window.border", "selected"),
+    "decorations_enabled": ("window.decoration", "enabled"),
+    "decoration_titlebar_height": ("window.decoration", "titlebar_height"),
+    "decoration_border_width": ("window.decoration", "border_width"),
+    "decoration_resize_hit_width": ("window.decoration", "resize_hit_width"),
+    "decoration_show_title": ("window.decoration", "show_title"),
+    "decoration_color_source": ("window.decoration", "color_source"),
+    "decoration_accent": ("window.decoration", "accent"),
+    "decoration_active_background": ("window.decoration", "active_background"),
+    "decoration_inactive_background": ("window.decoration", "inactive_background"),
+    "decoration_active_foreground": ("window.decoration", "active_foreground"),
+    "decoration_inactive_foreground": ("window.decoration", "inactive_foreground"),
+    "decoration_active_border": ("window.decoration", "active_border"),
+    "decoration_inactive_border": ("window.decoration", "inactive_border"),
+    "preview_hover_delay_ms": ("scroll", "preview_hover_delay_ms"),
+    "animations": ("animation", "enabled"),
+    "animation_duration_ms": ("animation", "duration_ms"),
+    "animation_fps": ("animation", "fps"),
+    "animation_easing": ("animation", "easing"),
+    "bar_enabled": ("bar", "enabled"),
+    "bar_position": ("bar", "position"),
+    "bar_height": ("bar", "height"),
+    "bar_font": ("bar", "font"),
+    "bar_font_size": ("bar", "font_size"),
+    "bar_font_weight": ("bar", "font_weight"),
+    "bar_foreground": ("bar", "foreground"),
+    "bar_background": ("bar", "background"),
+    "bar_tag_count": ("bar", "tag_count"),
+    "bar_tag_foreground": ("bar.tag", "foreground"),
+    "bar_tag_background": ("bar.tag", "background"),
+    "bar_block_foreground": ("bar.block", "foreground"),
+    "bar_block_background": ("bar.block", "background"),
 }
-DIRECTIVES = {"bind", "call", "workspace", "autostart", "rule", "bar_block",
-              "virtual_screen"}
+SETTING_NAMES = {path: name for name, path in SETTING_PATHS.items()}
 
 
 def default_bindings() -> list[dict]:
@@ -132,14 +168,12 @@ def default_bindings() -> list[dict]:
 def unquote(value: str) -> str:
     value = value.strip()
     if len(value) >= 2 and value[0] == value[-1] == '"':
-        return value[1:-1].strip()
+        return value[1:-1].replace(r'\"', '"').replace(r'\\', '\\')
     return value
 
 
 def quote(value: object) -> str:
-    # skarwm removes one surrounding quote pair; it intentionally does not use
-    # shell/JSON escaping, so embedded quotes must remain byte-for-byte intact.
-    return '"' + str(value) + '"'
+    return '"' + str(value).replace('\\', r'\\').replace('"', r'\"') + '"'
 
 
 def active_path() -> Path | None:
@@ -158,10 +192,10 @@ def active_path() -> Path | None:
     if configured:
         return Path(configured).expanduser()
     root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    user_path = root / "skarwm/config.rc"
+    user_path = root / "skarwm/default.conf"
     if user_path.exists():
         return user_path
-    system_path = Path("/etc/skarwm/config.rc")
+    system_path = Path("/etc/skarwm/default.conf")
     if system_path.exists():
         return system_path
     return user_path
@@ -171,110 +205,162 @@ def empty_document(path: Path) -> dict:
     return {
         "path": str(path), "exists": path.exists(), "settings": dict(SETTINGS),
         "barBlocks": [], "autostart": ["anushctl start"],
+        "autostartIds": ["anush"],
         "bindings": default_bindings(), "rules": [],
         "workspaceLayouts": [], "virtualScreens": [], "extras": [],
     }
+
+
+def read_assignments(path: Path, loaded=None, stack=None):
+    loaded = set() if loaded is None else loaded
+    stack = [] if stack is None else stack
+    normalized = path.expanduser().resolve()
+    if normalized in stack:
+        chain = " -> ".join(str(item) for item in stack + [normalized])
+        raise ValueError(f"skarwm import cycle: {chain}")
+    if normalized in loaded:
+        return []
+    if not normalized.is_file():
+        raise ValueError(f"skarwm configuration does not exist: {normalized}")
+    loaded.add(normalized)
+    stack.append(normalized)
+    assignments = []
+    section = ""
+    for number, original in enumerate(
+            normalized.read_text(encoding="utf-8").splitlines(), 1):
+        line = original.strip()
+        if not line or line.startswith(("#", ";")):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip()
+            continue
+        if not section or "=" not in original:
+            raise ValueError(f"{normalized}:{number}: malformed configuration")
+        key, value = (part.strip() for part in original.split("=", 1))
+        key, value = unquote(key), unquote(value)
+        if section == "import":
+            optional = value.startswith("?")
+            imported = Path(value[1:] if optional else value).expanduser()
+            if not imported.is_absolute():
+                imported = normalized.parent / imported
+            if optional and not imported.exists():
+                continue
+            assignments.extend(read_assignments(imported, loaded, stack))
+        else:
+            assignments.append((section, key, value))
+    stack.pop()
+    return assignments
+
+
+def normalized_combo(combo: str) -> str:
+    return "+".join(part.strip().lower() for part in combo.split("+"))
+
+
+def parse_rule(properties: dict) -> dict:
+    matches = [(key, properties[key]) for key in ("class", "instance", "title")
+               if properties.get(key)]
+    field, pattern = matches[0] if matches else ("class", "Application")
+    effects = []
+    for key, value in matches[1:]:
+        effects.extend((key, quote(value)))
+    if "workspace" in properties:
+        effects.extend(("workspace", properties["workspace"]))
+    for key in ("floating", "decorate"):
+        if key in properties:
+            effects.append(key if properties[key].lower() == "true"
+                           else f"{key} false")
+    return {"field": field, "pattern": pattern,
+            "effects": " ".join(effects) or "floating"}
 
 
 def parse(path: Path) -> dict:
     document = empty_document(path)
     if not path.exists():
         return document
-    # An existing rc file replaces the built-in lists completely.
-    document["barBlocks"] = []
-    document["autostart"] = []
-    document["bindings"] = []
-    for original in path.read_text(encoding="utf-8").splitlines():
-        line = original.strip()
-        if not line or line.startswith("#"):
-            continue
-        if ":" not in line:
-            document["extras"].append(line)
-            continue
-        key, rest = (part.strip() for part in line.split(":", 1))
-        canonical = ALIASES.get(key, key)
-        if key == "gap":
+    document.update(barBlocks=[], autostart=[], autostartIds=[], bindings=[], rules=[],
+                    workspaceLayouts=[], virtualScreens=[], extras=[])
+    objects: dict[str, dict[str, str]] = {}
+    object_order: list[str] = []
+    autostarts: dict[str, str] = {}
+    autostart_order: list[str] = []
+    bindings: dict[str, dict] = {}
+    binding_order: list[str] = []
+
+    for section, key, value in read_assignments(path):
+        if section == "window" and key == "gap":
             try:
-                document["settings"]["outer_gap"] = int(unquote(rest))
-                document["settings"]["inner_gap"] = int(unquote(rest))
+                gap = int(value)
             except ValueError:
-                document["extras"].append(line)
+                gap = value
+            document["settings"]["outer_gap"] = gap
+            document["settings"]["inner_gap"] = gap
             continue
-        if canonical in SETTINGS:
-            value = unquote(rest)
-            if canonical in BOOL_KEYS:
-                document["settings"][canonical] = value.lower() in ("true", "1")
-            elif canonical in INT_RANGES:
+        setting = SETTING_NAMES.get((section, key))
+        if setting:
+            if setting in BOOL_KEYS:
+                document["settings"][setting] = value.lower() == "true"
+            elif setting in INT_RANGES:
                 try:
-                    document["settings"][canonical] = int(value)
+                    document["settings"][setting] = int(value)
                 except ValueError:
-                    document["settings"][canonical] = value
+                    document["settings"][setting] = value
             else:
-                document["settings"][canonical] = value
-        elif key.startswith(("workspace-", "workspace_")):
-            prefix = "workspace-" if key.startswith("workspace-") else "workspace_"
-            try:
-                workspace = int(key[len(prefix):])
-            except ValueError:
-                document["extras"].append(line)
-                continue
-            parts = [part.strip() for part in rest.split(":")]
-            if 1 <= workspace <= 64 and len(parts) in (2, 3):
-                document["workspaceLayouts"].append({"workspace": workspace,
-                    "layout": parts[0], "icon": unquote(parts[1]),
-                    "name": unquote(parts[2]) if len(parts) == 3 else ""})
-            else:
-                document["extras"].append(line)
-        elif key in ("bind", "call", "workspace"):
-            parts = rest.split(":", 1)
-            if len(parts) == 2:
-                document["bindings"].append({
-                    "type": key, "combo": parts[0].strip(),
-                    "value": unquote(parts[1]),
-                })
-            else:
-                document["extras"].append(line)
-        elif key == "autostart":
-            document["autostart"].append(unquote(rest))
-        elif key == "rule":
-            parts = rest.split(":", 2)
-            if len(parts) == 3:
-                document["rules"].append({"field": parts[0].strip(),
-                    "pattern": unquote(parts[1]), "effects": parts[2].strip()})
-            else:
-                document["extras"].append(line)
-        elif key == "bar_block":
-            parts = [part.strip() for part in rest.split(":")]
-            kind = parts[0] if parts else "workspaces"
-            item = {"kind": kind, "alignment": parts[1] if len(parts) > 1 else "left",
-                    "name": "", "interval": 1, "timeout": 1, "command": ""}
-            if kind == "script" and len(parts) >= 6:
-                item.update(name=parts[2], interval=parts[3], timeout=parts[4],
-                            command=unquote(":".join(parts[5:])))
-            elif kind == "button" and len(parts) >= 4:
-                item.update(name=parts[2], command=unquote(":".join(parts[3:])))
-            elif kind not in ("workspaces", "systray"):
-                document["extras"].append(line)
-                continue
-            document["barBlocks"].append(item)
-        elif key == "virtual_screen":
-            parts = [part.strip() for part in rest.split(":")]
-            if len(parts) in (3, 4) and parts[1] == "split":
-                document["virtualScreens"].append({"output": parts[0],
-                    "ratio": parts[2], "offset": parts[3] if len(parts) == 4 else "0"})
-            else:
-                document["extras"].append(line)
-        elif key in ("workspace_layout", "tag_layout"):
-            parts = [part.strip() for part in rest.split(":", 1)]
-            if len(parts) == 2:
-                # Migrate legacy layout-only entries to the current unified
-                # declaration. The number remains visible until an icon is set.
-                document["workspaceLayouts"].append({"workspace": parts[0],
-                    "layout": parts[1], "icon": parts[0], "name": ""})
-            else:
-                document["extras"].append(line)
+                document["settings"][setting] = value
+            continue
+        if section in ("bind", "call", "workspace.bindings"):
+            kind = "workspace" if section == "workspace.bindings" else section
+            normalized = normalized_combo(key)
+            if normalized not in bindings:
+                binding_order.append(normalized)
+            bindings[normalized] = {"type": kind, "combo": key, "value": value}
+            continue
+        if section == "autostart":
+            if key not in autostarts:
+                autostart_order.append(key)
+            autostarts[key] = value
+            continue
+        named = any(section.startswith(prefix) for prefix in
+                    ("rule.", "workspace.", "virtual_screen.", "bar.block."))
+        if named:
+            if section not in objects:
+                objects[section] = {}
+                object_order.append(section)
+            objects[section][key] = value
+            continue
+        document["extras"].append(f"[{section}] {key} = {value}")
+
+    document["autostart"] = [autostarts[key] for key in autostart_order]
+    document["autostartIds"] = list(autostart_order)
+    document["bindings"] = [bindings[key] for key in binding_order]
+    for section in object_order:
+        properties = objects[section]
+        if section.startswith("rule."):
+            rule = parse_rule(properties)
+            rule["id"] = section[len("rule."):]
+            document["rules"].append(rule)
+        elif section.startswith("workspace."):
+            identifier = section[len("workspace."):]
+            document["workspaceLayouts"].append({
+                "workspace": identifier, "layout": properties.get("layout", "scrolling-tile"),
+                "icon": properties.get("icon", identifier), "name": properties.get("name", ""),
+            })
+        elif section.startswith("virtual_screen."):
+            document["virtualScreens"].append({
+                "output": section[len("virtual_screen."):],
+                "ratio": properties.get("ratio", 75), "offset": properties.get("offset", 0),
+            })
         else:
-            document["extras"].append(line)
+            kind = properties.get("type", "workspaces")
+            document["barBlocks"].append({
+                "id": section[len("bar.block."):],
+                "kind": kind, "alignment": properties.get("position", "left"),
+                "name": properties.get("label", properties.get("icon", "")),
+                "interval": properties.get("interval", 1),
+                "timeout": properties.get("timeout", 1),
+                "command": properties.get("command", ""),
+                "foreground": properties.get("foreground", ""),
+                "background": properties.get("background", ""),
+            })
     return document
 
 
@@ -297,8 +383,8 @@ def integer(value: object, label: str, low: int, high: int) -> int:
 
 def serialize(document: dict) -> str:
     settings = document.get("settings", {})
-    lines = ["# skarwm configuration — managed by anush", "",
-             "# General and window appearance"]
+    lines = ["# skarwm configuration — managed by anush"]
+    grouped_settings: dict[str, list[tuple[str, object]]] = {}
     for key, default in SETTINGS.items():
         value = settings.get(key, default)
         if key in BOOL_KEYS:
@@ -321,46 +407,70 @@ def serialize(document: dict) -> str:
             raise ValueError("invalid bar font weight")
         elif key == "bar_font":
             value = quote(require_text(value, key, 128))
-        lines.append(f"{key} : {value}")
+        section, config_key = SETTING_PATHS[key]
+        grouped_settings.setdefault(section, []).append((config_key, value))
+    for section, values in grouped_settings.items():
+        lines.extend(("", f"[{section}]"))
+        lines.extend(f"{key} = {value}" for key, value in values)
 
     lines.extend(["", "# Built-in bar blocks"])
-    for item in document.get("barBlocks", []):
+    for index, item in enumerate(document.get("barBlocks", []), 1):
         kind = require_text(item.get("kind"), "bar block kind", 20)
         align = item.get("alignment", "left")
         if align not in ("left", "center", "right"):
             raise ValueError("bar block alignment must be left, center, or right")
-        if kind in ("workspaces", "systray"):
-            lines.append(f"bar_block : {kind} : {align}")
-        elif kind == "button":
-            name = require_text(item.get("name"), "button label", 65)
-            command = require_text(item.get("command"), "button command")
-            lines.append(f"bar_block : button : {align} : {name} : {quote(command)}")
+        if kind not in ("workspaces", "layout", "title", "script", "systray",
+                        "button", "audio", "bluetooth", "network"):
+            raise ValueError(f"unknown bar block kind: {kind}")
+        identifier = str(item.get("id", "")).strip() or f"anush-{index}"
+        lines.extend(("", f"[bar.block.{identifier}]", f"type = {kind}",
+                      f"position = {align}"))
+        name = str(item.get("name", "")).strip()
+        command = str(item.get("command", "")).strip()
+        if kind == "button":
+            lines.append(f"label = {require_text(name, 'button label', 65)}")
+            lines.append(f"command = {require_text(command, 'button command')}")
         elif kind == "script":
-            name = require_text(item.get("name"), "script name", 65)
+            lines.append(f"icon = {require_text(name, 'script icon', 65)}")
             interval = integer(item.get("interval"), "script interval", 1, 86400)
             timeout = integer(item.get("timeout"), "script timeout", 1, 60)
-            command = require_text(item.get("command"), "script command")
-            lines.append(f"bar_block : script : {align} : {name} : {interval} : {timeout} : {quote(command)}")
-        else:
-            raise ValueError(f"unknown bar block kind: {kind}")
+            lines.extend((f"interval = {interval}", f"timeout = {timeout}",
+                          f"command = {require_text(command, 'script command')}"))
+        elif kind in ("audio", "bluetooth", "network"):
+            lines.append(f"icon = {require_text(name, 'status icon', 65)}")
+            if command:
+                lines.append(f"command = {command}")
+        for color in ("foreground", "background"):
+            if str(item.get(color, "")).strip():
+                lines.append(f"{color} = {item[color]}")
 
     lines.extend(["", "# Autostart"])
-    for command in document.get("autostart", []):
-        lines.append("autostart : " + quote(require_text(command, "autostart command")))
+    lines.append("[autostart]")
+    autostart_ids = document.get("autostartIds", [])
+    for index, command in enumerate(document.get("autostart", []), 1):
+        identifier = (str(autostart_ids[index - 1]).strip()
+                      if index <= len(autostart_ids) else "")
+        lines.append(f"{identifier or f'anush-{index}'} = "
+                     f"{require_text(command, 'autostart command')}")
 
     lines.extend(["", "# Key bindings and workspace bindings"])
+    binding_groups: dict[str, list[tuple[str, str]]] = {}
     for item in document.get("bindings", []):
         kind = item.get("type")
         if kind not in ("bind", "call", "workspace"):
             raise ValueError("binding type must be bind, call, or workspace")
         combo = require_text(item.get("combo"), "binding combo", 256)
         value = require_text(item.get("value"), "binding action")
-        lines.append(f"{kind} : {combo} : {quote(value) if kind == 'bind' else value}")
+        section = "workspace.bindings" if kind == "workspace" else kind
+        binding_groups.setdefault(section, []).append((combo, value))
+    for section, bindings in binding_groups.items():
+        lines.extend(("", f"[{section}]"))
+        lines.extend(f"{quote(combo)} = {value}" for combo, value in bindings)
 
     lines.extend(["", "# Workspace configuration and virtual screens"])
     seen_workspaces = set()
     for item in document.get("workspaceLayouts", []):
-        workspace = integer(item.get("workspace"), "workspace", 1, 2147483647)
+        workspace = integer(item.get("workspace"), "workspace", 1, 64)
         if workspace in seen_workspaces:
             raise ValueError(f"duplicate workspace layout: {workspace}")
         seen_workspaces.add(workspace)
@@ -371,10 +481,10 @@ def serialize(document: dict) -> str:
         name = str(item.get("name", "")).strip()
         if len(name) >= 129 or "\n" in name or "\r" in name:
             raise ValueError("workspace name is too long")
-        line = f"workspace-{workspace} : {layout} : {icon}"
+        lines.extend(("", f"[workspace.{workspace}]", f"layout = {layout}",
+                      f"icon = {icon}"))
         if name:
-            line += " : " + name
-        lines.append(line)
+            lines.append(f"name = {name}")
     seen_outputs = set()
     for item in document.get("virtualScreens", []):
         output = require_text(item.get("output"), "virtual screen output", 128)
@@ -383,34 +493,66 @@ def serialize(document: dict) -> str:
         seen_outputs.add(output)
         ratio = integer(item.get("ratio"), "split ratio", 10, 90)
         offset = integer(item.get("offset", 0), "split offset", -100000, 100000)
-        lines.append(f"virtual_screen : {output} : split : {ratio} : {offset}")
+        lines.extend(("", f"[virtual_screen.{output}]", "mode = split",
+                      f"ratio = {ratio}", f"offset = {offset}"))
 
     lines.extend(["", "# Window rules"])
-    for item in document.get("rules", []):
+    for index, item in enumerate(document.get("rules", []), 1):
         field = item.get("field")
         if field not in ("class", "instance", "title"):
             raise ValueError("rule field must be class, instance, or title")
         pattern = require_text(item.get("pattern"), "rule pattern", 512)
         effects = require_text(item.get("effects"), "rule effects", 512)
-        lines.append(f"rule : {field} : {quote(pattern)} : {effects}")
+        properties = {field: pattern}
+        tokens = shlex.split(effects)
+        cursor = 0
+        while cursor < len(tokens):
+            token = tokens[cursor]
+            if token in ("workspace", "class", "instance", "title") and cursor + 1 < len(tokens):
+                properties[token] = tokens[cursor + 1]
+                cursor += 2
+            elif token in ("floating", "decorate"):
+                value = "true"
+                if cursor + 1 < len(tokens) and tokens[cursor + 1] in ("true", "false"):
+                    value = tokens[cursor + 1]
+                    cursor += 1
+                properties[token] = value
+                cursor += 1
+            else:
+                raise ValueError(f"unsupported rule effect: {token}")
+        identifier = str(item.get("id", "")).strip() or f"anush-{index}"
+        lines.extend(("", f"[rule.{identifier}]"))
+        for property_name in ("class", "instance", "title", "workspace", "floating", "decorate"):
+            if property_name in properties:
+                lines.append(f"{property_name} = {properties[property_name]}")
 
     extras = document.get("extras", [])
     if extras:
         lines.extend(["", "# Advanced entries preserved by anush"])
         for raw in extras:
-            lines.append(require_text(raw, "advanced entry", 4096))
+            raw = require_text(raw, "advanced entry", 4096)
+            match = re.fullmatch(r"\[([^]]+)]\s+([^=]+?)\s*=\s*(.*)", raw)
+            if not match:
+                raise ValueError("advanced entry must be '[section] key = value'")
+            lines.extend(("", f"[{match.group(1)}]",
+                          f"{match.group(2).strip()} = {match.group(3)}"))
     return "\n".join(lines) + "\n"
 
 
 def save(document: dict, reload_wm: bool) -> dict:
-    path = active_path()
-    if path is None:
+    root = active_path()
+    if root is None:
         raise ValueError("No user configuration path is available")
     content = serialize(document)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    helper = Path(__file__).with_name("config-set")
+    result = subprocess.run([sys.executable, str(helper), "--path", str(root)], text=True,
+                            capture_output=True, timeout=8, check=False)
+    if result.returncode != 0 or not result.stdout.strip():
+        raise RuntimeError(result.stderr.strip() or "Cannot create anush.conf")
+    path = Path(result.stdout.strip())
     previous = path.read_bytes() if path.exists() else None
     mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
-    descriptor, temporary_name = tempfile.mkstemp(prefix=".config.rc.", dir=path.parent)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".default.conf.", dir=path.parent)
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
@@ -439,7 +581,7 @@ def save(document: dict, reload_wm: bool) -> dict:
             subprocess.run([shutil.which("skarwm-msg"), "reload"],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
         raise
-    return parse(path)
+    return parse(root)
 
 
 def main() -> int:

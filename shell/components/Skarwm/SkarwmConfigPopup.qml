@@ -16,7 +16,7 @@ Popout {
         { icon: "󰌌", label: "Bindings", description: "Commands, WM actions, and workspace shortcuts.", addLabel: "Add binding" },
         { icon: "󰖲", label: "Rules", description: "Match windows and apply workspace, floating, or decoration behavior.", addLabel: "Add rule" },
         { icon: "󰖯", label: "Workspaces", description: "Default layouts and optional ultrawide output splits.", addLabel: "Add layout", secondAddLabel: "Add split" },
-        { icon: "󰘦", label: "Advanced", description: "Unrecognized compatibility entries preserved verbatim.", addLabel: "Add entry" }
+        { icon: "󰘦", label: "Advanced", description: "Unrecognized section assignments preserved by the editor.", addLabel: "Add entry" }
     ]
     readonly property var generalSettings: [
         { key: "mod_key", label: "Primary modifier", kind: "choice",
@@ -99,7 +99,7 @@ Popout {
             SkarwmConfigService.addItem("workspaceLayouts",
                 { workspace: 1, layout: "scrolling-tile", icon: "1", name: "" })
         else if (index === 7)
-            SkarwmConfigService.addItem("extras", "mousebind : …")
+            SkarwmConfigService.addItem("extras", "[section] key = value")
     }
 
     component StyledField: Controls.TextField {

@@ -23,36 +23,20 @@ if [ -n "$message" ]; then
     )
 fi
 
-rewrite_enabled() {
-    file=$1
-    [ -f "$file" ] && [ -w "$file" ] || return 0
-
-    temporary=$(mktemp "${file}.decorations.XXXXXX") || return 1
-    if grep -Eq '^[[:space:]]*decorations_enabled[[:space:]]*:' "$file"; then
-        sed -E "s|^[[:space:]]*decorations_enabled[[:space:]]*:.*$|decorations_enabled : $enabled|" \
-            "$file" > "$temporary" || { rm -f "$temporary"; return 1; }
-    else
-        sed '$a\
-decorations_enabled : '"$enabled" "$file" > "$temporary" \
-            || { rm -f "$temporary"; return 1; }
-    fi
-    chmod 644 "$temporary"
-    mv "$temporary" "$file"
-}
-
 if [ -n "$active_config" ]; then
     live_config=$active_config
 elif [ -n "${SKARWM_CONFIG:-}" ]; then
     live_config=$SKARWM_CONFIG
 elif [ -n "${XDG_CONFIG_HOME:-}" ]; then
-    live_config=$XDG_CONFIG_HOME/skarwm/config.rc
+    live_config=$XDG_CONFIG_HOME/skarwm/default.conf
 elif [ -n "${HOME:-}" ]; then
-    live_config=$HOME/.config/skarwm/config.rc
+    live_config=$HOME/.config/skarwm/default.conf
 else
     live_config=
 fi
 if [ -n "$live_config" ]; then
-    rewrite_enabled "$live_config"
+    config_set=$(CDPATH= cd "$(dirname "$0")/../skarwm" && pwd)/config-set
+    "$config_set" "$live_config" window.decoration enabled "$enabled"
 fi
 
 if [ "${ANUSH_DECORATION_NO_RELOAD:-0}" != 1 ]; then
@@ -60,7 +44,7 @@ if [ "${ANUSH_DECORATION_NO_RELOAD:-0}" != 1 ]; then
         # Apply directly to the running WM. A reload can read an explicit -c
         # path that this helper cannot discover, leaving the switch unchanged.
         if ! "$message" decorations "$enabled" >/dev/null 2>&1; then
-            # Keep compatibility with skarwm builds predating the command.
+            # Fall back to reloading when direct runtime control is unavailable.
             "$message" reload >/dev/null 2>&1 || true
         fi
     fi

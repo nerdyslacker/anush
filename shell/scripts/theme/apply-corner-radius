@@ -26,9 +26,9 @@ if [ -n "$active_config" ]; then
 elif [ -n "${SKARWM_CONFIG:-}" ]; then
     config_file=$SKARWM_CONFIG
 elif [ -n "${XDG_CONFIG_HOME:-}" ]; then
-    config_file=$XDG_CONFIG_HOME/skarwm/config.rc
+    config_file=$XDG_CONFIG_HOME/skarwm/default.conf
 elif [ -n "${HOME:-}" ]; then
-    config_file=$HOME/.config/skarwm/config.rc
+    config_file=$HOME/.config/skarwm/default.conf
 else
     config_file=
 fi
@@ -36,19 +36,7 @@ fi
 [ -n "$config_file" ] && [ -f "$config_file" ] \
     && [ -w "$config_file" ] || exit 0
 
-temporary=$(mktemp "${config_file}.corner-radius.XXXXXX") || exit 1
-trap 'rm -f "$temporary"' EXIT HUP INT TERM
-
-if grep -Eq '^[[:space:]]*corner_radius[[:space:]]*:' "$config_file"; then
-    sed -E "/^[[:space:]]*corner_radius[[:space:]]*:/ s/(:[[:space:]]*)[0-9]+/\1$radius/" \
-        "$config_file" > "$temporary" || exit 1
-else
-    sed '$a\
-corner_radius : '"$radius" "$config_file" > "$temporary" || exit 1
-fi
-
-chmod 644 "$temporary"
-mv "$temporary" "$config_file"
-trap - EXIT HUP INT TERM
+config_set=$(CDPATH= cd "$(dirname "$0")/../skarwm" && pwd)/config-set
+"$config_set" "$config_file" window corner_radius "$radius"
 
 [ -z "$message" ] || "$message" reload >/dev/null 2>&1 || true

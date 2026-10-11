@@ -177,8 +177,9 @@ There is deliberately no anush session executable or display-manager entry.
 The active WM decides how to start the shell. For skarwm, add this to your own
 configuration:
 
-```text
-autostart : "anushctl start"
+```ini
+[autostart]
+anush = anushctl start
 ```
 
 With a current skarwm build, anush also replaces the WM's native keybinding,
@@ -282,17 +283,17 @@ surface square; larger values derive coherent small, medium, and large radii:
 ```
 
 Committing the corner-radius slider also updates `corner_radius` in the active
-user-owned skarwm configuration atomically and requests a reload.
+configuration's imported `anush.conf` overlay and requests a reload.
 
 The same popup includes a persistent **Window decorations** switch. It updates
-the live user-owned skarwm configuration, then reloads the WM. Decoration
+the live configuration's imported `anush.conf` overlay, then reloads the WM. Decoration
 backgrounds, text, controls, and borders follow the active
 theme's surface and foreground roles; both active and inactive frame outlines
 follow the active accent. Preset, mode, wallpaper-palette, and accent changes
 update those colors automatically.
 Current skarwm builds export the resolved `-c` configuration path to anush, so
 the popup also works in nested/development sessions that do not use the normal
-`$XDG_CONFIG_HOME/skarwm/config.rc` location.
+`$XDG_CONFIG_HOME/skarwm/default.conf` location.
 Decorations use the same surfaces as bar widgets by default: inactive
 titlebars use the idle widget background and the focused titlebar uses its
 brighter hover background. Titles, window buttons, and frame outlines use the

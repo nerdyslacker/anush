@@ -9,7 +9,7 @@ Singleton {
     id: root
 
     readonly property string helperPath: Theme.scriptsDir + "/skarwm/config-editor"
-    property var document: ({ settings: {}, barBlocks: [], autostart: [],
+    property var document: ({ settings: {}, barBlocks: [], autostart: [], autostartIds: [],
         bindings: [], rules: [], workspaceLayouts: [], virtualScreens: [], extras: [] })
     property var pending: clone(document)
     property bool loading: false
@@ -59,6 +59,10 @@ Singleton {
         const next = clone(pending)
         if (!Array.isArray(next[name])) next[name] = []
         next[name].push(value)
+        if (name === "autostart") {
+            if (!Array.isArray(next.autostartIds)) next.autostartIds = []
+            next.autostartIds.push("")
+        }
         pending = next
         error = ""
     }
@@ -67,6 +71,8 @@ Singleton {
         const next = clone(pending)
         if (!Array.isArray(next[name]) || index < 0 || index >= next[name].length) return
         next[name].splice(index, 1)
+        if (name === "autostart" && Array.isArray(next.autostartIds))
+            next.autostartIds.splice(index, 1)
         pending = next
         error = ""
     }

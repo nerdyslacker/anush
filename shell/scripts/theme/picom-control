@@ -19,8 +19,8 @@ DEFAULT_COMMAND = (
     "/picom/picom.conf ${ANUSH_PICOM_ARGS:---no-use-damage} -b"
 )
 AUTOSTART = re.compile(
-    r'^(?P<indent>\s*)(?P<comment>#\s*)?autostart\s*:\s*'
-    r'"(?P<command>[^"]*\bpicom\b[^"]*)"\s*$'
+    r'^(?P<indent>\s*)(?P<comment>#\s*)?'
+    r'(?P<key>[^=]+?)\s*=\s*(?P<command>.*\bpicom\b.*)\s*$'
 )
 
 
@@ -41,15 +41,31 @@ def active_config(message: str) -> Path:
         return Path(os.environ["SKARWM_CONFIG"])
     config_home = Path(os.environ.get(
         "XDG_CONFIG_HOME", Path.home() / ".config"))
-    return config_home / "skarwm/config.rc"
+    return config_home / "skarwm/default.conf"
 
 
-def find_picom(lines: list[str]):
+def find_picom(path: Path):
+    if not path.is_file():
+        return None, None
+    lines = path.read_text().splitlines(keepends=True)
+    section = ""
+    active = None
+    commented = None
     for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            section = stripped[1:-1].strip()
+            continue
+        if section != "autostart":
+            continue
         match = AUTOSTART.match(line.rstrip("\n"))
         if match:
-            return index, match
-    return None, None
+            candidate = (path, lines, index, match)
+            if match.group("comment") is None:
+                active = candidate
+            else:
+                commented = candidate
+    return active, commented
 
 
 def atomic_write(path: Path, text: str) -> None:
@@ -93,16 +109,31 @@ def main() -> int:
 
     action = sys.argv[1]
     message = sys.argv[2] if len(sys.argv) == 3 else "skarwm-msg"
-    path = active_config(message)
-    if not path.is_file():
-        print(f"picom control: skarwm config does not exist: {path}",
+    root = active_config(message)
+    if not root.is_file():
+        print(f"picom control: skarwm config does not exist: {root}",
               file=sys.stderr)
         return 1
 
-    lines = path.read_text().splitlines(keepends=True)
-    index, match = find_picom(lines)
-    enabled = match is not None and match.group("comment") is None
-    command = match.group("command") if match is not None else DEFAULT_COMMAND
+    config_set = Path(__file__).resolve().parent.parent / "skarwm/config-set"
+    result = subprocess.run([sys.executable, str(config_set), "--path", str(root)], check=False,
+                            capture_output=True, text=True)
+    if result.returncode != 0 or not result.stdout.strip():
+        print(result.stderr.strip() or "picom control: cannot create anush.conf",
+              file=sys.stderr)
+        return 1
+    path = Path(result.stdout.strip())
+
+    active, commented = find_picom(path)
+    candidate = active if active is not None else commented
+    if candidate is None:
+        source_path, lines, index, match = path, path.read_text().splitlines(keepends=True), None, None
+    else:
+        source_path, lines, index, match = candidate
+    enabled = active is not None
+    command = match.group("command").strip() if match is not None else DEFAULT_COMMAND
+    if len(command) >= 2 and command[0] == command[-1] == '"':
+        command = command[1:-1]
     available = shutil.which("picom") is not None
 
     if action == "enable":
@@ -112,18 +143,20 @@ def main() -> int:
         if match is None:
             if lines and not lines[-1].endswith("\n"):
                 lines[-1] += "\n"
-            lines.append(f'autostart : "{command}"\n')
+            if lines and lines[-1].strip():
+                lines.append("\n")
+            lines.extend(("[autostart]\n", f"picom = {command}\n"))
         else:
             lines[index] = (
-                f'{match.group("indent")}autostart : "{command}"\n')
-        atomic_write(path, "".join(lines))
+                f'{match.group("indent")}{match.group("key").strip()} = {command}\n')
+        atomic_write(source_path, "".join(lines))
         start_picom(command)
         enabled = True
     elif action == "disable":
         if match is not None and enabled:
             lines[index] = (
-                f'{match.group("indent")}# autostart : "{command}"\n')
-            atomic_write(path, "".join(lines))
+                f'{match.group("indent")}# {match.group("key").strip()} = {command}\n')
+            atomic_write(source_path, "".join(lines))
         stop_picom()
         enabled = False
 

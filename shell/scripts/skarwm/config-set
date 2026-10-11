@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+"""Write Anush-owned overrides without replacing the user's skarwm config."""
+
+from __future__ import annotations
+
+from collections import OrderedDict
+import os
+from pathlib import Path
+import re
+import sys
+
+
+SECTION = re.compile(r"^\s*\[([^]]+)]\s*(?:[#;].*)?$")
+ASSIGNMENT = re.compile(r"^(?P<indent>\s*)(?P<key>[^=]+?)\s*=\s*(?P<value>.*)$")
+
+
+def unquote(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        return value[1:-1].replace(r'\"', '"').replace(r'\\', '\\')
+    return value
+
+
+def atomic_write(path: Path, text: str, mode: int = 0o644) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.anush-{os.getpid()}")
+    try:
+        temporary.write_text(text, encoding="utf-8")
+        temporary.chmod(mode)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def assignment_indexes(lines: list[str]):
+    section = ""
+    for index, line in enumerate(lines):
+        header = SECTION.match(line.rstrip("\n"))
+        if header:
+            section = header.group(1).strip()
+            continue
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", ";")):
+            continue
+        assignment = ASSIGNMENT.match(line.rstrip("\n"))
+        if assignment:
+            yield index, section, assignment
+
+
+def ensure_overlay(root: Path) -> Path:
+    root = root.expanduser()
+    if root.name == "anush.conf":
+        overlay = root
+    else:
+        overlay = root.parent / "anush.conf"
+        lines = (root.read_text(encoding="utf-8").splitlines(keepends=True)
+                 if root.exists() else [])
+        target = overlay.resolve()
+        matching = []
+        last_assignment = -1
+        for index, section, assignment in assignment_indexes(lines):
+            last_assignment = index
+            if section != "import":
+                continue
+            value = unquote(assignment.group("value"))
+            imported = Path(value[1:] if value.startswith("?") else value).expanduser()
+            if not imported.is_absolute():
+                imported = root.parent / imported
+            if imported.resolve() == target:
+                matching.append(index)
+        if not matching or matching[-1] != last_assignment:
+            lines = [line for index, line in enumerate(lines)
+                     if index not in matching]
+            if lines and not lines[-1].endswith("\n"):
+                lines[-1] += "\n"
+            if lines and lines[-1].strip():
+                lines.append("\n")
+            lines.extend(("[import]\n", "anush = anush.conf\n"))
+            mode = root.stat().st_mode & 0o777 if root.exists() else 0o644
+            atomic_write(root, "".join(lines), mode)
+
+    if not overlay.exists():
+        atomic_write(overlay, "# Settings managed by anush.\n")
+    return overlay
+
+
+def set_value(root: Path, section: str, key: str, value: str) -> Path:
+    path = ensure_overlay(root)
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    values: OrderedDict[str, str] = OrderedDict()
+    ranges: list[tuple[int, int]] = []
+    current_start = None
+    current_name = ""
+
+    for index, line in enumerate(lines + ["[__anush_end__]\n"]):
+        header = SECTION.match(line.rstrip("\n"))
+        if not header:
+            if current_name == section:
+                stripped = line.strip()
+                assignment = (None if not stripped or stripped.startswith(("#", ";"))
+                              else ASSIGNMENT.match(line.rstrip("\n")))
+                if assignment:
+                    values[assignment.group("key").strip()] = assignment.group("value").strip()
+            continue
+        if current_name == section and current_start is not None:
+            ranges.append((current_start, index))
+        current_name = header.group(1).strip()
+        current_start = index
+
+    values[key] = value
+    removed = set()
+    for start, end in ranges:
+        removed.update(range(start, end))
+    replacement = [f"[{section}]\n"]
+    replacement.extend(f"{name} = {stored}\n" for name, stored in values.items())
+    replacement.append("\n")
+    if ranges:
+        output = []
+        insert_at = ranges[0][0]
+        for index, line in enumerate(lines):
+            if index == insert_at:
+                output.extend(replacement)
+            if index not in removed:
+                output.append(line)
+    else:
+        output = list(lines)
+        while output and not output[-1].strip():
+            output.pop()
+        if output:
+            if not output[-1].endswith("\n"):
+                output[-1] += "\n"
+            output.append("\n")
+        output.extend(replacement)
+    atomic_write(path, "".join(output), path.stat().st_mode & 0o777)
+    return path
+
+
+def main() -> int:
+    if len(sys.argv) == 3 and sys.argv[1] == "--path":
+        print(ensure_overlay(Path(sys.argv[2])))
+        return 0
+    if len(sys.argv) != 5 or not sys.argv[2] or not sys.argv[3]:
+        print("usage: config-set FILE SECTION KEY VALUE", file=sys.stderr)
+        print("       config-set --path FILE", file=sys.stderr)
+        return 2
+    set_value(Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4])
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

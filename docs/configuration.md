@@ -90,17 +90,20 @@ The repository content has the following intended ownership:
 writable dunst, Fastfetch, kitty, Picom, and rofi files under `skarwm/anush`
 when those directories are absent. Package assets, wallpapers, Matugen
 configuration, and built-in presets are never copied. Generated colors modify
-only the writable copies and the user's active skarwm configuration.
+only the writable copies and the Anush-owned skarwm overlay.
 
-## skarwm evaluation
+## skarwm integration
 
-skarwm's current rc parser has no include/import directive. It loads the first
-existing rc file, applies built-in scalar defaults for omitted settings, and
-treats a discovered file as the complete binding/directive set. Repeated
-bindings, rules, autostarts, and bar blocks are ordered lists, so a generic
-deep-merge rule would be unsafe.
+skarwm loads `$XDG_CONFIG_HOME/skarwm/default.conf` and supports ordered,
+nested imports through `[import]`. Scalar settings override by section and key;
+bindings merge by normalized key combination; named rules, workspaces, virtual
+screens, and bar blocks merge by identifier without changing their original
+order.
 
-anush therefore does not install, remove, or bundle a skarwm rc file. The user
-adds the required startup line and any optional bindings directly; see
-[`skarwm.md`](skarwm.md). A future skarwm-side `include` feature would still
-need explicit ordering and duplicate semantics for repeated directives.
+anush does not install, remove, or bundle the root skarwm configuration. Add
+the required `[autostart]` assignment and any optional `[bind]` assignments to
+the root file or one of its imported modules; see [`skarwm.md`](skarwm.md).
+The graphical skarwm editor resolves the active import graph for display and
+writes its validated overrides to `anush.conf` beside the active root. Anush
+adds `anush = anush.conf` as the final import in `default.conf`, but does not
+replace the root file or its other imported modules.
