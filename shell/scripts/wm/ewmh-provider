@@ -1,0 +1,333 @@
+#!/usr/bin/env python3
+
+import ast
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+
+
+ROOT_PROPERTIES = [
+    "_NET_SUPPORTING_WM_CHECK",
+    "_NET_SUPPORTED",
+    "_NET_NUMBER_OF_DESKTOPS",
+    "_NET_DESKTOP_NAMES",
+    "_NET_CURRENT_DESKTOP",
+    "_NET_CLIENT_LIST",
+    "_NET_ACTIVE_WINDOW",
+    "_NET_WORKAREA",
+]
+WINDOW_PROPERTIES = [
+    "_NET_WM_NAME",
+    "WM_NAME",
+    "WM_CLASS",
+    "_NET_WM_DESKTOP",
+    "_NET_WM_STATE",
+    "_NET_WM_WINDOW_TYPE",
+]
+WINDOW_ID = re.compile(r"0x[0-9a-fA-F]+")
+INTEGER = re.compile(r"(?<![A-Za-z_])-?(?:0x[0-9a-fA-F]+|\d+)")
+
+
+def fixture_dir():
+    value = os.environ.get("ANUSH_EWMH_FIXTURE_DIR", "")
+    return Path(value) if value else None
+
+
+def fixture_text(target):
+    directory = fixture_dir()
+    if directory is None:
+        return None
+    name = "root.txt" if target == "root" else f"window-{target.lower()}.txt"
+    path = directory / name
+    if not path.exists():
+        raise RuntimeError(f"missing EWMH fixture {name}")
+    return path.read_text()
+
+
+def xprop(target, properties):
+    fixture = fixture_text(target)
+    if fixture is not None:
+        return fixture
+    command = ["xprop"]
+    if target == "root":
+        command.append("-root")
+    else:
+        command.extend(["-id", target])
+    command.extend(properties)
+    result = subprocess.run(
+        command, check=False, capture_output=True, text=True, timeout=4,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or "xprop failed"
+        raise RuntimeError(detail)
+    return result.stdout
+
+
+def properties(text):
+    result = {}
+    for line in text.splitlines():
+        if not line or line[0].isspace():
+            continue
+        name = line.split("(", 1)[0].split(":", 1)[0].strip()
+        if not name.startswith("_") and name not in ("WM_NAME", "WM_CLASS"):
+            continue
+        result[name] = line
+    return result
+
+
+def rhs(line):
+    if not line:
+        return ""
+    if "=" in line:
+        return line.split("=", 1)[1].strip()
+    if "#" in line:
+        return line.split("#", 1)[1].strip()
+    return ""
+
+
+def integers(line):
+    return [int(value, 0) for value in INTEGER.findall(rhs(line))]
+
+
+def window_ids(line):
+    return [value.lower() for value in WINDOW_ID.findall(rhs(line))]
+
+
+def strings(line):
+    values = []
+    for token in re.findall(r'"(?:\\.|[^"\\])*"', rhs(line)):
+        try:
+            values.append(str(ast.literal_eval(token)))
+        except (SyntaxError, ValueError):
+            values.append(token[1:-1])
+    return values
+
+
+def first_string(line):
+    values = strings(line)
+    return values[0] if values else ""
+
+
+def supported_atoms(line):
+    if not line or "=" not in line:
+        return set()
+    return {
+        token.strip()
+        for token in rhs(line).split(",")
+        if token.strip().startswith("_")
+    }
+
+
+def wm_identity(root_values=None):
+    root_values = root_values or properties(xprop("root", ROOT_PROPERTIES))
+    checks = window_ids(root_values.get("_NET_SUPPORTING_WM_CHECK", ""))
+    if not checks:
+        return {"connected": False, "name": "", "windowId": None}
+    check = checks[0]
+    wm_values = properties(xprop(check, ["_NET_WM_NAME", "WM_NAME"]))
+    name = first_string(wm_values.get("_NET_WM_NAME", "")) \
+        or first_string(wm_values.get("WM_NAME", ""))
+    return {"connected": name != "", "name": name, "windowId": check}
+
+
+def normalize_identity(name):
+    compact = re.sub(r"[^a-z0-9]+", "", name.lower())
+    if "skarwm" in compact:
+        return "skarwm"
+    if compact.startswith("bspwm"):
+        return "bspwm"
+    if compact == "i3" or compact.startswith("i3wm"):
+        return "i3"
+    if "spectrwm" in compact:
+        return "spectrwm"
+    if "herbstluftwm" in compact:
+        return "herbstluftwm"
+    if compact == "dwm" or compact.startswith("dwm"):
+        return "dwm"
+    return compact or "unknown"
+
+
+def window_snapshot(window_id, active_id, atoms):
+    values = properties(xprop(window_id, WINDOW_PROPERTIES))
+    classes = strings(values.get("WM_CLASS", ""))
+    instance = classes[0] if classes else ""
+    class_name = classes[1] if len(classes) > 1 else ""
+    title = first_string(values.get("_NET_WM_NAME", "")) \
+        or first_string(values.get("WM_NAME", ""))
+    desktop_values = integers(values.get("_NET_WM_DESKTOP", ""))
+    desktop = desktop_values[0] if desktop_values else None
+    if desktop == 0xFFFFFFFF:
+        desktop = None
+    states = supported_atoms(values.get("_NET_WM_STATE", ""))
+    types = supported_atoms(values.get("_NET_WM_WINDOW_TYPE", ""))
+    state_known = "_NET_WM_STATE" in atoms
+    return {
+        "id": str(int(window_id, 16)),
+        "title": title,
+        "appId": class_name or instance,
+        "class": class_name,
+        "instance": instance,
+        "workspaceId": str(desktop) if desktop is not None else None,
+        "screenId": None,
+        "focused": window_id == active_id,
+        "urgent": "_NET_WM_STATE_DEMANDS_ATTENTION" in states
+            if state_known else None,
+        "floating": None,
+        "fullscreen": "_NET_WM_STATE_FULLSCREEN" in states
+            if state_known else None,
+        "maximized": (
+            "_NET_WM_STATE_MAXIMIZED_VERT" in states
+            and "_NET_WM_STATE_MAXIMIZED_HORZ" in states
+        ) if state_known else None,
+        "scratchpad": None,
+        "dock": "_NET_WM_WINDOW_TYPE_DOCK" in types,
+    }
+
+
+def snapshot():
+    root_values = properties(xprop("root", ROOT_PROPERTIES))
+    identity = wm_identity(root_values)
+    atoms = supported_atoms(root_values.get("_NET_SUPPORTED", ""))
+    tools = fixture_dir() is not None or shutil.which("xdotool") is not None
+
+    counts = integers(root_values.get("_NET_NUMBER_OF_DESKTOPS", ""))
+    current_values = integers(root_values.get("_NET_CURRENT_DESKTOP", ""))
+    count = counts[0] if counts and counts[0] >= 0 else 0
+    current = current_values[0] if current_values else None
+    names = strings(root_values.get("_NET_DESKTOP_NAMES", ""))
+    clients = window_ids(root_values.get("_NET_CLIENT_LIST", ""))
+    active_values = window_ids(root_values.get("_NET_ACTIVE_WINDOW", ""))
+    active = active_values[0] if active_values else ""
+
+    windows = []
+    for window_id in clients:
+        try:
+            windows.append(window_snapshot(window_id, active, atoms))
+        except RuntimeError:
+            windows.append({
+                "id": str(int(window_id, 16)),
+                "title": "", "appId": "", "class": "", "instance": "",
+                "workspaceId": None, "screenId": None,
+                "focused": window_id == active, "urgent": None,
+                "floating": None, "fullscreen": None, "maximized": None,
+                "scratchpad": None, "dock": False,
+            })
+
+    occupied = {
+        window["workspaceId"] for window in windows
+        if window["workspaceId"] is not None and not window["dock"]
+    }
+    urgent = {
+        window["workspaceId"] for window in windows
+        if window["workspaceId"] is not None and window["urgent"] is True
+    }
+    workspaces = []
+    if "_NET_NUMBER_OF_DESKTOPS" in atoms and count > 0:
+        for index in range(count):
+            workspace_id = str(index)
+            workspaces.append({
+                "id": workspace_id,
+                "name": names[index] if index < len(names) and names[index]
+                    else str(index + 1),
+                "index": index,
+                "screenId": None,
+                "active": index == current,
+                "focused": index == current,
+                "visible": index == current,
+                "occupied": workspace_id in occupied,
+                "urgent": workspace_id in urgent,
+            })
+
+    capabilities = {
+        "screens": False,
+        "perScreenWorkspaces": False,
+        "workspaces": "_NET_NUMBER_OF_DESKTOPS" in atoms
+            and "_NET_CURRENT_DESKTOP" in atoms,
+        "renameWorkspace": False,
+        "windows": "_NET_CLIENT_LIST" in atoms,
+        "windowTitles": "_NET_WM_NAME" in atoms,
+        "windowAppIdentity": True,
+        "focusWindow": tools and "_NET_ACTIVE_WINDOW" in atoms,
+        "closeWindow": tools and "_NET_CLOSE_WINDOW" in atoms,
+        "moveWindowToWorkspace": tools and "_NET_WM_DESKTOP" in atoms,
+        "moveWindowToScreen": False,
+        "scratchpad": False,
+        "virtualScreens": False,
+        "decorationStyling": False,
+        "eventStream": fixture_dir() is not None
+            or shutil.which("xprop") is not None,
+        "layouts": False,
+        "gaps": False,
+        "reload": False,
+        "sessionControl": False,
+        "keybindings": False,
+        "configurationEditor": False,
+    }
+    return {
+        "connected": identity["connected"],
+        "wmName": identity["name"],
+        "wmIdentity": normalize_identity(identity["name"]),
+        "capabilities": capabilities,
+        "screens": [],
+        "workspaces": workspaces,
+        "windows": windows,
+    }
+
+
+def action(args):
+    if len(args) < 2:
+        raise RuntimeError("missing EWMH action")
+    kind, value = args[0], args[1]
+    command = ["xdotool"]
+    if kind == "workspace":
+        command.extend(["set_desktop", value])
+    elif kind == "focus":
+        command.extend(["windowactivate", "--sync", value])
+    elif kind == "close":
+        command.extend(["windowclose", value])
+    elif kind == "move-workspace" and len(args) == 3:
+        command.extend(["set_desktop_for_window", value, args[2]])
+    else:
+        raise RuntimeError(f"unknown EWMH action {kind}")
+    result = subprocess.run(command, check=False, timeout=4)
+    if result.returncode != 0:
+        raise RuntimeError(f"{kind} failed")
+
+
+def monitor(identity_only=False):
+    if fixture_dir() is not None:
+        return
+    properties_to_watch = ["_NET_SUPPORTING_WM_CHECK", "_NET_WM_NAME"] \
+        if identity_only else ROOT_PROPERTIES
+    os.execvp("xprop", ["xprop", "-spy", "-root", *properties_to_watch])
+
+
+def main():
+    try:
+        command = sys.argv[1] if len(sys.argv) > 1 else "snapshot"
+        if command == "detect":
+            value = wm_identity()
+            value["identity"] = normalize_identity(value["name"])
+            print(json.dumps(value))
+        elif command == "snapshot":
+            print(json.dumps(snapshot()))
+        elif command == "monitor":
+            monitor(False)
+        elif command == "monitor-identity":
+            monitor(True)
+        elif command == "action":
+            action(sys.argv[2:])
+        else:
+            raise RuntimeError(f"unknown command {command}")
+    except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+        print(json.dumps({"error": str(error)}), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

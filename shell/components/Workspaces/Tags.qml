@@ -18,9 +18,10 @@ Rectangle {
     property int pageStart: 0
     readonly property int activeTagIndex: {
         for (const ws of Wm.workspaces) {
-            if ((!outputName && ws.focused)
-                    || (outputName && String(ws.output) === outputName && ws.visible))
-                return Math.max(0, Number(ws.id) - 1)
+            if ((Wm.capabilities.perScreenWorkspaces !== true && ws.focused)
+                    || (!outputName && ws.focused)
+                    || (outputName && String(ws.screenId) === outputName && ws.visible))
+                return Math.max(0, Number(ws.index) || 0)
         }
         return 0
     }

@@ -67,27 +67,7 @@ BarModule {
 
     function restartDesktop() {
         menu.visible = false
-        const script =
-            "wm=$1; notification_id=991049; " +
-            "if ! \"$wm\" reload >/dev/null 2>&1; then " +
-            "notify-send -a skarwm -r $notification_id -u critical " +
-            "-i dialog-error 'Desktop reload failed' " +
-            "'skarwm rejected the configuration; Quickshell was left running.'; " +
-            "exit 1; fi; " +
-            "notify-send -a skarwm -r $notification_id -t 2000 " +
-            "-i system-run 'Reloading desktop' " +
-            "'skarwm reloaded; restarting Quickshell…'; " +
-            "sleep 0.25; " +
-            "if anushctl restart >/dev/null 2>&1; then " +
-            "sleep 0.8; notify-send -a skarwm -r $notification_id -t 2500 " +
-            "-i dialog-information 'Desktop reloaded' " +
-            "'skarwm and Quickshell restarted successfully.'; " +
-            "else notify-send -a skarwm -r $notification_id -u critical " +
-            "-i dialog-error 'Quickshell restart failed' " +
-            "'skarwm reloaded, but Quickshell could not be started.'; fi"
-        Quickshell.execDetached([
-            "sh", "-c", script, "skarwm-reload", Wm.msgPath
-        ])
+        Wm.reloadWindowManager()
     }
 
     function persistPomo() {
@@ -535,20 +515,33 @@ BarModule {
                 columns: 2
                 spacing: 7
                 Repeater {
-                    model: [
-                        { icon: "󰌾", label: "Lock", color: Theme.cyan,
-                          run: () => root.run(["anushctl", "lock"]) },
-                        { icon: "󰤄", label: "Suspend", color: Theme.magenta,
-                          run: () => root.run(["loginctl", "suspend"]) },
-                        { icon: "󰍃", label: "Logout", color: Theme.yellow,
-                          run: () => root.run([Wm.msgPath, "quit"]) },
-                        { icon: "󰑓", label: "Reload desktop", color: Theme.brightBlue,
-                          run: () => root.restartDesktop() },
-                        { icon: "󰜉", label: "Reboot", color: Theme.brightOrange,
-                          run: () => root.confirmPowerAction("reboot") },
-                        { icon: "󰐥", label: "Shutdown", color: Theme.red,
-                          run: () => root.confirmPowerAction("poweroff") }
-                    ]
+                    model: {
+                        const actions = [
+                            { icon: "󰌾", label: "Lock", color: Theme.cyan,
+                              run: () => root.run(["anushctl", "lock"]) },
+                            { icon: "󰤄", label: "Suspend", color: Theme.magenta,
+                              run: () => root.run(["loginctl", "suspend"]) }
+                        ]
+                        if (Wm.capabilities.sessionControl === true)
+                            actions.push({ icon: "󰍃", label: "Logout",
+                                color: Theme.yellow,
+                                run: () => {
+                                    menu.visible = false
+                                    Wm.quitWindowManager()
+                                } })
+                        if (Wm.capabilities.reload === true)
+                            actions.push({ icon: "󰑓", label: "Reload desktop",
+                                color: Theme.brightBlue,
+                                run: () => root.restartDesktop() })
+                        actions.push(
+                            { icon: "󰜉", label: "Reboot",
+                              color: Theme.brightOrange,
+                              run: () => root.confirmPowerAction("reboot") },
+                            { icon: "󰐥", label: "Shutdown", color: Theme.red,
+                              run: () => root.confirmPowerAction("poweroff") }
+                        )
+                        return actions
+                    }
                     MenuButton {}
                 }
             }
@@ -568,11 +561,15 @@ BarModule {
                               "if command -v kitty >/dev/null 2>&1; then " +
                               "config=${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/skarwm/anush}; " +
                               "exec kitty --config \"$config/kitty/kitty.conf\" --hold sh -c 'xbps-install -Mun'; " +
-                              "else exec xterm -hold -e sh -c 'xbps-install -Mun'; fi"]) },
-                        { icon: "󰌌", label: "Keybindings",
-                          run: () => root.run([Wm.msgPath, "show-bindings"]) }
+                              "else exec xterm -hold -e sh -c 'xbps-install -Mun'; fi"]) }
                     ]
-                    if (Wm.isSkarwm)
+                    if (Wm.capabilities.keybindings === true)
+                        commands.push({ icon: "󰌌", label: "Keybindings",
+                            run: () => {
+                                menu.visible = false
+                                Wm.showKeybindings()
+                            } })
+                    if (Wm.capabilities.configurationEditor === true)
                         commands.push({ icon: "󰒓", label: "skarwm settings",
                             run: () => {
                                 menu.visible = false

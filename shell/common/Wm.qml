@@ -7,33 +7,94 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    property var workspaces: []
-    property var windows: []
-    property var outputs: []
-    property var workspaceConfigurations: ({})
-    property var lastFocusedWindowByOutput: ({})
-    property var registeredScratchpads: []
+    readonly property string requestedBackend: {
+        const override = String(Quickshell.env("ANUSH_WM_BACKEND") ?? "")
+            .trim().toLowerCase()
+        if (override !== "") return override
+        return String(ShellState.state.windowManager?.backend ?? "auto")
+            .trim().toLowerCase()
+    }
+    property bool detectionComplete: false
+    property string detectedWmName: ""
+    property string detectedWmIdentity: "unknown"
+    readonly property string selectedBackendName: {
+        if (requestedBackend === "auto") {
+            if (!detectionComplete) return "detecting"
+            return detectedWmIdentity === "skarwm" ? "skarwm" : "ewmh"
+        }
+        if (["ewmh", "bspwm", "dwm", "i3", "spectrwm",
+                "herbstluftwm"].indexOf(requestedBackend) >= 0)
+            return "ewmh"
+        return requestedBackend
+    }
+    readonly property var backend: selectedBackendName === "skarwm"
+        ? skarwmBackend : selectedBackendName === "mock"
+            ? mockBackend : selectedBackendName === "ewmh"
+                ? ewmhBackend : unavailableBackend
+    readonly property string backendName: String(backend.name)
+    readonly property bool connected: backend.connected === true
+    readonly property var capabilities: backend.capabilities ?? ({})
+    readonly property var screens: backend.screens ?? []
+    readonly property var workspaces: backend.workspaces ?? []
+    readonly property var windows: backend.windows ?? []
+
+    readonly property var outputs: backend === skarwmBackend
+        ? skarwmBackend.rawOutputs : compatibilityOutputs()
+    readonly property var workspaceConfigurations: backend === skarwmBackend
+        ? skarwmBackend.workspaceConfigurations : ({})
+    readonly property var registeredScratchpads: backend === skarwmBackend
+        ? skarwmBackend.registeredScratchpads : []
+    readonly property string msgPath: backend === skarwmBackend
+        ? skarwmBackend.msgPath : ""
+    readonly property bool isSkarwm: backend === skarwmBackend && connected
+    readonly property string activeWinId: backend === skarwmBackend
+        ? skarwmBackend.activeWinId : ""
+    readonly property string title: backend === skarwmBackend
+        ? skarwmBackend.title : String(focusedWindow?.title ?? "")
+
     signal overviewCommand(string action)
     signal uiEvent(var event)
+    signal actionFailed(string action, string reason)
     signal physicalOutputConnected()
     signal physicalOutputDisconnected()
-    property int tagCount: 1
+
+    readonly property int tagCount: {
+        let highest = 1
+        for (const workspace of workspaces)
+            highest = Math.max(highest, Number(workspace.index) + 1)
+        return highest
+    }
     readonly property int dynamicTagCount: {
         let highestOccupied = 0
         let focused = 1
-        for (const ws of workspaces) {
-            const id = Math.max(1, Number(ws.id) || 1)
-            if (ws.windows > 0)
-                highestOccupied = Math.max(highestOccupied, id)
-            if (ws.focused)
-                focused = id
+        for (const workspace of workspaces) {
+            const index = Math.max(0, Number(workspace.index) || 0)
+            if (workspace.occupied === true)
+                highestOccupied = Math.max(highestOccupied, index + 1)
+            if (workspace.focused === true)
+                focused = index + 1
         }
         return Math.max(1, focused, highestOccupied + 1)
     }
-    property string title: ""
-    property string activeWinId: ""
-    readonly property string msgPath: "skarwm-msg"
-    property bool isSkarwm: false
+    readonly property var focusedWindow:
+        windows.find(window => window.focused === true) ?? null
+    readonly property var focusedScreen:
+        screens.find(screen => screen.focused === true)
+            ?? (screens.length > 0 ? screens[0] : null)
+    readonly property var focusedOutput: {
+        const screen = focusedScreen
+        if (!screen) return null
+        for (const output of outputs)
+            if (String(output.name) === String(screen.id)) return output
+        return {
+            name: screen.name,
+            rect: screen.geometry,
+            workarea: screen.workarea,
+            focused: screen.focused
+        }
+    }
+    readonly property var focusedWorkspace:
+        workspaces.find(workspace => workspace.focused === true) ?? null
 
     readonly property var layouts: [
         { name: "Scrolling Tile", glyph: "󰙀", command: "scrolling-tile" },
@@ -46,21 +107,6 @@ Singleton {
     readonly property var workspaceLayoutCommands: [
         "scrolling-tile", "vertical-scrolling-tile", "dwindle", "monocle", "floating"
     ]
-    readonly property var focusedWindow: {
-        for (const win of windows)
-            if (win.focused && !win.dock) return win
-        return null
-    }
-    readonly property var focusedOutput: {
-        for (const output of outputs)
-            if (output.focused) return output
-        return outputs.length > 0 ? outputs[0] : null
-    }
-    readonly property var focusedWorkspace: {
-        for (const ws of workspaces)
-            if (ws.focused === true) return ws
-        return null
-    }
     readonly property string workspaceLayout: String(
         focusedWorkspace?.layout ?? "scrolling-tile")
     readonly property int layoutIndex: {
@@ -70,328 +116,247 @@ Singleton {
         const index = layouts.findIndex(layout => layout.command === workspaceLayout)
         return index >= 0 ? index : 0
     }
+
+    property var lastFocusedWindowByScreen: ({})
     property int gaps: 8
     property bool decorationsEnabled: false
-    property bool decorationStateLoaded: false
     property bool picomAvailable: false
     property bool picomEnabled: false
     property bool picomBusy: false
 
+    function compatibilityOutputs() {
+        return screens.map(screen => {
+            const workspace = focusedWorkspaceForScreen(screen.id)
+            return {
+                name: screen.id,
+                active: true,
+                focused: screen.focused,
+                rect: screen.geometry,
+                workarea: screen.workarea,
+                physical_output: screen.physicalOutput,
+                virtual: screen.virtual,
+                current_workspace: workspace ? workspace.id : null
+            }
+        })
+    }
+
     function outputNameForScreen(screen) {
         const nativeName = String(screen?.name ?? "")
-        for (const output of outputs)
-            if (String(output.name ?? "") === nativeName)
-                return nativeName
-
+        for (const wmScreen of screens)
+            if (String(wmScreen.name) === nativeName
+                    || String(wmScreen.id) === nativeName)
+                return String(wmScreen.id)
         if (screen) {
-            const x = Number(screen.x)
-            const y = Number(screen.y)
-            const width = Number(screen.width)
-            const height = Number(screen.height)
-            for (const output of outputs) {
-                const rect = output.rect
-                if (rect && Number(rect.x) === x && Number(rect.y) === y
-                        && Number(rect.width) === width
-                        && Number(rect.height) === height)
-                    return String(output.name ?? nativeName)
+            for (const wmScreen of screens) {
+                const geometry = wmScreen.geometry
+                if (geometry && Number(geometry.x) === Number(screen.x)
+                        && Number(geometry.y) === Number(screen.y)
+                        && Number(geometry.width) === Number(screen.width)
+                        && Number(geometry.height) === Number(screen.height))
+                    return String(wmScreen.id)
             }
         }
-
-        if (outputs.length === 1)
-            return String(outputs[0].name ?? nativeName)
+        if (screens.length === 1) return String(screens[0].id)
         return nativeName
     }
 
-    function workspaceAt(index, outputName) {
-        const id = index + 1
-        for (const ws of workspaces)
-            if (Number(ws.id) === id
-                    && (!outputName || String(ws.output) === String(outputName))) return ws
+    function workspaceAt(index, screenId) {
+        for (const workspace of workspaces)
+            if (Number(workspace.index) === index
+                    && (capabilities.perScreenWorkspaces !== true
+                        || !screenId
+                        || String(workspace.screenId) === String(screenId)))
+                return workspace
         return null
     }
-    function isSelected(index, outputName) {
-        const ws = workspaceAt(index, outputName)
-        return ws !== null && (outputName ? ws.visible === true : ws.focused === true)
+    function isSelected(index, screenId) {
+        const workspace = workspaceAt(index, screenId)
+        return workspace !== null
+            && (screenId ? workspace.visible === true : workspace.focused === true)
     }
-    function isOccupied(index, outputName) {
-        const ws = workspaceAt(index, outputName)
-        return ws !== null && ws.windows > 0
+    function isOccupied(index, screenId) {
+        const workspace = workspaceAt(index, screenId)
+        return workspace !== null && workspace.occupied === true
     }
-    function isUrgent(index, outputName) {
-        const ws = workspaceAt(index, outputName)
-        return ws !== null && ws.urgent
+    function isUrgent(index, screenId) {
+        const workspace = workspaceAt(index, screenId)
+        return workspace !== null && workspace.urgent === true
     }
     function workspaceIcon(index) {
         return String(workspaceConfigurations[String(index + 1)]?.icon ?? "")
     }
     function workspaceName(index) {
-        return String(workspaceConfigurations[String(index + 1)]?.name ?? "")
+        const configured = workspaceConfigurations[String(index + 1)]?.name
+        if (configured !== undefined && String(configured) !== "")
+            return String(configured)
+        const workspace = workspaceAt(index, "")
+        return String(workspace?.name ?? "")
     }
 
-    function windowForOutput(outputName) {
-        const wantedOutput = String(outputName ?? "")
-        if (wantedOutput === "") return null
-
-        let workspace = -1
-        for (const output of outputs) {
-            if (String(output.name) === wantedOutput) {
-                workspace = Number(output.current_workspace)
-                break
-            }
-        }
-
-        const candidates = windows.filter(win => win && !win.dock
-            && win.scratchpad !== true
-            && String(win.output ?? "") === wantedOutput
-            && (workspace < 0 || Number(win.workspace) === workspace))
-        if (candidates.length === 0) return null
-
-        const focused = candidates.find(win => win.focused === true)
-        if (focused) return focused
-
-        const rememberedId = lastFocusedWindowByOutput[wantedOutput]
-        const remembered = candidates.find(win => String(win.id) === String(rememberedId))
-        if (remembered) return remembered
-
-        return candidates.find(win => win.tab_active === true) ?? candidates[0]
+    function workspacesForScreen(screenId) {
+        const wanted = String(screenId ?? "")
+        return workspaces.filter(workspace => String(workspace.screenId ?? "") === wanted)
     }
+    function windowsForScreen(screenId) {
+        const wanted = String(screenId ?? "")
+        return windows.filter(window => String(window.screenId ?? "") === wanted)
+    }
+    function focusedWorkspaceForScreen(screenId) {
+        if (capabilities.perScreenWorkspaces !== true)
+            return workspaces.find(workspace => workspace.focused === true)
+                ?? workspaces.find(workspace => workspace.visible === true) ?? null
+        const wanted = String(screenId ?? "")
+        return workspaces.find(workspace => String(workspace.screenId ?? "") === wanted
+            && workspace.visible === true) ?? null
+    }
+    function windowForScreen(screenId) {
+        const wanted = String(screenId ?? "")
+        const workspace = focusedWorkspaceForScreen(wanted)
+        const candidates = windows.filter(window => window.scratchpad !== true
+            && window.dock !== true
+            && (capabilities.screens !== true
+                || String(window.screenId ?? "") === wanted)
+            && (!workspace || window.workspaceId === null
+                || window.workspaceId === undefined
+                || String(window.workspaceId) === String(workspace.id)))
+        return candidates.find(window => window.focused === true)
+            ?? candidates.find(window => String(window.id)
+                === String(lastFocusedWindowByScreen[wanted]))
+            ?? candidates.find(window => window.tab_active === true)
+            ?? (candidates.length > 0 ? candidates[0] : null)
+    }
+    function windowForOutput(outputName) { return windowForScreen(outputName) }
 
-    function refreshWorkspaces() {
-        workspaceQuery.running = false
-        workspaceQuery.running = true
-    }
-    function refreshWindows() {
-        windowQuery.running = false
-        windowQuery.running = true
-    }
-    function refreshAll() {
-        refreshWorkspaces()
-        refreshWindows()
-        workspaceConfigQuery.running = false
-        workspaceConfigQuery.running = true
-        outputQuery.running = false
-        outputQuery.running = true
+    function rememberFocusedWindow() {
+        const focused = focusedWindow
+        if (!focused || focused.screenId === null || focused.screenId === undefined)
+            return
+        const next = Object.assign({}, lastFocusedWindowByScreen)
+        next[String(focused.screenId)] = focused.id
+        lastFocusedWindowByScreen = next
     }
 
-    function acceptWorkspaceConfig(line) {
-        try {
-            const value = JSON.parse(line)
-            const entries = value?.document?.workspaceLayouts
-            if (!Array.isArray(entries)) return
-            const next = ({})
-            for (const entry of entries) {
-                const id = Number(entry?.workspace)
-                const icon = String(entry?.icon ?? "")
-                if (isFinite(id) && id >= 1 && icon !== "")
-                    next[String(Math.round(id))] = {
-                        icon: icon, name: String(entry?.name ?? "")
-                    }
-            }
-            workspaceConfigurations = next
-        } catch (e) {
-            console.warn("skarwm workspace configuration:", e)
-        }
+    function requireCapability(capability, action) {
+        if (connected && capabilities[capability] === true) return true
+        const reason = !connected ? backendName + " backend is disconnected"
+            : backendName + " does not support " + action
+        actionFailed(action, reason)
+        return false
+    }
+    function refreshAll() { backend.refresh() }
+    function refreshWorkspaces() { backend.refresh() }
+    function refreshWindows() { backend.refresh() }
+    function switchWorkspace(id, screenId) {
+        return requireCapability("workspaces", "switchWorkspace")
+            && backend.switchWorkspace(id, screenId)
+    }
+    function focusWindow(id) {
+        return requireCapability("focusWindow", "focusWindow")
+            && backend.focusWindow(id)
+    }
+    function focusScreen(id) {
+        return requireCapability("screens", "focusScreen")
+            && backend.focusScreen(id)
+    }
+    function moveWindowToWorkspace(windowId, workspaceId) {
+        return requireCapability("moveWindowToWorkspace", "moveWindowToWorkspace")
+            && backend.moveWindowToWorkspace(windowId, workspaceId)
+    }
+    function moveWindowToScreen(windowId, screenId) {
+        return requireCapability("moveWindowToScreen", "moveWindowToScreen")
+            && backend.moveWindowToScreen(windowId, screenId)
+    }
+    function closeWindow(id) {
+        return requireCapability("closeWindow", "closeWindow")
+            && backend.closeWindow(id)
     }
 
-    function acceptWorkspaces(line) {
-        try {
-            const value = JSON.parse(line)
-            if (!Array.isArray(value)) return
-            workspaces = value
-            let highest = 1
-            for (const ws of value) highest = Math.max(highest, ws.id)
-            tagCount = Math.max(1, highest)
-        } catch (e) {
-            console.warn("skarwm workspace snapshot:", e)
-        }
+    function viewTag(index, screenId) {
+        const workspace = workspaceAt(index, screenId)
+        return workspace ? switchWorkspace(workspace.id, screenId) : false
     }
-
-    function acceptWindows(line) {
-        try {
-            const value = JSON.parse(line)
-            if (!value || !Array.isArray(value.windows)) return
-            windows = value.windows
-            let focused = null
-            const scratchpads = []
-            for (const win of windows) {
-                if (win.focused && !win.dock) { focused = win; break }
-            }
-            if (focused && focused.output !== null && focused.output !== undefined) {
-                const nextFocusedByOutput = Object.assign({}, lastFocusedWindowByOutput)
-                nextFocusedByOutput[String(focused.output)] = focused.id
-                lastFocusedWindowByOutput = nextFocusedByOutput
-            }
-            for (const win of windows) {
-                const registers = Array.isArray(win.scratchpad_registers)
-                    ? win.scratchpad_registers
-                    : win.scratchpad_register === null || win.scratchpad_register === undefined
-                        ? [] : [win.scratchpad_register]
-                for (const register of registers) {
-                    scratchpads.push({
-                        register: Number(register),
-                        id: win.id,
-                        title: win.title || win.class || win.instance || "Untitled window",
-                        className: win.class || win.instance || "",
-                        hidden: win.scratchpad === true,
-                        workspace: win.workspace,
-                        output: win.output
-                    })
-                }
-            }
-            scratchpads.sort((a, b) => a.register - b.register)
-            registeredScratchpads = scratchpads
-            activeWinId = focused ? "0x" + Number(focused.id).toString(16) : ""
-            title = focused ? focused.title : ""
-        } catch (e) {
-            console.warn("skarwm window snapshot:", e)
-        }
-    }
-
-    function acceptOutputs(line) {
-        try {
-            const value = JSON.parse(line)
-            if (Array.isArray(value)) outputs = value
-        } catch (e) {
-            console.warn("skarwm output snapshot:", e)
-        }
-    }
-
-    Process {
-        id: versionQuery
-        command: [root.msgPath, "get-version"]
-        running: true
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    const value = JSON.parse(text)
-                    root.isSkarwm = String(value?.human_readable ?? "")
-                        .toLowerCase().indexOf("skarwm") !== -1
-                } catch (failure) {
-                    root.isSkarwm = false
-                }
-            }
-        }
-        onExited: code => { if (code !== 0) root.isSkarwm = false }
-    }
-    Process {
-        id: workspaceQuery
-        command: [root.msgPath, "get-workspaces"]
-        running: true
-        stdout: SplitParser { onRead: line => root.acceptWorkspaces(line) }
-    }
-    Process {
-        id: workspaceConfigQuery
-        command: [Theme.scriptsDir + "/skarwm/config-editor", "read"]
-        running: true
-        stdout: SplitParser { onRead: line => root.acceptWorkspaceConfig(line) }
-    }
-    Process {
-        id: windowQuery
-        command: [root.msgPath, "get-windows"]
-        running: true
-        stdout: SplitParser { onRead: line => root.acceptWindows(line) }
-    }
-    Process {
-        id: outputQuery
-        command: [root.msgPath, "get-outputs"]
-        running: true
-        stdout: SplitParser { onRead: line => root.acceptOutputs(line) }
-    }
-    Process {
-        command: [root.msgPath, "subscribe", "workspace", "window", "output", "ui"]
-        running: true
-        stdout: SplitParser {
-            onRead: line => {
-                // The first line is the subscription acknowledgement. Every
-                // later event is a cheap invalidation signal; snapshots keep
-                // the QML model deterministic even after event bursts.
-                try {
-                    const event = JSON.parse(line)
-                    if (!event || event.change === undefined) return
-                    const change = String(event.change)
-                    if (change.startsWith("ui-")) {
-                        root.uiEvent(event)
-                        return
-                    }
-                    if (change.startsWith("overview-")) {
-                        root.overviewCommand(change.slice(9))
-                        return
-                    }
-                    if (change === "connected")
-                        root.physicalOutputConnected()
-                    else if (change === "disconnected")
-                        root.physicalOutputDisconnected()
-                    root.refreshAll()
-                } catch (e) {
-                    console.warn("skarwm event:", e)
-                }
-            }
-        }
-    }
-
-    function viewTag(index, outputName) {
-        const command = [msgPath, "workspace", String(index + 1)]
-        if (outputName) command.push("output", String(outputName))
-        Quickshell.execDetached(command)
-    }
-    function toggleViewTag(index, outputName) { viewTag(index, outputName) }
+    function toggleViewTag(index, screenId) { return viewTag(index, screenId) }
     function sendToTag(index) {
-        Quickshell.execDetached([msgPath, "move", "workspace", String(index + 1)])
+        const workspace = workspaceAt(index, "")
+        if (!workspace) return false
+        if (!connected) return requireCapability("moveWindowToWorkspace",
+            "moveWindowToWorkspace")
+        return backend.sendFocusedWindowToWorkspace(workspace.id)
     }
-    function cycleTag(direction, visibleCount, outputName) {
+    function cycleTag(direction, visibleCount, screenId) {
         const count = Math.max(1, Math.round(Number(visibleCount) || tagCount))
-        let current = 0
-        for (const ws of workspaces) {
-            if ((!outputName && ws.focused)
-                    || (outputName && String(ws.output) === String(outputName) && ws.visible)) {
-                current = Math.max(0, Number(ws.id) - 1)
-                break
-            }
-        }
+        const current = focusedWorkspaceForScreen(screenId) ?? focusedWorkspace
+        const index = current ? Number(current.index) : 0
         const step = direction > 0 ? 1 : -1
-        viewTag((current + step + count) % count, outputName)
+        return viewTag((index + step + count) % count, screenId)
     }
     function setLayout(index) {
+        if (!requireCapability("layouts", "setLayout")) return false
         const layout = layouts[index]
-        if (layout) {
-            const command = layout.command === "scrolling-tile"
-                    && focusedWindow?.column_layout === "tabbed"
-                ? "stacked" : layout.command
-            Quickshell.execDetached([msgPath, "layout", command])
-        }
+        if (!layout) return false
+        const command = layout.command === "scrolling-tile"
+                && focusedWindow?.column_layout === "tabbed"
+            ? "stacked" : layout.command
+        return backend.setLayout(command)
     }
     function cycleLayout(direction) {
+        if (!requireCapability("layouts", "cycleLayout")) return false
         let index = workspaceLayoutCommands.indexOf(workspaceLayout)
         if (index < 0) index = 0
         const next = (index + direction + workspaceLayoutCommands.length)
             % workspaceLayoutCommands.length
-        Quickshell.execDetached([msgPath, "layout", workspaceLayoutCommands[next]])
-    }
-    function focusWindow(id) {
-        if (id !== undefined && id !== null)
-            Quickshell.execDetached([msgPath, "focus", "window", String(id)])
+        return backend.setLayout(workspaceLayoutCommands[next])
     }
     function setGaps(value, persist) {
         const next = Math.min(40, Math.max(0, Math.round(value)))
         gaps = next
-        Quickshell.execDetached([msgPath, "gaps", String(next)])
+        if (capabilities.gaps === true) backend.setGaps(next)
         if (persist !== false)
             ShellState.updateSection("windowManager", { gap: next })
     }
     function persistGaps(value) {
-        const next = Math.min(40, Math.max(0, Math.round(value)))
-        gaps = next
-        ShellState.updateSection("windowManager", { gap: next })
+        gaps = Math.min(40, Math.max(0, Math.round(value)))
+        ShellState.updateSection("windowManager", { gap: gaps })
     }
     function setDecorationsEnabled(enabled) {
-        const next = enabled === true
-        decorationsEnabled = next
-        ShellState.updateSection("windowManager", { decorations: next })
-        Quickshell.execDetached([
-            ShellState.scriptsDir + "/theme/apply-window-decorations",
-            next ? "true" : "false", msgPath
-        ])
+        decorationsEnabled = enabled === true
+        ShellState.updateSection("windowManager", {
+            decorations: decorationsEnabled
+        })
+        if (capabilities.decorationStyling === true)
+            backend.setDecorationsEnabled(decorationsEnabled)
     }
+    function toggleScratchpad(register) {
+        return requireCapability("scratchpad", "toggleScratchpad")
+            && backend.toggleScratchpad(register)
+    }
+    function addReminder(minutes, message) {
+        if (!connected) return false
+        return backend.addReminder(minutes, message)
+    }
+    function reloadWindowManager() {
+        return requireCapability("reload", "reloadWindowManager")
+            && backend.reloadWindowManager()
+    }
+    function quitWindowManager() {
+        return requireCapability("sessionControl", "quitWindowManager")
+            && backend.quitWindowManager()
+    }
+    function showKeybindings() {
+        return requireCapability("keybindings", "showKeybindings")
+            && backend.showKeybindings()
+    }
+
+    function showNotice(message, persistent, screenId) {
+        const requested = String(screenId ?? "")
+        root.uiEvent({
+            change: "ui-notice",
+            text: String(message ?? ""),
+            persistent: persistent === true,
+            output: requested !== "" ? requested : String(focusedScreen?.id ?? "")
+        })
+    }
+
     function acceptPicomStatus(text) {
         try {
             const value = JSON.parse(String(text ?? ""))
@@ -402,72 +367,139 @@ Singleton {
         }
     }
     function refreshPicomState() {
-        if (picomBusy)
-            return
+        if (picomBusy) return
         picomStatus.running = false
         picomStatus.running = true
     }
     function setPicomEnabled(enabled) {
-        if (picomBusy)
-            return
+        if (picomBusy) return
         picomEnabled = enabled === true
         picomBusy = true
         picomControl.command = [ShellState.scriptsDir + "/theme/picom-control",
             picomEnabled ? "enable" : "disable", msgPath]
         picomControl.running = true
     }
-    function toggleScratchpad(register) {
-        Quickshell.execDetached([msgPath, "scratchpad", "toggle", String(register)])
-    }
-
-    function addReminder(minutes, message) {
-        Quickshell.execDetached([
-            msgPath, "reminder", "add", String(minutes), String(message)
-        ])
-    }
-
-    // Feed shell-owned status messages through the same themed overlay used
-    // by window-manager notices instead of the desktop notification daemon.
-    function showNotice(message, persistent, outputName) {
-        const requestedOutput = String(outputName ?? "")
-        const focusedName = String(focusedOutput?.name ?? "")
-        root.uiEvent({
-            change: "ui-notice",
-            text: String(message ?? ""),
-            persistent: persistent === true,
-            output: requestedOutput !== "" ? requestedOutput : focusedName
-        })
-    }
 
     function loadWindowManagerState() {
         const saved = Number(ShellState.state.windowManager.gap)
-        if (!isNaN(saved)) {
-            root.gaps = Math.min(40, Math.max(0, Math.round(saved)))
-            restoreGap.restart()
-        }
-        const nextDecorations =
-            ShellState.state.windowManager.decorations === true
-        if (!root.decorationStateLoaded) {
-            root.decorationsEnabled = nextDecorations
-            root.decorationStateLoaded = true
-        } else if (root.decorationsEnabled !== nextDecorations) {
-            root.decorationsEnabled = nextDecorations
-            Quickshell.execDetached([
-                ShellState.scriptsDir + "/theme/apply-window-decorations",
-                nextDecorations ? "true" : "false", root.msgPath
-            ])
-        }
+        if (!isNaN(saved)) gaps = Math.min(40, Math.max(0, Math.round(saved)))
+        decorationsEnabled = ShellState.state.windowManager.decorations === true
+        if (connected && capabilities.gaps === true) backend.setGaps(gaps)
+        if (connected && capabilities.decorationStyling === true)
+            backend.setDecorationsEnabled(decorationsEnabled)
     }
 
+    function detectWindowManager() {
+        if (!ShellState.ready || requestedBackend !== "auto") return
+        detectionQuery.running = false
+        detectionQuery.running = true
+    }
+
+    function acceptDetection(text) {
+        try {
+            const value = JSON.parse(String(text ?? ""))
+            detectedWmName = String(value.name ?? "")
+            detectedWmIdentity = String(value.identity ?? "unknown")
+        } catch (error) {
+            detectedWmName = ""
+            detectedWmIdentity = "unknown"
+        }
+        detectionComplete = true
+    }
+
+    function configureDetection() {
+        const automatic = ShellState.ready && requestedBackend === "auto"
+        if (automatic && !detectionComplete) detectWindowManager()
+        identityMonitor.running = automatic
+        if (!automatic) identityRestart.stop()
+    }
+
+    SkarwmBackend {
+        id: skarwmBackend
+        active: ShellState.ready && root.selectedBackendName === "skarwm"
+    }
+    MockWindowManagerBackend {
+        id: mockBackend
+        active: ShellState.ready && root.selectedBackendName === "mock"
+    }
+    EwmhBackend {
+        id: ewmhBackend
+        active: ShellState.ready && root.selectedBackendName === "ewmh"
+    }
+    WindowManagerBackend {
+        id: unavailableBackend
+        name: root.selectedBackendName
+        active: ShellState.ready && root.selectedBackendName !== "skarwm"
+            && root.selectedBackendName !== "mock"
+            && root.selectedBackendName !== "ewmh"
+    }
+
+    Connections {
+        target: root.backend
+        function onChanged() { root.rememberFocusedWindow() }
+        function onActionFailed(action, reason) {
+            root.actionFailed(action, reason)
+        }
+        function onOverviewCommand(action) { root.overviewCommand(action) }
+        function onUiEvent(event) { root.uiEvent(event) }
+        function onPhysicalOutputConnected() { root.physicalOutputConnected() }
+        function onPhysicalOutputDisconnected() { root.physicalOutputDisconnected() }
+        function onConnectedChanged() {
+            if (root.connected) root.loadWindowManagerState()
+        }
+    }
     Connections {
         target: ShellState
         function onStateChanged() { root.loadWindowManagerState() }
         function onReadyChanged() {
-            if (ShellState.ready) root.loadWindowManagerState()
+            if (ShellState.ready) {
+                root.configureDetection()
+                root.loadWindowManagerState()
+            }
         }
     }
 
-    Component.onCompleted: if (ShellState.ready) loadWindowManagerState()
+    onRequestedBackendChanged: configureDetection()
+    Component.onCompleted: if (ShellState.ready) {
+        configureDetection()
+        loadWindowManagerState()
+    }
+
+    Process {
+        id: detectionQuery
+        command: [ShellState.scriptsDir + "/wm/ewmh-provider", "detect"]
+        running: false
+        stdout: StdioCollector { id: detectionOutput }
+        onExited: exitCode => {
+            if (exitCode === 0) root.acceptDetection(detectionOutput.text)
+            else root.acceptDetection("{}")
+        }
+    }
+    Process {
+        id: identityMonitor
+        command: [ShellState.scriptsDir + "/wm/ewmh-provider", "monitor-identity"]
+        running: false
+        stdout: SplitParser {
+            onRead: line => { if (line !== "") detectionDebounce.restart() }
+        }
+        onExited: {
+            if (ShellState.ready && root.requestedBackend === "auto")
+                identityRestart.restart()
+        }
+    }
+    Timer {
+        id: detectionDebounce
+        interval: 100
+        onTriggered: root.detectWindowManager()
+    }
+    Timer {
+        id: identityRestart
+        interval: 2000
+        onTriggered: {
+            root.detectWindowManager()
+            identityMonitor.running = true
+        }
+    }
 
     Process {
         id: picomStatus
@@ -475,11 +507,9 @@ Singleton {
         running: true
         stdout: StdioCollector { id: picomStatusOutput }
         onExited: exitCode => {
-            if (exitCode === 0)
-                root.acceptPicomStatus(picomStatusOutput.text)
+            if (exitCode === 0) root.acceptPicomStatus(picomStatusOutput.text)
         }
     }
-
     Process {
         id: picomControl
         running: false
@@ -496,12 +526,4 @@ Singleton {
             }
         }
     }
-
-    Timer {
-        id: restoreGap
-        interval: 150
-        onTriggered: Quickshell.execDetached(
-            [root.msgPath, "gaps", String(root.gaps)])
-    }
-
 }

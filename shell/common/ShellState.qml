@@ -124,6 +124,7 @@ Singleton {
                 mode: "dark"
             },
             windowManager: {
+                backend: "auto",
                 gap: 8,
                 decorations: false
             },

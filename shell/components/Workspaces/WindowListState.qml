@@ -16,11 +16,13 @@ Singleton {
     property bool showWindowsFromAllMonitors: false
 
     function identity(win) {
-        return (String(win.class ?? "") + "|" + String(win.instance ?? "")).toLowerCase();
+        return (String(win.appId ?? "") + "|" + String(win.class ?? "")
+            + "|" + String(win.instance ?? "")).toLowerCase();
     }
 
     function desktopEntry(win) {
-        const candidates = [String(win.class ?? ""), String(win.instance ?? "")];
+        const candidates = [String(win.appId ?? ""), String(win.class ?? ""),
+            String(win.instance ?? "")];
         for (const candidate of candidates) {
             if (candidate === "")
                 continue;
@@ -55,10 +57,13 @@ Singleton {
     function rebuild() {
         const normalized = [];
         for (const win of Wm.windows) {
-            if (!win || win.dock === true || win.scratchpad === true || win.workspace === null || win.workspace === undefined || win.output === null || win.output === undefined)
+            if (!win || win.dock === true || win.scratchpad === true
+                    || (Wm.capabilities.workspaces === true
+                        && (win.workspaceId === null
+                            || win.workspaceId === undefined)))
                 continue;
             const icon = iconInfo(win);
-            const appId = String(win.class || win.instance || "");
+            const appId = String(win.appId || win.class || win.instance || "");
             const groupKey = icon.desktopFileId !== "" ? "desktop:" + icon.desktopFileId.toLowerCase() : appId !== "" ? "wmclass:" + appId.toLowerCase() : "window:" + String(win.id);
             normalized.push({
                 id: win.id,
@@ -68,8 +73,10 @@ Singleton {
                 desktopFileId: icon.desktopFileId,
                 appName: icon.appName,
                 iconSource: icon.iconSource,
-                workspace: Number(win.workspace),
-                output: String(win.output),
+                workspaceId: win.workspaceId === null
+                    || win.workspaceId === undefined ? "" : String(win.workspaceId),
+                screenId: win.screenId === null || win.screenId === undefined
+                    ? "" : String(win.screenId),
                 active: win.focused === true,
                 urgent: win.urgent === true,
                 minimized: win.minimized === true,
@@ -79,16 +86,20 @@ Singleton {
         entries = normalized;
     }
 
-    function windowsFor(outputName, workspace) {
-        const wantedOutput = String(outputName ?? "");
-        const wantedWorkspace = Number(workspace);
-        if (wantedOutput === "" || !Number.isFinite(wantedWorkspace))
+    function windowsFor(screenId, workspaceId) {
+        const wantedScreen = String(screenId ?? "");
+        const wantedWorkspace = String(workspaceId ?? "");
+        if (Wm.capabilities.workspaces === true && wantedWorkspace === "")
             return [];
-        return entries.filter(entry => entry.workspace === wantedWorkspace && (showWindowsFromAllMonitors || entry.output === wantedOutput));
+        return entries.filter(entry =>
+            (Wm.capabilities.workspaces !== true
+                || entry.workspaceId === wantedWorkspace)
+            && (Wm.capabilities.screens !== true
+                || showWindowsFromAllMonitors || entry.screenId === wantedScreen));
     }
 
-    function groupsFor(outputName, workspace) {
-        const windows = windowsFor(outputName, workspace);
+    function groupsFor(screenId, workspaceId) {
+        const windows = windowsFor(screenId, workspaceId);
         const groups = [];
         const indexes = ({});
         for (const win of windows) {

@@ -47,6 +47,7 @@ clean:
 test: build/anushctl
 	./tests/anushctl.sh
 	./tests/config-loading.sh
+	python3 ./tests/ewmh-provider.py
 	./tests/hotspot-control.sh
 	./tests/icon-theme.sh
 	./tests/launcher-search.sh

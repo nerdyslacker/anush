@@ -22,6 +22,7 @@ Required:
 
 - Quickshell;
 - Python 3 for state migration and shell helpers;
+- Xprop for running-WM detection and the generic EWMH adapter;
 - JetBrainsMono Nerd Font for typography and Symbols Nerd Font Mono for
   consistently sized bar icons;
 - for the current skarwm adapter, `skarwm-msg` available in `PATH`.
@@ -33,7 +34,8 @@ Optional desktop integrations:
   `papirus-folders` helper is preferred, with a built-in fallback for writable
   user-installed Papirus themes;
 - Picom, Dunst, Feh, Kitty, and Fastfetch for the supplied desktop configuration;
-- Clipmenu and Xdotool for clipboard history and pasting;
+- Clipmenu and Xdotool for clipboard history, pasting, and generic EWMH window
+  actions;
 - `setxkbmap`, `xkb-switch`, and `xmodmap` for keyboard layouts; `xinput`
   provides deterministic multi-group cycling for the shortcut presets;
 - renCal for calendar events;
@@ -73,7 +75,7 @@ printf '%s\n' 'repository=https://github.com/lazylinuxos/lazy-repo/releases/late
 sudo xbps-install -S quickshell picom dunst feh kitty fastfetch xss-lock \
   betterlockscreen udiskie lxqt-policykit NetworkManager bluez blueman pavucontrol \
   curl flameshot brightnessctl xrandr python3 python3-gobject iw iproute2 dnsmasq polkit \
-  hostapd create_ap iptables renCal xterm xinput xdotool xcolor \
+  hostapd create_ap iptables renCal xterm xinput xdotool xprop xcolor \
   clipmenu xkb-switch setxkbmap ImageMagick matugen adw-gtk-theme
 ```
 

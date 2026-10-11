@@ -245,7 +245,18 @@ Singleton {
     }
 
     function available(key) {
-        return key !== "title" || !Wm.decorationsEnabled;
+        if (key === "tags")
+            return Wm.capabilities.workspaces === true;
+        if (key === "windowList")
+            return Wm.capabilities.windows === true;
+        if (key === "layout")
+            return Wm.capabilities.layouts === true;
+        if (key === "title")
+            return Wm.capabilities.windowTitles === true
+                && !Wm.decorationsEnabled;
+        if (key === "scratchpads")
+            return Wm.capabilities.scratchpad === true;
+        return true;
     }
 
     function enabled(key) {

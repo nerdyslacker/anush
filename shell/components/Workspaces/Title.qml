@@ -8,7 +8,7 @@ Item {
 
     property var barScreen
     readonly property string outputName: Wm.outputNameForScreen(barScreen)
-    readonly property var screenWindow: Wm.windowForOutput(outputName)
+    readonly property var screenWindow: Wm.windowForScreen(outputName)
     readonly property string displayTitle: String(screenWindow?.title
         || screenWindow?.class || screenWindow?.instance || "")
     readonly property bool hasTitle: displayTitle !== ""

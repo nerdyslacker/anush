@@ -68,6 +68,22 @@ created when a setting is changed through the running shell, or when legacy
 state is actually migrated. New keys added to the installed JSON therefore
 appear automatically unless a higher-precedence layer defines them.
 
+The window-manager backend defaults to automatic selection. During backend
+development it can be selected explicitly, including the deterministic mock:
+
+```json
+{
+  "windowManager": {"backend": "skarwm"}
+}
+```
+
+Selectable implementations are `skarwm`, `ewmh`, and `mock`. Until their
+dedicated adapters are implemented, explicit `bspwm`, `dwm`, `i3`, `spectrwm`,
+and `herbstluftwm` selections use the EWMH baseline. `auto` reads the running
+WM identity from `_NET_SUPPORTING_WM_CHECK` and `_NET_WM_NAME`; it selects the
+skarwm adapter only for a verified skarwm identity and otherwise uses EWMH.
+`ANUSH_WM_BACKEND` overrides configuration for a single shell process.
+
 This is loader-level composition rather than a JSON `include` extension. It is
 smaller, hides prefix-specific paths, gives every QML consumer the same
 effective object, and leaves standard JSON tooling usable.

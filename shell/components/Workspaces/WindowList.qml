@@ -11,13 +11,9 @@ Rectangle {
 
     property var barScreen
     readonly property string outputName: Wm.outputNameForScreen(barScreen)
-    readonly property int workspace: {
-        for (const output of Wm.outputs)
-            if (String(output.name) === outputName)
-                return Number(output.current_workspace);
-        return -1;
-    }
-    readonly property var appGroups: WindowListState.groupsFor(outputName, workspace)
+    readonly property var focusedWorkspace: Wm.focusedWorkspaceForScreen(outputName)
+    readonly property string workspaceId: String(focusedWorkspace?.id ?? "")
+    readonly property var appGroups: WindowListState.groupsFor(outputName, workspaceId)
     property string selectedGroupKey: ""
     readonly property var selectedGroup: {
         for (const group of appGroups)
