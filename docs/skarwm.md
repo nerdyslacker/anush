@@ -1,7 +1,12 @@
 # skarwm integration
 
 anush does not install or own a skarwm configuration. Add the lines you want
-directly to your user-owned `$XDG_CONFIG_HOME/skarwm/config.rc`.
+directly to your user-owned `$XDG_CONFIG_HOME/skarwm/skarwm.rc`; the former
+`config.rc` name remains supported as a fallback.
+
+The graphical skarwm editor follows recursive `import` directives. Imported
+bindings and other entries are shown alongside entries from the main file, and
+changes are saved back to the rc file that owns each entry.
 
 ## Required
 

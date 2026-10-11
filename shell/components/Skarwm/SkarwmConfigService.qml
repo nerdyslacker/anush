@@ -38,6 +38,9 @@ Singleton {
     function setSetting(key, value) {
         const next = clone(pending)
         next.settings[key] = value
+        if (!next._fileSettings) next._fileSettings = {}
+        if (!next._fileSettings[next.path]) next._fileSettings[next.path] = {}
+        next._fileSettings[next.path][key] = value
         pending = next
         error = ""
     }
@@ -58,7 +61,18 @@ Singleton {
     function addItem(name, value) {
         const next = clone(pending)
         if (!Array.isArray(next[name])) next[name] = []
-        next[name].push(value)
+        if (value !== null && typeof value === "object") {
+            const item = clone(value)
+            item._source = next.path
+            next[name].push(item)
+        } else {
+            next[name].push(value)
+            if (name === "autostart" || name === "extras") {
+                if (!next._owners) next._owners = {}
+                if (!Array.isArray(next._owners[name])) next._owners[name] = []
+                next._owners[name].push(next.path)
+            }
+        }
         pending = next
         error = ""
     }
@@ -67,6 +81,9 @@ Singleton {
         const next = clone(pending)
         if (!Array.isArray(next[name]) || index < 0 || index >= next[name].length) return
         next[name].splice(index, 1)
+        if ((name === "autostart" || name === "extras") && next._owners
+                && Array.isArray(next._owners[name]))
+            next._owners[name].splice(index, 1)
         pending = next
         error = ""
     }

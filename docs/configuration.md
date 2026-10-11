@@ -94,13 +94,12 @@ only the writable copies and the user's active skarwm configuration.
 
 ## skarwm evaluation
 
-skarwm's current rc parser has no include/import directive. It loads the first
-existing rc file, applies built-in scalar defaults for omitted settings, and
-treats a discovered file as the complete binding/directive set. Repeated
-bindings, rules, autostarts, and bar blocks are ordered lists, so a generic
-deep-merge rule would be unsafe.
+skarwm loads the preferred `skarwm.rc` name, with legacy `config.rc` fallback,
+and applies built-in scalar defaults for omitted settings. Its `import`
+directive can split ordered bindings, rules, autostarts, and other entries into
+separate rc files.
 
-anush therefore does not install, remove, or bundle a skarwm rc file. The user
-adds the required startup line and any optional bindings directly; see
-[`skarwm.md`](skarwm.md). A future skarwm-side `include` feature would still
-need explicit ordering and duplicate semantics for repeated directives.
+anush does not install, remove, or bundle a skarwm rc file. The user adds the
+required startup line and any optional bindings directly; see
+[`skarwm.md`](skarwm.md). The graphical skarwm editor follows imports
+recursively and retains each entry's source file when saving.

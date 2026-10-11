@@ -54,6 +54,7 @@ test: build/anushctl
 	./tests/picom-control.sh
 	./tests/resource-ownership.sh
 	./tests/rss-reader.sh
+	python3 ./tests/skarwm-config-editor.py
 	./tests/theme-generation.sh
 	./tests/taildrop-inbox.sh
 	node --test tests/tailscale-model.test.js

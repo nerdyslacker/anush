@@ -5,11 +5,13 @@ widget also provides one of the bar configuration entry points and can be
 hidden from Bar Layout.
 
 The **skarwm settings** entry opens a staged graphical editor for the active
-`config.rc`. It covers window styling, decorations, animations, autostart
+`skarwm.rc` (or legacy `config.rc`). It covers window styling, decorations, animations, autostart
 commands, bindings, rules, workspace layouts, virtual screens, and advanced
-compatibility entries. The entry is shown only while skarwm is the active
-window manager. **Save & Reload** validates the values and rolls the file back
-automatically if skarwm rejects the reload.
+compatibility entries. Imported rc files are loaded recursively, so their
+bindings and other entries appear in the same editor; edited rows are written
+back to their source files. The entry is shown only while skarwm is the active
+window manager. **Save & Reload** validates the values and rolls changed files
+back automatically if skarwm rejects the reload.
 
 ## Actions
 

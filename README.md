@@ -292,7 +292,8 @@ follow the active accent. Preset, mode, wallpaper-palette, and accent changes
 update those colors automatically.
 Current skarwm builds export the resolved `-c` configuration path to anush, so
 the popup also works in nested/development sessions that do not use the normal
-`$XDG_CONFIG_HOME/skarwm/config.rc` location.
+`$XDG_CONFIG_HOME/skarwm/skarwm.rc` location (with legacy `config.rc`
+fallback).
 Decorations use the same surfaces as bar widgets by default: inactive
 titlebars use the idle widget background and the focused titlebar uses its
 brighter hover background. Titles, window buttons, and frame outlines use the

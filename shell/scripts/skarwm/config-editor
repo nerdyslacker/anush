@@ -158,21 +158,30 @@ def active_path() -> Path | None:
     if configured:
         return Path(configured).expanduser()
     root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    user_path = root / "skarwm/config.rc"
-    if user_path.exists():
-        return user_path
-    system_path = Path("/etc/skarwm/config.rc")
-    if system_path.exists():
-        return system_path
-    return user_path
+    preferred = root / "skarwm/skarwm.rc"
+    legacy = root / "skarwm/config.rc"
+    if preferred.exists():
+        return preferred
+    if legacy.exists():
+        return legacy
+    for system_path in (Path("/etc/skarwm/skarwm.rc"),
+                        Path("/etc/skarwm/config.rc")):
+        if system_path.exists():
+            return system_path
+    return preferred
 
 
 def empty_document(path: Path) -> dict:
+    source = str(path.resolve())
     return {
-        "path": str(path), "exists": path.exists(), "settings": dict(SETTINGS),
+        "path": source, "exists": path.exists(), "settings": dict(SETTINGS),
         "barBlocks": [], "autostart": ["anushctl start"],
         "bindings": default_bindings(), "rules": [],
         "workspaceLayouts": [], "virtualScreens": [], "extras": [],
+        "_sources": [source], "_imports": {source: []},
+        "_fileSettings": {source: {}},
+        "_owners": {"autostart": [source], "extras": []},
+        "_serialized": {},
     }
 
 
@@ -180,101 +189,157 @@ def parse(path: Path) -> dict:
     document = empty_document(path)
     if not path.exists():
         return document
-    # An existing rc file replaces the built-in lists completely.
-    document["barBlocks"] = []
-    document["autostart"] = []
-    document["bindings"] = []
-    for original in path.read_text(encoding="utf-8").splitlines():
-        line = original.strip()
-        if not line or line.startswith("#"):
-            continue
-        if ":" not in line:
-            document["extras"].append(line)
-            continue
-        key, rest = (part.strip() for part in line.split(":", 1))
-        canonical = ALIASES.get(key, key)
-        if key == "gap":
-            try:
-                document["settings"]["outer_gap"] = int(unquote(rest))
-                document["settings"]["inner_gap"] = int(unquote(rest))
-            except ValueError:
-                document["extras"].append(line)
-            continue
-        if canonical in SETTINGS:
-            value = unquote(rest)
-            if canonical in BOOL_KEYS:
-                document["settings"][canonical] = value.lower() in ("true", "1")
-            elif canonical in INT_RANGES:
-                try:
-                    document["settings"][canonical] = int(value)
-                except ValueError:
+    # An existing rc graph replaces the built-in lists completely. Source
+    # metadata lets the editor write each row back to the file it came from.
+    for name in ("barBlocks", "autostart", "bindings", "rules",
+                 "workspaceLayouts", "virtualScreens", "extras"):
+        document[name] = []
+    document["_owners"] = {"autostart": [], "extras": []}
+    document["_sources"] = []
+    document["_imports"] = {}
+    document["_fileSettings"] = {}
+    root = path.resolve()
+    document["path"] = str(root)
+    seen: set[Path] = set()
+    stack: list[Path] = []
+
+    def add_extra(line: str, source: str) -> None:
+        document["extras"].append(line)
+        document["_owners"]["extras"].append(source)
+
+    def parse_file(file_path: Path) -> None:
+        resolved = file_path.resolve()
+        if resolved in stack:
+            chain = " -> ".join(str(item) for item in stack + [resolved])
+            raise ValueError(f"skarwm config import cycle: {chain}")
+        if resolved in seen:
+            return
+        if len(stack) >= 64:
+            raise ValueError(f"skarwm config import depth exceeds 64 at {resolved}")
+        if not resolved.is_file():
+            raise ValueError(f"Cannot read imported skarwm config: {resolved}")
+        seen.add(resolved)
+        stack.append(resolved)
+        source = str(resolved)
+        document["_sources"].append(source)
+        document["_imports"][source] = []
+        document["_fileSettings"][source] = {}
+        try:
+            for original in resolved.read_text(encoding="utf-8").splitlines():
+                line = original.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if ":" not in line:
+                    add_extra(line, source)
+                    continue
+                key, rest = (part.strip() for part in line.split(":", 1))
+                canonical = ALIASES.get(key, key)
+                if key == "import":
+                    target = unquote(rest)
+                    if not target:
+                        raise ValueError(f"Empty skarwm import in {resolved}")
+                    document["_imports"][source].append(rest)
+                    imported = Path(target).expanduser()
+                    if not imported.is_absolute():
+                        imported = resolved.parent / imported
+                    parse_file(imported)
+                    continue
+                if key == "gap":
+                    try:
+                        value = int(unquote(rest))
+                        for setting in ("outer_gap", "inner_gap"):
+                            document["settings"][setting] = value
+                            document["_fileSettings"][source][setting] = value
+                    except ValueError:
+                        add_extra(line, source)
+                    continue
+                if canonical in SETTINGS:
+                    value: object = unquote(rest)
+                    if canonical in BOOL_KEYS:
+                        value = str(value).lower() in ("true", "1")
+                    elif canonical in INT_RANGES:
+                        try:
+                            value = int(str(value))
+                        except ValueError:
+                            pass
                     document["settings"][canonical] = value
-            else:
-                document["settings"][canonical] = value
-        elif key.startswith(("workspace-", "workspace_")):
-            prefix = "workspace-" if key.startswith("workspace-") else "workspace_"
-            try:
-                workspace = int(key[len(prefix):])
-            except ValueError:
-                document["extras"].append(line)
-                continue
-            parts = [part.strip() for part in rest.split(":")]
-            if 1 <= workspace <= 64 and len(parts) in (2, 3):
-                document["workspaceLayouts"].append({"workspace": workspace,
-                    "layout": parts[0], "icon": unquote(parts[1]),
-                    "name": unquote(parts[2]) if len(parts) == 3 else ""})
-            else:
-                document["extras"].append(line)
-        elif key in ("bind", "call", "workspace"):
-            parts = rest.split(":", 1)
-            if len(parts) == 2:
-                document["bindings"].append({
-                    "type": key, "combo": parts[0].strip(),
-                    "value": unquote(parts[1]),
-                })
-            else:
-                document["extras"].append(line)
-        elif key == "autostart":
-            document["autostart"].append(unquote(rest))
-        elif key == "rule":
-            parts = rest.split(":", 2)
-            if len(parts) == 3:
-                document["rules"].append({"field": parts[0].strip(),
-                    "pattern": unquote(parts[1]), "effects": parts[2].strip()})
-            else:
-                document["extras"].append(line)
-        elif key == "bar_block":
-            parts = [part.strip() for part in rest.split(":")]
-            kind = parts[0] if parts else "workspaces"
-            item = {"kind": kind, "alignment": parts[1] if len(parts) > 1 else "left",
-                    "name": "", "interval": 1, "timeout": 1, "command": ""}
-            if kind == "script" and len(parts) >= 6:
-                item.update(name=parts[2], interval=parts[3], timeout=parts[4],
-                            command=unquote(":".join(parts[5:])))
-            elif kind == "button" and len(parts) >= 4:
-                item.update(name=parts[2], command=unquote(":".join(parts[3:])))
-            elif kind not in ("workspaces", "systray"):
-                document["extras"].append(line)
-                continue
-            document["barBlocks"].append(item)
-        elif key == "virtual_screen":
-            parts = [part.strip() for part in rest.split(":")]
-            if len(parts) in (3, 4) and parts[1] == "split":
-                document["virtualScreens"].append({"output": parts[0],
-                    "ratio": parts[2], "offset": parts[3] if len(parts) == 4 else "0"})
-            else:
-                document["extras"].append(line)
-        elif key in ("workspace_layout", "tag_layout"):
-            parts = [part.strip() for part in rest.split(":", 1)]
-            if len(parts) == 2:
-                # Migrate legacy layout-only entries to the current unified
-                # declaration. The number remains visible until an icon is set.
-                document["workspaceLayouts"].append({"workspace": parts[0],
-                    "layout": parts[1], "icon": parts[0], "name": ""})
-            else:
-                document["extras"].append(line)
-        else:
-            document["extras"].append(line)
+                    document["_fileSettings"][source][canonical] = value
+                elif key.startswith(("workspace-", "workspace_")):
+                    prefix = "workspace-" if key.startswith("workspace-") else "workspace_"
+                    try:
+                        workspace = int(key[len(prefix):])
+                    except ValueError:
+                        add_extra(line, source)
+                        continue
+                    parts = [part.strip() for part in rest.split(":")]
+                    if 1 <= workspace <= 64 and len(parts) in (2, 3):
+                        document["workspaceLayouts"].append({"workspace": workspace,
+                            "layout": parts[0], "icon": unquote(parts[1]),
+                            "name": unquote(parts[2]) if len(parts) == 3 else "",
+                            "_source": source})
+                    else:
+                        add_extra(line, source)
+                elif key in ("bind", "call", "workspace"):
+                    parts = rest.split(":", 1)
+                    if len(parts) == 2:
+                        document["bindings"].append({
+                            "type": key, "combo": parts[0].strip(),
+                            "value": unquote(parts[1]), "_source": source,
+                        })
+                    else:
+                        add_extra(line, source)
+                elif key == "autostart":
+                    document["autostart"].append(unquote(rest))
+                    document["_owners"]["autostart"].append(source)
+                elif key == "rule":
+                    parts = rest.split(":", 2)
+                    if len(parts) == 3:
+                        document["rules"].append({"field": parts[0].strip(),
+                            "pattern": unquote(parts[1]), "effects": parts[2].strip(),
+                            "_source": source})
+                    else:
+                        add_extra(line, source)
+                elif key == "bar_block":
+                    parts = [part.strip() for part in rest.split(":")]
+                    kind = parts[0] if parts else "workspaces"
+                    item = {"kind": kind, "alignment": parts[1] if len(parts) > 1 else "left",
+                            "name": "", "interval": 1, "timeout": 1, "command": "",
+                            "_source": source}
+                    if kind == "script" and len(parts) >= 6:
+                        item.update(name=parts[2], interval=parts[3], timeout=parts[4],
+                                    command=unquote(":".join(parts[5:])))
+                    elif kind == "button" and len(parts) >= 4:
+                        item.update(name=parts[2], command=unquote(":".join(parts[3:])))
+                    elif kind not in ("workspaces", "systray"):
+                        add_extra(line, source)
+                        continue
+                    document["barBlocks"].append(item)
+                elif key == "virtual_screen":
+                    parts = [part.strip() for part in rest.split(":")]
+                    if len(parts) in (3, 4) and parts[1] == "split":
+                        document["virtualScreens"].append({"output": parts[0],
+                            "ratio": parts[2], "offset": parts[3] if len(parts) == 4 else "0",
+                            "_source": source})
+                    else:
+                        add_extra(line, source)
+                elif key in ("workspace_layout", "tag_layout"):
+                    parts = [part.strip() for part in rest.split(":", 1)]
+                    if len(parts) == 2:
+                        document["workspaceLayouts"].append({"workspace": parts[0],
+                            "layout": parts[1], "icon": parts[0], "name": "",
+                            "_source": source})
+                    else:
+                        add_extra(line, source)
+                else:
+                    add_extra(line, source)
+        finally:
+            stack.pop()
+
+    parse_file(root)
+    document["_serialized"] = {
+        source: serialize_source(document, source)
+        for source in document["_sources"]
+    }
     return document
 
 
@@ -295,11 +360,26 @@ def integer(value: object, label: str, low: int, high: int) -> int:
     return number
 
 
-def serialize(document: dict) -> str:
-    settings = document.get("settings", {})
-    lines = ["# skarwm configuration — managed by anush", "",
-             "# General and window appearance"]
-    for key, default in SETTINGS.items():
+def item_source(item: object, root: str) -> str:
+    return str(item.get("_source", root)) if isinstance(item, dict) else root
+
+
+def serialize_source(document: dict, source: str) -> str:
+    root = str(document.get("path", source))
+    is_root = source == root
+    settings = (document.get("settings", {}) if is_root else
+                document.get("_fileSettings", {}).get(source, {}))
+    lines = ["# skarwm configuration — managed by anush"]
+    imports = document.get("_imports", {}).get(source, [])
+    if imports:
+        lines.extend(["", "# Imported configuration"])
+        lines.extend("import : " + require_text(value, "import path", 4096)
+                     for value in imports)
+    if settings:
+        lines.extend(["", "# General and window appearance"])
+    keys = SETTINGS if is_root else settings
+    for key in keys:
+        default = SETTINGS[key]
         value = settings.get(key, default)
         if key in BOOL_KEYS:
             value = "true" if value is True else "false"
@@ -323,8 +403,11 @@ def serialize(document: dict) -> str:
             value = quote(require_text(value, key, 128))
         lines.append(f"{key} : {value}")
 
-    lines.extend(["", "# Built-in bar blocks"])
-    for item in document.get("barBlocks", []):
+    blocks = [item for item in document.get("barBlocks", [])
+              if item_source(item, root) == source]
+    if blocks:
+        lines.extend(["", "# Built-in bar blocks"])
+    for item in blocks:
         kind = require_text(item.get("kind"), "bar block kind", 20)
         align = item.get("alignment", "left")
         if align not in ("left", "center", "right"):
@@ -344,12 +427,22 @@ def serialize(document: dict) -> str:
         else:
             raise ValueError(f"unknown bar block kind: {kind}")
 
-    lines.extend(["", "# Autostart"])
-    for command in document.get("autostart", []):
+    owners = document.get("_owners", {})
+    autostarts = [(command, owners.get("autostart", [])[index]
+                   if index < len(owners.get("autostart", [])) else root)
+                  for index, command in enumerate(document.get("autostart", []))]
+    if any(owner == source for _, owner in autostarts):
+        lines.extend(["", "# Autostart"])
+    for command, owner in autostarts:
+        if owner != source:
+            continue
         lines.append("autostart : " + quote(require_text(command, "autostart command")))
 
-    lines.extend(["", "# Key bindings and workspace bindings"])
-    for item in document.get("bindings", []):
+    bindings = [item for item in document.get("bindings", [])
+                if item_source(item, root) == source]
+    if bindings:
+        lines.extend(["", "# Key bindings and workspace bindings"])
+    for item in bindings:
         kind = item.get("type")
         if kind not in ("bind", "call", "workspace"):
             raise ValueError("binding type must be bind, call, or workspace")
@@ -357,9 +450,14 @@ def serialize(document: dict) -> str:
         value = require_text(item.get("value"), "binding action")
         lines.append(f"{kind} : {combo} : {quote(value) if kind == 'bind' else value}")
 
-    lines.extend(["", "# Workspace configuration and virtual screens"])
+    workspace_items = [item for item in document.get("workspaceLayouts", [])
+                       if item_source(item, root) == source]
+    virtual_items = [item for item in document.get("virtualScreens", [])
+                     if item_source(item, root) == source]
+    if workspace_items or virtual_items:
+        lines.extend(["", "# Workspace configuration and virtual screens"])
     seen_workspaces = set()
-    for item in document.get("workspaceLayouts", []):
+    for item in workspace_items:
         workspace = integer(item.get("workspace"), "workspace", 1, 2147483647)
         if workspace in seen_workspaces:
             raise ValueError(f"duplicate workspace layout: {workspace}")
@@ -376,7 +474,7 @@ def serialize(document: dict) -> str:
             line += " : " + name
         lines.append(line)
     seen_outputs = set()
-    for item in document.get("virtualScreens", []):
+    for item in virtual_items:
         output = require_text(item.get("output"), "virtual screen output", 128)
         if output in seen_outputs:
             raise ValueError(f"duplicate virtual screen output: {output}")
@@ -385,8 +483,11 @@ def serialize(document: dict) -> str:
         offset = integer(item.get("offset", 0), "split offset", -100000, 100000)
         lines.append(f"virtual_screen : {output} : split : {ratio} : {offset}")
 
-    lines.extend(["", "# Window rules"])
-    for item in document.get("rules", []):
+    rules = [item for item in document.get("rules", [])
+             if item_source(item, root) == source]
+    if rules:
+        lines.extend(["", "# Window rules"])
+    for item in rules:
         field = item.get("field")
         if field not in ("class", "instance", "title"):
             raise ValueError("rule field must be class, instance, or title")
@@ -394,31 +495,57 @@ def serialize(document: dict) -> str:
         effects = require_text(item.get("effects"), "rule effects", 512)
         lines.append(f"rule : {field} : {quote(pattern)} : {effects}")
 
-    extras = document.get("extras", [])
-    if extras:
+    extras = [(raw, owners.get("extras", [])[index]
+               if index < len(owners.get("extras", [])) else root)
+              for index, raw in enumerate(document.get("extras", []))]
+    if any(owner == source for _, owner in extras):
         lines.extend(["", "# Advanced entries preserved by anush"])
-        for raw in extras:
+        for raw, owner in extras:
+            if owner != source:
+                continue
             lines.append(require_text(raw, "advanced entry", 4096))
     return "\n".join(lines) + "\n"
+
+
+def serialize(document: dict) -> str:
+    return serialize_source(document, str(document.get("path", active_path())))
 
 
 def save(document: dict, reload_wm: bool) -> dict:
     path = active_path()
     if path is None:
         raise ValueError("No user configuration path is available")
-    content = serialize(document)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    previous = path.read_bytes() if path.exists() else None
-    mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
-    descriptor, temporary_name = tempfile.mkstemp(prefix=".config.rc.", dir=path.parent)
-    temporary = Path(temporary_name)
+    root = path.resolve()
+    document["path"] = str(root)
+    sources = [str(root)]
+    for source in document.get("_sources", []):
+        resolved = str(Path(source).resolve())
+        if resolved not in sources:
+            sources.append(resolved)
+    baseline = document.get("_serialized", {})
+    contents = {source: serialize_source(document, source) for source in sources}
+    changed = [source for source in sources
+               if contents[source] != baseline.get(source)]
+    previous: dict[str, bytes | None] = {}
+    modes: dict[str, int] = {}
+    temporary_files: dict[str, Path] = {}
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.chmod(temporary, mode)
-        os.replace(temporary, path)
+        for source in changed:
+            target = Path(source)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            previous[source] = target.read_bytes() if target.exists() else None
+            modes[source] = target.stat().st_mode & 0o777 if target.exists() else 0o644
+            descriptor, temporary_name = tempfile.mkstemp(
+                prefix=f".{target.name}.", dir=target.parent)
+            temporary = Path(temporary_name)
+            temporary_files[source] = temporary
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                handle.write(contents[source])
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temporary, modes[source])
+        for source in changed:
+            os.replace(temporary_files[source], Path(source))
         if reload_wm:
             command = shutil.which("skarwm-msg")
             if not command:
@@ -429,17 +556,20 @@ def save(document: dict, reload_wm: bool) -> dict:
                 detail = (result.stderr or result.stdout).strip()
                 raise RuntimeError(detail or "skarwm rejected the configuration")
     except Exception:
-        temporary.unlink(missing_ok=True)
-        if path.exists() and previous is None:
-            path.unlink()
-        elif previous is not None:
-            path.write_bytes(previous)
-            os.chmod(path, mode)
+        for temporary in temporary_files.values():
+            temporary.unlink(missing_ok=True)
+        for source, content in previous.items():
+            target = Path(source)
+            if content is None:
+                target.unlink(missing_ok=True)
+            else:
+                target.write_bytes(content)
+                os.chmod(target, modes[source])
         if reload_wm and shutil.which("skarwm-msg"):
             subprocess.run([shutil.which("skarwm-msg"), "reload"],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
         raise
-    return parse(path)
+    return parse(root)
 
 
 def main() -> int:
