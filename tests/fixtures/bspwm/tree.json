@@ -1,0 +1,74 @@
+{
+  "focusedMonitorId": 2097153,
+  "primaryMonitorId": 2097153,
+  "clientsCount": 3,
+  "monitors": [
+    {
+      "name": "DP-1",
+      "id": 2097153,
+      "wired": true,
+      "focusedDesktopId": 2097155,
+      "padding": {"top": 28, "right": 0, "bottom": 0, "left": 0},
+      "rectangle": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+      "desktops": [
+        {
+          "name": "term",
+          "id": 2097154,
+          "layout": "tiled",
+          "focusedNodeId": 4194305,
+          "padding": {"top": 0, "right": 0, "bottom": 0, "left": 0},
+          "root": {
+            "id": 4194305,
+            "firstChild": null,
+            "secondChild": null,
+            "client": {"className": "kitty", "instanceName": "kitty", "state": "tiled", "urgent": true}
+          }
+        },
+        {
+          "name": "web",
+          "id": 2097155,
+          "layout": "monocle",
+          "focusedNodeId": 4194306,
+          "padding": {"top": 2, "right": 3, "bottom": 4, "left": 5},
+          "root": {
+            "id": 4194306,
+            "firstChild": null,
+            "secondChild": null,
+            "client": {"className": "firefox", "instanceName": "Navigator", "state": "fullscreen", "urgent": false}
+          }
+        }
+      ]
+    },
+    {
+      "name": "HDMI-1",
+      "id": 2097156,
+      "wired": true,
+      "focusedDesktopId": 2097157,
+      "padding": {"top": 28, "right": 0, "bottom": 0, "left": 0},
+      "rectangle": {"x": 1920, "y": 0, "width": 1280, "height": 1024},
+      "desktops": [
+        {
+          "name": "chat",
+          "id": 2097157,
+          "layout": "tiled",
+          "focusedNodeId": 4194307,
+          "padding": {"top": 0, "right": 0, "bottom": 0, "left": 0},
+          "root": {
+            "id": 4194307,
+            "firstChild": null,
+            "secondChild": null,
+            "client": {"className": "Slack", "instanceName": "slack", "state": "floating", "urgent": false}
+          }
+        },
+        {
+          "name": "empty",
+          "id": 2097158,
+          "layout": "tiled",
+          "focusedNodeId": 0,
+          "padding": {"top": 0, "right": 0, "bottom": 0, "left": 0},
+          "root": null
+        }
+      ]
+    }
+  ]
+}

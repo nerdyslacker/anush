@@ -1,0 +1,247 @@
+#!/usr/bin/env python3
+
+import ast
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+
+
+QUOTED = re.compile(r'"(?:\\.|[^"\\])*"')
+
+
+def fixture_dir():
+    value = os.environ.get("ANUSH_BSPWM_FIXTURE_DIR", "")
+    return Path(value) if value else None
+
+
+def bsp_id(value):
+    return f"0x{int(value):08x}"
+
+
+def load_tree():
+    directory = fixture_dir()
+    if directory is not None:
+        return json.loads((directory / "tree.json").read_text())
+    result = subprocess.run(
+        ["bspc", "query", "-T"], check=False, capture_output=True,
+        text=True, timeout=5,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "bspc query -T failed")
+    return json.loads(result.stdout)
+
+
+def fixture_titles():
+    directory = fixture_dir()
+    if directory is None:
+        return None
+    path = directory / "titles.json"
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+def parse_title(text):
+    for line in text.splitlines():
+        if line.startswith("_NET_WM_NAME") or line.startswith("WM_NAME"):
+            match = QUOTED.search(line)
+            if match:
+                try:
+                    return str(ast.literal_eval(match.group(0)))
+                except (SyntaxError, ValueError):
+                    return match.group(0)[1:-1]
+    return ""
+
+
+def window_title(node_id, titles):
+    identifier = bsp_id(node_id)
+    if titles is not None:
+        return str(titles.get(identifier, ""))
+    if shutil.which("xprop") is None:
+        return ""
+    result = subprocess.run(
+        ["xprop", "-id", identifier, "_NET_WM_NAME", "WM_NAME"],
+        check=False, capture_output=True, text=True, timeout=3,
+    )
+    return parse_title(result.stdout) if result.returncode == 0 else ""
+
+
+def workarea(monitor):
+    rectangle = monitor.get("rectangle", {})
+    padding = monitor.get("padding", {})
+    desktop = next((item for item in monitor.get("desktops", [])
+                    if item.get("id") == monitor.get("focusedDesktopId")), {})
+    desktop_padding = desktop.get("padding", {})
+    left = int(padding.get("left", 0)) + int(desktop_padding.get("left", 0))
+    right = int(padding.get("right", 0)) + int(desktop_padding.get("right", 0))
+    top = int(padding.get("top", 0)) + int(desktop_padding.get("top", 0))
+    bottom = int(padding.get("bottom", 0)) + int(desktop_padding.get("bottom", 0))
+    return {
+        "x": int(rectangle.get("x", 0)) + left,
+        "y": int(rectangle.get("y", 0)) + top,
+        "width": max(0, int(rectangle.get("width", 0)) - left - right),
+        "height": max(0, int(rectangle.get("height", 0)) - top - bottom),
+    }
+
+
+def collect_windows(node, monitor, desktop, focused_monitor, titles, result):
+    if not node:
+        return
+    client = node.get("client")
+    if client:
+        node_id = node.get("id", 0)
+        state = str(client.get("state", ""))
+        result.append({
+            "id": bsp_id(node_id),
+            "title": window_title(node_id, titles),
+            "appId": str(client.get("className")
+                         or client.get("instanceName") or ""),
+            "class": str(client.get("className", "")),
+            "instance": str(client.get("instanceName", "")),
+            "workspaceId": bsp_id(desktop.get("id", 0)),
+            "screenId": bsp_id(monitor.get("id", 0)),
+            "focused": monitor.get("id") == focused_monitor
+                and desktop.get("id") == monitor.get("focusedDesktopId")
+                and node_id == desktop.get("focusedNodeId"),
+            "urgent": client.get("urgent") is True,
+            "floating": state == "floating",
+            "fullscreen": state == "fullscreen",
+            "maximized": None,
+            "scratchpad": None,
+            "dock": False,
+        })
+    collect_windows(node.get("firstChild"), monitor, desktop,
+                    focused_monitor, titles, result)
+    collect_windows(node.get("secondChild"), monitor, desktop,
+                    focused_monitor, titles, result)
+
+
+def snapshot():
+    tree = load_tree()
+    titles = fixture_titles()
+    focused_monitor = tree.get("focusedMonitorId")
+    screens = []
+    workspaces = []
+    windows = []
+    for monitor in tree.get("monitors", []):
+        monitor_id = bsp_id(monitor.get("id", 0))
+        rectangle = monitor.get("rectangle", {})
+        screens.append({
+            "id": monitor_id,
+            "name": str(monitor.get("name", monitor_id)),
+            "geometry": {
+                "x": int(rectangle.get("x", 0)),
+                "y": int(rectangle.get("y", 0)),
+                "width": int(rectangle.get("width", 0)),
+                "height": int(rectangle.get("height", 0)),
+            },
+            "workarea": workarea(monitor),
+            "focused": monitor.get("id") == focused_monitor,
+            "physicalOutput": str(monitor.get("name", "")),
+            "virtual": False,
+        })
+        for index, desktop in enumerate(monitor.get("desktops", [])):
+            desktop_id = bsp_id(desktop.get("id", 0))
+            active = desktop.get("id") == monitor.get("focusedDesktopId")
+            desktop_windows = []
+            collect_windows(desktop.get("root"), monitor, desktop,
+                            focused_monitor, titles, desktop_windows)
+            windows.extend(desktop_windows)
+            workspaces.append({
+                "id": desktop_id,
+                "name": str(desktop.get("name", desktop_id)),
+                "index": index,
+                "screenId": monitor_id,
+                "active": active,
+                "focused": active and monitor.get("id") == focused_monitor,
+                "visible": active,
+                "occupied": bool(desktop_windows),
+                "urgent": any(item["urgent"] for item in desktop_windows),
+                "layout": str(desktop.get("layout", "")),
+            })
+    tools = fixture_dir() is not None or shutil.which("bspc") is not None
+    titles_available = fixture_dir() is not None or shutil.which("xprop") is not None
+    return {
+        "connected": True,
+        "capabilities": {
+            "screens": True,
+            "perScreenWorkspaces": True,
+            "workspaces": True,
+            "renameWorkspace": False,
+            "windows": True,
+            "windowTitles": titles_available,
+            "windowAppIdentity": True,
+            "focusWindow": tools,
+            "closeWindow": tools,
+            "moveWindowToWorkspace": tools,
+            "moveWindowToScreen": tools,
+            "scratchpad": False,
+            "virtualScreens": False,
+            "decorationStyling": False,
+            "eventStream": tools,
+            "layouts": False,
+            "gaps": tools,
+            "reload": False,
+            "sessionControl": False,
+            "keybindings": False,
+            "configurationEditor": False,
+        },
+        "screens": screens,
+        "workspaces": workspaces,
+        "windows": windows,
+    }
+
+
+def action(args):
+    if len(args) < 2:
+        raise RuntimeError("missing bspwm action")
+    kind = args[0]
+    if kind == "workspace" and len(args) == 2:
+        command = ["bspc", "desktop", args[1], "--focus"]
+    elif kind == "focus" and len(args) == 2:
+        command = ["bspc", "node", args[1], "--focus"]
+    elif kind == "focus-screen" and len(args) == 2:
+        command = ["bspc", "monitor", args[1], "--focus"]
+    elif kind == "close" and len(args) == 2:
+        command = ["bspc", "node", args[1], "--close"]
+    elif kind == "move-workspace" and len(args) == 3:
+        command = ["bspc", "node", args[1], "--to-desktop", args[2]]
+    elif kind == "move-screen" and len(args) == 3:
+        command = ["bspc", "node", args[1], "--to-monitor", args[2]]
+    elif kind == "gaps" and len(args) == 2:
+        command = ["bspc", "config", "window_gap", args[1]]
+    else:
+        raise RuntimeError(f"unknown bspwm action {kind}")
+    result = subprocess.run(command, check=False, timeout=4)
+    if result.returncode != 0:
+        raise RuntimeError(f"{kind} failed")
+
+
+def monitor():
+    if fixture_dir() is not None:
+        return
+    os.execvp("bspc", ["bspc", "subscribe", "monitor", "desktop", "node"])
+
+
+def main():
+    try:
+        command = sys.argv[1] if len(sys.argv) > 1 else "snapshot"
+        if command == "snapshot":
+            print(json.dumps(snapshot()))
+        elif command == "monitor":
+            monitor()
+        elif command == "action":
+            action(sys.argv[2:])
+        else:
+            raise RuntimeError(f"unknown command {command}")
+    except (OSError, ValueError, RuntimeError,
+            subprocess.SubprocessError, json.JSONDecodeError) as error:
+        print(json.dumps({"error": str(error)}), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

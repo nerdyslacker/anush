@@ -6,6 +6,7 @@ WindowManagerBackend common/WindowManagerBackend.qml
 MockWindowManagerBackend common/MockWindowManagerBackend.qml
 SkarwmBackend common/SkarwmBackend.qml
 EwmhBackend common/EwmhBackend.qml
+BspwmBackend common/BspwmBackend.qml
 singleton Sys common/Sys.qml
 singleton PopupCoordinator common/PopupCoordinator.qml
 singleton ShellControl common/ShellControl.qml

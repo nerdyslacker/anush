@@ -20,17 +20,20 @@ Singleton {
     readonly property string selectedBackendName: {
         if (requestedBackend === "auto") {
             if (!detectionComplete) return "detecting"
-            return detectedWmIdentity === "skarwm" ? "skarwm" : "ewmh"
+            if (["skarwm", "bspwm"].indexOf(detectedWmIdentity) >= 0)
+                return detectedWmIdentity
+            return "ewmh"
         }
-        if (["ewmh", "bspwm", "dwm", "i3", "spectrwm",
+        if (["ewmh", "dwm", "i3", "spectrwm",
                 "herbstluftwm"].indexOf(requestedBackend) >= 0)
             return "ewmh"
         return requestedBackend
     }
     readonly property var backend: selectedBackendName === "skarwm"
         ? skarwmBackend : selectedBackendName === "mock"
-            ? mockBackend : selectedBackendName === "ewmh"
-                ? ewmhBackend : unavailableBackend
+            ? mockBackend : selectedBackendName === "bspwm"
+                ? bspwmBackend : selectedBackendName === "ewmh"
+                    ? ewmhBackend : unavailableBackend
     readonly property string backendName: String(backend.name)
     readonly property bool connected: backend.connected === true
     readonly property var capabilities: backend.capabilities ?? ({})
@@ -426,11 +429,16 @@ Singleton {
         id: ewmhBackend
         active: ShellState.ready && root.selectedBackendName === "ewmh"
     }
+    BspwmBackend {
+        id: bspwmBackend
+        active: ShellState.ready && root.selectedBackendName === "bspwm"
+    }
     WindowManagerBackend {
         id: unavailableBackend
         name: root.selectedBackendName
         active: ShellState.ready && root.selectedBackendName !== "skarwm"
             && root.selectedBackendName !== "mock"
+            && root.selectedBackendName !== "bspwm"
             && root.selectedBackendName !== "ewmh"
     }
 

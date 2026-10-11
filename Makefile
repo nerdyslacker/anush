@@ -46,6 +46,7 @@ clean:
 
 test: build/anushctl
 	./tests/anushctl.sh
+	python3 ./tests/bspwm-provider.py
 	./tests/config-loading.sh
 	python3 ./tests/ewmh-provider.py
 	./tests/hotspot-control.sh
