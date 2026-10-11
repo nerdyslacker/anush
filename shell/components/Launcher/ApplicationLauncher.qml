@@ -546,7 +546,8 @@ Popout {
                         ThemedToolTip {
                             parent: favoriteMouse
                             visible: favoriteMouse.containsMouse
-                            text: favorite ? "Remove from Favorites" : "Add to Favorites"
+                            text: favoriteButton.favorite
+                                ? "Remove from Favorites" : "Add to Favorites"
                             x: (favoriteMouse.width - width) / 2
                             y: favoriteMouse.height + 6
                         }
