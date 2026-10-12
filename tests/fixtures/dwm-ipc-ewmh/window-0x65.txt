@@ -1,0 +1,8 @@
+_NET_WM_NAME(UTF8_STRING) = "Terminal"
+WM_NAME(STRING) = "Terminal"
+WM_CLASS(STRING) = "kitty", "kitty"
+WM_HINTS(WM_HINTS):
+    Client accepts input or input focus: True
+_NET_WM_DESKTOP:  no such atom on any window.
+_NET_WM_STATE(ATOM) =
+_NET_WM_WINDOW_TYPE(ATOM) = _NET_WM_WINDOW_TYPE_NORMAL

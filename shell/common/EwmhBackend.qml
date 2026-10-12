@@ -8,15 +8,17 @@ WindowManagerBackend {
 
     name: "ewmh"
     property string profile: "ewmh"
+    property string providerName: "ewmh-provider"
     property string wmName: ""
     property string wmIdentity: "unknown"
-    readonly property string provider:
-        ShellState.scriptsDir + "/wm/ewmh-provider"
+    property string integration: ""
+    readonly property string provider: ShellState.scriptsDir + "/wm/" + providerName
 
     function clearState() {
         connected = false
         wmName = ""
         wmIdentity = "unknown"
+        integration = ""
         capabilities = ({})
         screens = []
         workspaces = []
@@ -48,16 +50,21 @@ WindowManagerBackend {
 
     function acceptSnapshot(text) {
         try {
+            const previousIntegration = integration
             const value = JSON.parse(String(text ?? ""))
             if (value.error !== undefined) throw new Error(String(value.error))
             connected = value.connected === true
             wmName = String(value.wmName ?? "")
             wmIdentity = String(value.wmIdentity ?? "unknown")
+            integration = String(value.integration ?? profile)
             capabilities = value.capabilities ?? ({})
             screens = Array.isArray(value.screens) ? value.screens : []
             workspaces = Array.isArray(value.workspaces) ? value.workspaces : []
             windows = Array.isArray(value.windows) ? value.windows : []
             changed()
+            if (previousIntegration !== ""
+                    && previousIntegration !== integration)
+                eventMonitor.running = false
         } catch (error) {
             console.warn("EWMH snapshot:", error)
             clearState()

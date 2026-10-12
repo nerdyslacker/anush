@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+
+import json
+import os
+from pathlib import Path
+import socket
+import struct
+import subprocess
+import sys
+
+
+MAGIC = b"DWM-IPC"
+GET_MONITORS = 1
+GET_TAGS = 2
+GET_CLIENT = 4
+SUBSCRIBE = 5
+EVENT = 6
+EVENT_NAMES = [
+    "tag_change_event",
+    "client_focus_change_event",
+    "layout_change_event",
+    "monitor_focus_change_event",
+    "focused_title_change_event",
+    "focused_state_change_event",
+]
+EWMH_PROVIDER = Path(__file__).with_name("ewmh-provider")
+
+
+def fixture_dir():
+    value = os.environ.get("ANUSH_DWM_IPC_FIXTURE_DIR", "")
+    return Path(value) if value else None
+
+
+def socket_path():
+    return os.environ.get("ANUSH_DWM_IPC_SOCKET", "/tmp/dwm.sock")
+
+
+def connect_ipc():
+    connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    connection.settimeout(5)
+    try:
+        connection.connect(socket_path())
+        return connection
+    except OSError:
+        connection.close()
+        raise
+
+
+def receive_exact(connection, size):
+    chunks = []
+    remaining = size
+    while remaining:
+        chunk = connection.recv(remaining)
+        if not chunk:
+            raise RuntimeError("Dwm IPC connection closed")
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
+def send_message(connection, message_type, payload=b"\0"):
+    connection.sendall(
+        MAGIC + struct.pack("=IB", len(payload), message_type) + payload
+    )
+
+
+def receive_message(connection):
+    header = receive_exact(connection, len(MAGIC) + 5)
+    if header[:len(MAGIC)] != MAGIC:
+        raise RuntimeError("invalid Dwm IPC magic")
+    length, message_type = struct.unpack("=IB", header[len(MAGIC):])
+    if length > 64 * 1024 * 1024:
+        raise RuntimeError("Dwm IPC payload is too large")
+    payload = receive_exact(connection, length).rstrip(b"\0")
+    value = json.loads(payload.decode("utf-8")) if payload else None
+    return message_type, value
+
+
+def request(connection, message_type, value=None):
+    payload = b"\0" if value is None else json.dumps(
+        value, separators=(",", ":"),
+    ).encode("utf-8")
+    send_message(connection, message_type, payload)
+    reply_type, reply = receive_message(connection)
+    if reply_type != message_type:
+        raise RuntimeError(f"unexpected Dwm IPC reply type {reply_type}")
+    if isinstance(reply, dict) and reply.get("result") == "error":
+        raise RuntimeError(str(reply.get("reason") or "Dwm IPC request failed"))
+    return reply
+
+
+def ipc_snapshot():
+    directory = fixture_dir()
+    if directory is not None:
+        return {
+            "monitors": json.loads((directory / "monitors.json").read_text()),
+            "tags": json.loads((directory / "tags.json").read_text()),
+            "clients": json.loads((directory / "clients.json").read_text()),
+        }
+    connection = connect_ipc()
+    try:
+        monitors = request(connection, GET_MONITORS)
+        tags = request(connection, GET_TAGS)
+        clients = []
+        seen = set()
+        for monitor in monitors:
+            for window_id in monitor.get("clients", {}).get("all", []):
+                if window_id in seen:
+                    continue
+                seen.add(window_id)
+                clients.append(request(connection, GET_CLIENT, {
+                    "client_window_id": int(window_id),
+                }))
+        return {"monitors": monitors, "tags": tags, "clients": clients}
+    finally:
+        connection.close()
+
+
+def ewmh_snapshot():
+    result = subprocess.run(
+        [str(EWMH_PROVIDER), "snapshot", "dwm"], check=False,
+        capture_output=True, text=True, timeout=10,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "EWMH snapshot failed")
+    return json.loads(result.stdout)
+
+
+def rectangle(value):
+    return {
+        "x": int(value.get("x", 0)),
+        "y": int(value.get("y", 0)),
+        "width": int(value.get("width", 0)),
+        "height": int(value.get("height", 0)),
+    }
+
+
+def normalize(raw, metadata):
+    tags = raw.get("tags", [])
+    monitors = raw.get("monitors", [])
+    client_values = raw.get("clients", [])
+    metadata_windows = {
+        str(window.get("id")): window for window in metadata.get("windows", [])
+    }
+
+    screens = []
+    workspaces = []
+    selected_clients = set()
+    for monitor in monitors:
+        number = int(monitor.get("num", 0))
+        screen_id = str(number)
+        selected = monitor.get("is_selected") is True
+        tag_state = monitor.get("tag_state") or {}
+        selected_mask = int(tag_state.get("selected", 0))
+        occupied_mask = int(tag_state.get("occupied", 0))
+        urgent_mask = int(tag_state.get("urgent", 0))
+        selected_client = int(
+            (monitor.get("clients") or {}).get("selected") or 0
+        )
+        if selected and selected_client:
+            selected_clients.add(str(selected_client))
+        screens.append({
+            "id": screen_id,
+            "name": f"Monitor {number + 1}",
+            "geometry": rectangle(monitor.get("monitor_geometry") or {}),
+            "workarea": rectangle(monitor.get("window_geometry") or {}),
+            "focused": selected,
+            "physicalOutput": None,
+            "virtual": None,
+        })
+        layout = str(
+            ((monitor.get("layout") or {}).get("symbol") or {}).get(
+                "current", "",
+            )
+        )
+        for index, tag_value in enumerate(tags):
+            mask = int(tag_value.get("bit_mask", 0))
+            visible = bool(selected_mask & mask)
+            workspaces.append({
+                "id": f"{screen_id}:{mask}",
+                "name": str(tag_value.get("name") or index + 1),
+                "index": index,
+                "screenId": screen_id,
+                "active": visible,
+                "focused": selected and visible,
+                "visible": visible,
+                "occupied": bool(occupied_mask & mask),
+                "urgent": bool(urgent_mask & mask),
+                "layout": layout if visible else "",
+            })
+
+    windows = []
+    for client in client_values:
+        window_id = str(int(client.get("window_id", 0)))
+        monitor_number = int(client.get("monitor_number", 0))
+        tag_mask = int(client.get("tags", 0))
+        single_tag = tag_mask > 0 and tag_mask & (tag_mask - 1) == 0
+        metadata_window = metadata_windows.get(window_id, {})
+        states = client.get("states") or {}
+        windows.append({
+            "id": window_id,
+            "title": str(client.get("name") or metadata_window.get("title") or ""),
+            "appId": str(metadata_window.get("appId") or ""),
+            "class": str(metadata_window.get("class") or ""),
+            "instance": str(metadata_window.get("instance") or ""),
+            "workspaceId": f"{monitor_number}:{tag_mask}" if single_tag else None,
+            "screenId": str(monitor_number),
+            "focused": window_id in selected_clients,
+            "urgent": states.get("is_urgent") is True,
+            "floating": states.get("is_floating") is True,
+            "fullscreen": states.get("is_fullscreen") is True,
+            "maximized": None,
+            "scratchpad": None,
+            "dock": metadata_window.get("dock") is True,
+        })
+
+    return {
+        "connected": True,
+        "wmName": metadata.get("wmName", "dwm"),
+        "wmIdentity": "dwm",
+        "integration": "dwm-ipc",
+        "capabilities": {
+            "screens": True,
+            "perScreenWorkspaces": True,
+            "workspaces": True,
+            "renameWorkspace": False,
+            "windows": True,
+            "windowTitles": True,
+            "windowAppIdentity": metadata.get("capabilities", {}).get(
+                "windowAppIdentity", False,
+            ),
+            "focusWindow": False,
+            "closeWindow": False,
+            "moveWindowToWorkspace": False,
+            "moveWindowToScreen": False,
+            "scratchpad": False,
+            "virtualScreens": False,
+            "decorationStyling": False,
+            "eventStream": True,
+            "layouts": False,
+            "gaps": False,
+            "reload": False,
+            "sessionControl": False,
+            "keybindings": False,
+            "configurationEditor": False,
+        },
+        "screens": screens,
+        "workspaces": workspaces,
+        "windows": windows,
+    }
+
+
+def snapshot():
+    metadata = ewmh_snapshot()
+    try:
+        return normalize(ipc_snapshot(), metadata)
+    except (OSError, RuntimeError, ValueError, json.JSONDecodeError):
+        return metadata
+
+
+def monitor_ipc():
+    directory = fixture_dir()
+    if directory is not None:
+        path = directory / "events.jsonl"
+        if path.exists():
+            print(path.read_text(), end="")
+        return
+    connection = connect_ipc()
+    try:
+        for event_name in EVENT_NAMES:
+            reply = request(connection, SUBSCRIBE, {
+                "event": event_name,
+                "action": "subscribe",
+            })
+            if isinstance(reply, dict) and reply.get("result") not in (
+                    None, "success"):
+                raise RuntimeError(f"failed to subscribe to {event_name}")
+        connection.settimeout(None)
+        while True:
+            message_type, payload = receive_message(connection)
+            if message_type == EVENT:
+                print(json.dumps(payload), flush=True)
+    finally:
+        connection.close()
+
+
+def monitor():
+    try:
+        monitor_ipc()
+    except (OSError, RuntimeError, ValueError, json.JSONDecodeError):
+        os.execv(EWMH_PROVIDER, [str(EWMH_PROVIDER), "monitor"])
+
+
+def main():
+    try:
+        command = sys.argv[1] if len(sys.argv) > 1 else "snapshot"
+        if command == "snapshot":
+            print(json.dumps(snapshot()))
+        elif command == "monitor":
+            monitor()
+        else:
+            raise RuntimeError(f"unknown Dwm provider command {command}")
+    except (OSError, RuntimeError, ValueError, subprocess.SubprocessError,
+            json.JSONDecodeError) as error:
+        print(json.dumps({"error": str(error)}), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

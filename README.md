@@ -33,6 +33,8 @@ Required:
   root `I3_SOCKET_PATH` property, or `i3 --get-socketpath` must expose it.
 - the Spectrwm adapter uses its standard EWMH properties through Xprop; Xdotool
   enables its supported workspace and window actions.
+- stock Dwm needs only Xprop. The optional `dwm-ipc` integration probes
+  `/tmp/dwm.sock`, or the path in `ANUSH_DWM_IPC_SOCKET`, directly.
 
 Optional desktop integrations:
 

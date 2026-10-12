@@ -1,0 +1,5 @@
+[
+  {"bit_mask": 1, "name": "term"},
+  {"bit_mask": 2, "name": "web"},
+  {"bit_mask": 4, "name": "chat"}
+]

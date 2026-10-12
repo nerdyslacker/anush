@@ -1,0 +1,8 @@
+_NET_WM_NAME(UTF8_STRING) = "Picture in Picture"
+WM_NAME(STRING) = "Picture in Picture"
+WM_CLASS(STRING) = "Toolkit", "firefox"
+WM_HINTS(WM_HINTS):
+    The urgency hint bit is set.
+_NET_WM_DESKTOP:  no such atom on any window.
+_NET_WM_STATE(ATOM) =
+_NET_WM_WINDOW_TYPE(ATOM) = _NET_WM_WINDOW_TYPE_DIALOG

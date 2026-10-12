@@ -300,6 +300,7 @@ def snapshot(profile="ewmh"):
         "connected": identity["connected"],
         "wmName": identity["name"],
         "wmIdentity": normalize_identity(identity["name"]),
+        "integration": "stock" if profile == "dwm" else profile,
         "capabilities": capabilities,
         "screens": [],
         "workspaces": workspaces,

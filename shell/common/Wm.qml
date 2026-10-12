@@ -40,6 +40,7 @@ Singleton {
                                 ? dwmBackend : selectedBackendName === "ewmh"
                                     ? ewmhBackend : unavailableBackend
     readonly property string backendName: String(backend.name)
+    readonly property string backendIntegration: String(backend.integration ?? "")
     readonly property bool connected: backend.connected === true
     readonly property var capabilities: backend.capabilities ?? ({})
     readonly property var screens: backend.screens ?? []
