@@ -20,12 +20,12 @@ Singleton {
     readonly property string selectedBackendName: {
         if (requestedBackend === "auto") {
             if (!detectionComplete) return "detecting"
-            if (["skarwm", "bspwm", "herbstluftwm", "i3"]
+            if (["skarwm", "bspwm", "herbstluftwm", "i3", "spectrwm"]
                     .indexOf(detectedWmIdentity) >= 0)
                 return detectedWmIdentity
             return "ewmh"
         }
-        if (["ewmh", "dwm", "spectrwm"]
+        if (["ewmh", "dwm"]
                 .indexOf(requestedBackend) >= 0)
             return "ewmh"
         return requestedBackend
@@ -35,8 +35,9 @@ Singleton {
             ? mockBackend : selectedBackendName === "bspwm"
                 ? bspwmBackend : selectedBackendName === "herbstluftwm"
                     ? herbstluftwmBackend : selectedBackendName === "i3"
-                        ? i3Backend : selectedBackendName === "ewmh"
-                            ? ewmhBackend : unavailableBackend
+                        ? i3Backend : selectedBackendName === "spectrwm"
+                            ? spectrwmBackend : selectedBackendName === "ewmh"
+                                ? ewmhBackend : unavailableBackend
     readonly property string backendName: String(backend.name)
     readonly property bool connected: backend.connected === true
     readonly property var capabilities: backend.capabilities ?? ({})
@@ -460,6 +461,10 @@ Singleton {
         id: i3Backend
         active: ShellState.ready && root.selectedBackendName === "i3"
     }
+    SpectrwmBackend {
+        id: spectrwmBackend
+        active: ShellState.ready && root.selectedBackendName === "spectrwm"
+    }
     WindowManagerBackend {
         id: unavailableBackend
         name: root.selectedBackendName
@@ -468,6 +473,7 @@ Singleton {
             && root.selectedBackendName !== "bspwm"
             && root.selectedBackendName !== "herbstluftwm"
             && root.selectedBackendName !== "i3"
+            && root.selectedBackendName !== "spectrwm"
             && root.selectedBackendName !== "ewmh"
     }
 

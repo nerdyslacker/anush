@@ -293,6 +293,12 @@ def action(args):
         command.extend(["set_desktop_for_window", value, args[2]])
     else:
         raise RuntimeError(f"unknown EWMH action {kind}")
+    action_log = os.environ.get("ANUSH_EWMH_ACTION_LOG", "")
+    if fixture_dir() is not None:
+        if not action_log:
+            raise RuntimeError("ANUSH_EWMH_ACTION_LOG is not set")
+        Path(action_log).write_text(json.dumps(command))
+        return
     result = subprocess.run(command, check=False, timeout=4)
     if result.returncode != 0:
         raise RuntimeError(f"{kind} failed")
@@ -300,6 +306,9 @@ def action(args):
 
 def monitor(identity_only=False):
     if fixture_dir() is not None:
+        path = fixture_dir() / "events.jsonl"
+        if path.exists():
+            print(path.read_text(), end="")
         return
     properties_to_watch = ["_NET_SUPPORTING_WM_CHECK", "_NET_WM_NAME"] \
         if identity_only else ROOT_PROPERTIES
