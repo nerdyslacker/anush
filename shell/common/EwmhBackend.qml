@@ -7,6 +7,7 @@ WindowManagerBackend {
     id: root
 
     name: "ewmh"
+    property string profile: "ewmh"
     property string wmName: ""
     property string wmIdentity: "unknown"
     readonly property string provider:
@@ -109,7 +110,7 @@ WindowManagerBackend {
 
     Process {
         id: snapshotQuery
-        command: [root.provider, "snapshot"]
+        command: [root.provider, "snapshot", root.profile]
         running: false
         stdout: StdioCollector { id: snapshotOutput }
         stderr: StdioCollector { id: snapshotError }

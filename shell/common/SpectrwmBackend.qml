@@ -3,4 +3,5 @@ import ".."
 
 EwmhBackend {
     name: "spectrwm"
+    profile: "spectrwm"
 }

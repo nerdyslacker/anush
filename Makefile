@@ -48,6 +48,7 @@ test: build/anushctl
 	./tests/anushctl.sh
 	python3 ./tests/bspwm-provider.py
 	./tests/config-loading.sh
+	python3 ./tests/dwm-backend.py
 	python3 ./tests/ewmh-provider.py
 	python3 ./tests/herbstluftwm-provider.py
 	python3 ./tests/i3-provider.py

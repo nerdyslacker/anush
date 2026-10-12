@@ -24,6 +24,7 @@ WINDOW_PROPERTIES = [
     "_NET_WM_NAME",
     "WM_NAME",
     "WM_CLASS",
+    "WM_HINTS",
     "_NET_WM_DESKTOP",
     "_NET_WM_STATE",
     "_NET_WM_WINDOW_TYPE",
@@ -69,13 +70,21 @@ def xprop(target, properties):
 
 def properties(text):
     result = {}
+    current = None
     for line in text.splitlines():
-        if not line or line[0].isspace():
+        if not line:
+            continue
+        if line[0].isspace():
+            if current is not None:
+                result[current] += "\n" + line
             continue
         name = line.split("(", 1)[0].split(":", 1)[0].strip()
-        if not name.startswith("_") and name not in ("WM_NAME", "WM_CLASS"):
+        if not name.startswith("_") \
+                and name not in ("WM_NAME", "WM_CLASS", "WM_HINTS"):
+            current = None
             continue
         result[name] = line
+        current = name
     return result
 
 
@@ -164,7 +173,17 @@ def window_snapshot(window_id, active_id, atoms):
         desktop = None
     states = supported_atoms(values.get("_NET_WM_STATE", ""))
     types = supported_atoms(values.get("_NET_WM_WINDOW_TYPE", ""))
-    state_known = "_NET_WM_STATE" in atoms
+    hints = values.get("WM_HINTS", "").lower()
+    if "_NET_WM_STATE_DEMANDS_ATTENTION" in atoms:
+        urgent = "_NET_WM_STATE_DEMANDS_ATTENTION" in states
+    elif hints:
+        urgent = "urgency hint" in hints
+    else:
+        urgent = None
+    fullscreen = "_NET_WM_STATE_FULLSCREEN" in states \
+        if "_NET_WM_STATE_FULLSCREEN" in atoms else None
+    maximized_supported = "_NET_WM_STATE_MAXIMIZED_VERT" in atoms \
+        and "_NET_WM_STATE_MAXIMIZED_HORZ" in atoms
     return {
         "id": str(int(window_id, 16)),
         "title": title,
@@ -174,21 +193,21 @@ def window_snapshot(window_id, active_id, atoms):
         "workspaceId": str(desktop) if desktop is not None else None,
         "screenId": None,
         "focused": window_id == active_id,
-        "urgent": "_NET_WM_STATE_DEMANDS_ATTENTION" in states
-            if state_known else None,
+        "urgent": urgent,
         "floating": None,
-        "fullscreen": "_NET_WM_STATE_FULLSCREEN" in states
-            if state_known else None,
+        "fullscreen": fullscreen,
         "maximized": (
             "_NET_WM_STATE_MAXIMIZED_VERT" in states
             and "_NET_WM_STATE_MAXIMIZED_HORZ" in states
-        ) if state_known else None,
+        ) if maximized_supported else None,
         "scratchpad": None,
         "dock": "_NET_WM_WINDOW_TYPE_DOCK" in types,
     }
 
 
-def snapshot():
+def snapshot(profile="ewmh"):
+    if profile not in ("ewmh", "spectrwm", "dwm"):
+        raise RuntimeError(f"unknown EWMH profile {profile}")
     root_values = properties(xprop("root", ROOT_PROPERTIES))
     identity = wm_identity(root_values)
     atoms = supported_atoms(root_values.get("_NET_SUPPORTED", ""))
@@ -216,6 +235,9 @@ def snapshot():
                 "floating": None, "fullscreen": None, "maximized": None,
                 "scratchpad": None, "dock": False,
             })
+    if profile == "dwm":
+        for window in windows:
+            window["workspaceId"] = None
 
     occupied = {
         window["workspaceId"] for window in windows
@@ -226,7 +248,7 @@ def snapshot():
         if window["workspaceId"] is not None and window["urgent"] is True
     }
     workspaces = []
-    if "_NET_NUMBER_OF_DESKTOPS" in atoms and count > 0:
+    if profile != "dwm" and "_NET_NUMBER_OF_DESKTOPS" in atoms and count > 0:
         for index in range(count):
             workspace_id = str(index)
             workspaces.append({
@@ -267,6 +289,13 @@ def snapshot():
         "keybindings": False,
         "configurationEditor": False,
     }
+    if profile == "dwm":
+        capabilities.update({
+            "workspaces": False,
+            "focusWindow": False,
+            "closeWindow": False,
+            "moveWindowToWorkspace": False,
+        })
     return {
         "connected": identity["connected"],
         "wmName": identity["name"],
@@ -323,7 +352,8 @@ def main():
             value["identity"] = normalize_identity(value["name"])
             print(json.dumps(value))
         elif command == "snapshot":
-            print(json.dumps(snapshot()))
+            profile = sys.argv[2] if len(sys.argv) > 2 else "ewmh"
+            print(json.dumps(snapshot(profile)))
         elif command == "monitor":
             monitor(False)
         elif command == "monitor-identity":
