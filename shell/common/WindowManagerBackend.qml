@@ -7,6 +7,8 @@ Scope {
     property string name: "unknown"
     property bool active: false
     property bool connected: false
+    readonly property string connectionState: !active ? "inactive"
+        : connected ? "connected" : "disconnected"
     property var capabilities: ({})
     property var screens: []
     property var workspaces: []

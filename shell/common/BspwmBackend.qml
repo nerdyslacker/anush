@@ -52,8 +52,10 @@ WindowManagerBackend {
         try {
             const value = JSON.parse(String(text ?? ""))
             if (value.error !== undefined) throw new Error(String(value.error))
+            if (value.connected !== true)
+                throw new Error("bspwm is unavailable")
             snapshotRetryTimer.stop()
-            connected = value.connected === true
+            connected = true
             capabilities = value.capabilities ?? ({})
             screens = Array.isArray(value.screens) ? value.screens : []
             workspaces = Array.isArray(value.workspaces) ? value.workspaces : []
@@ -62,6 +64,7 @@ WindowManagerBackend {
         } catch (error) {
             console.warn("bspwm snapshot:", error)
             clearState()
+            if (active) snapshotRetryTimer.restart()
         }
     }
 

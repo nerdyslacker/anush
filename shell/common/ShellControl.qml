@@ -18,6 +18,7 @@ Singleton {
             backend: Wm.backendName,
             integration: Wm.backendIntegration,
             connected: Wm.connected,
+            connectionState: Wm.connectionState,
             focusedScreen: Wm.focusedScreen ? Wm.focusedScreen.id : null,
             focusedWorkspace: Wm.focusedWorkspace
                 ? Wm.focusedWorkspace.id : null,

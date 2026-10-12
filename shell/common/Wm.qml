@@ -42,6 +42,7 @@ Singleton {
     readonly property string backendName: String(backend.name)
     readonly property string backendIntegration: String(backend.integration ?? "")
     readonly property bool connected: backend.connected === true
+    readonly property string connectionState: String(backend.connectionState)
     readonly property var capabilities: backend.capabilities ?? ({})
     readonly property var screens: backend.screens ?? []
     readonly property var workspaces: backend.workspaces ?? []
@@ -496,6 +497,7 @@ Singleton {
         function onPhysicalOutputDisconnected() { root.physicalOutputDisconnected() }
         function onConnectedChanged() {
             if (root.connected) root.loadWindowManagerState()
+            else root.lastFocusedWindowByScreen = ({})
         }
     }
     Connections {

@@ -89,7 +89,7 @@ errors return 1.
 
 The `wm` namespace talks only to the normalized window-manager service. IDs in
 its output are opaque and can be passed back to the corresponding action. The
-`status` command reports backend selection, integration mode, connection state,
+`status` command reports backend selection, integration mode, lifecycle state,
 focused objects, and model counts. `state` includes that status plus all
 capabilities, screens, workspaces, and windows for diagnostics. Unsupported
 actions, disconnected backends, unknown IDs, and backend rejections return 1

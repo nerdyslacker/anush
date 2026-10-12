@@ -28,7 +28,7 @@ case "$*" in
     *'-d --no-duplicate -p '*) rm -f "$FAKE_QS_STATE" ;;
     *'call anush ping') [ ! -e "$FAKE_QS_STATE" ] ;;
     *'call anush status') printf '%s\n' '{"name":"anush","protocol":1}' ;;
-    *'call wm status') printf '%s\n' '{"backend":"mock","connected":true}' ;;
+    *'call wm status') printf '%s\n' '{"backend":"mock","connected":true,"connectionState":"connected"}' ;;
     *'call wm capabilities') printf '%s\n' '{"workspaces":true,"focusWindow":true}' ;;
     *'call wm screens') printf '%s\n' '[{"id":"left"}]' ;;
     *'call wm workspaces') printf '%s\n' '[{"id":"1"}]' ;;
@@ -131,6 +131,7 @@ $binary theme mode light
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call anush themeMode light'
 wm_status=$($binary wm status)
 assert_contains "$wm_status" '"backend":"mock"'
+assert_contains "$wm_status" '"connectionState":"connected"'
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call wm status'
 assert_contains "$($binary wm capabilities)" '"focusWindow":true'
 assert_contains "$($binary wm screens)" '"id":"left"'

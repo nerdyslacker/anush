@@ -12,6 +12,7 @@ WindowManagerBackend {
     property string wmName: ""
     property string wmIdentity: "unknown"
     property string integration: ""
+    property bool refreshPending: false
     readonly property string provider: ShellState.scriptsDir + "/wm/" + providerName
 
     function clearState() {
@@ -35,8 +36,10 @@ WindowManagerBackend {
 
     function stop() {
         reconnectTimer.stop()
+        snapshotRetryTimer.stop()
         refreshTimer.stop()
         reconcileTimer.stop()
+        refreshPending = false
         snapshotQuery.running = false
         eventMonitor.running = false
         clearState()
@@ -44,7 +47,11 @@ WindowManagerBackend {
 
     function refresh() {
         if (!active) return
-        snapshotQuery.running = false
+        if (snapshotQuery.running) {
+            refreshPending = true
+            return
+        }
+        refreshPending = false
         snapshotQuery.running = true
     }
 
@@ -53,7 +60,10 @@ WindowManagerBackend {
             const previousIntegration = integration
             const value = JSON.parse(String(text ?? ""))
             if (value.error !== undefined) throw new Error(String(value.error))
-            connected = value.connected === true
+            if (value.connected !== true)
+                throw new Error("EWMH window manager is unavailable")
+            snapshotRetryTimer.stop()
+            connected = true
             wmName = String(value.wmName ?? "")
             wmIdentity = String(value.wmIdentity ?? "unknown")
             integration = String(value.integration ?? profile)
@@ -68,6 +78,7 @@ WindowManagerBackend {
         } catch (error) {
             console.warn("EWMH snapshot:", error)
             clearState()
+            if (active) snapshotRetryTimer.restart()
         }
     }
 
@@ -129,7 +140,9 @@ WindowManagerBackend {
                 const detail = snapshotError.text.trim()
                 if (detail !== "") console.warn("EWMH provider:", detail)
                 root.clearState()
+                snapshotRetryTimer.restart()
             }
+            if (root.refreshPending) refreshTimer.restart()
         }
     }
 
@@ -158,6 +171,11 @@ WindowManagerBackend {
         id: reconnectTimer
         interval: 2000
         onTriggered: root.start()
+    }
+    Timer {
+        id: snapshotRetryTimer
+        interval: 2000
+        onTriggered: root.refresh()
     }
     Timer {
         id: reconcileTimer

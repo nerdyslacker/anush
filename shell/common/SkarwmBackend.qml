@@ -52,16 +52,20 @@ WindowManagerBackend {
 
     function start() {
         if (!active) return
+        snapshotRetryTimer.stop()
         versionQuery.running = true
         workspaceQuery.running = true
         workspaceConfigQuery.running = true
         windowQuery.running = true
         outputQuery.running = true
         eventSubscription.running = true
+        reconcileTimer.start()
     }
 
     function stop() {
         reconnectTimer.stop()
+        snapshotRetryTimer.stop()
+        reconcileTimer.stop()
         versionQuery.running = false
         workspaceQuery.running = false
         workspaceConfigQuery.running = false
@@ -81,6 +85,12 @@ WindowManagerBackend {
         workspaceConfigQuery.running = true
         outputQuery.running = false
         outputQuery.running = true
+    }
+
+    function snapshotFailed(source) {
+        console.warn("skarwm " + source + " query failed")
+        clearState()
+        if (active) snapshotRetryTimer.restart()
     }
 
     function acceptWorkspaceConfig(line) {
@@ -123,6 +133,7 @@ WindowManagerBackend {
             changed()
         } catch (error) {
             console.warn("skarwm workspace snapshot:", error)
+            snapshotFailed("workspace")
         }
     }
 
@@ -173,6 +184,7 @@ WindowManagerBackend {
             changed()
         } catch (error) {
             console.warn("skarwm window snapshot:", error)
+            snapshotFailed("window")
         }
     }
 
@@ -195,6 +207,7 @@ WindowManagerBackend {
             changed()
         } catch (error) {
             console.warn("skarwm output snapshot:", error)
+            snapshotFailed("output")
         }
     }
 
@@ -310,11 +323,13 @@ WindowManagerBackend {
                     root.connected = String(value?.human_readable ?? "")
                         .toLowerCase().indexOf("skarwm") !== -1
                 } catch (error) {
-                    root.connected = false
+                    if (root.active) root.snapshotFailed("version")
                 }
             }
         }
-        onExited: code => { if (code !== 0) root.connected = false }
+        onExited: code => {
+            if (code !== 0 && root.active) root.snapshotFailed("version")
+        }
     }
 
     Process {
@@ -322,6 +337,9 @@ WindowManagerBackend {
         command: [root.msgPath, "get-workspaces"]
         running: false
         stdout: SplitParser { onRead: line => root.acceptWorkspaces(line) }
+        onExited: code => {
+            if (code !== 0 && root.active) root.snapshotFailed("workspace")
+        }
     }
 
     Process {
@@ -336,6 +354,9 @@ WindowManagerBackend {
         command: [root.msgPath, "get-windows"]
         running: false
         stdout: SplitParser { onRead: line => root.acceptWindows(line) }
+        onExited: code => {
+            if (code !== 0 && root.active) root.snapshotFailed("window")
+        }
     }
 
     Process {
@@ -343,6 +364,9 @@ WindowManagerBackend {
         command: [root.msgPath, "get-outputs"]
         running: false
         stdout: SplitParser { onRead: line => root.acceptOutputs(line) }
+        onExited: code => {
+            if (code !== 0 && root.active) root.snapshotFailed("output")
+        }
     }
 
     Process {
@@ -385,5 +409,16 @@ WindowManagerBackend {
         id: reconnectTimer
         interval: 2000
         onTriggered: root.start()
+    }
+    Timer {
+        id: snapshotRetryTimer
+        interval: 2000
+        onTriggered: root.refresh()
+    }
+    Timer {
+        id: reconcileTimer
+        interval: 30000
+        repeat: true
+        onTriggered: root.refresh()
     }
 }
