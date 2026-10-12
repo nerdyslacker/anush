@@ -53,6 +53,18 @@ anushctl wallpaper random
 anushctl wallpaper restore
 anushctl theme mode light
 anushctl theme mode dark
+anushctl wm status
+anushctl wm capabilities
+anushctl wm screens
+anushctl wm workspaces
+anushctl wm windows
+anushctl wm state
+anushctl wm workspace focus WORKSPACE_ID
+anushctl wm screen focus SCREEN_ID
+anushctl wm window focus WINDOW_ID
+anushctl wm window close WINDOW_ID
+anushctl wm window move-workspace WINDOW_ID WORKSPACE_ID
+anushctl wm window move-screen WINDOW_ID SCREEN_ID
 ```
 
 `sidebar toggle` is an alias for the current Notepad sidebar. `reload` uses
@@ -75,6 +87,14 @@ If no matching Quickshell instance is available, runtime commands print a clear
 error and return exit code 3. Invalid usage returns 2 and other runtime or file
 errors return 1.
 
+The `wm` namespace talks only to the normalized window-manager service. IDs in
+its output are opaque and can be passed back to the corresponding action. The
+`status` command reports backend selection, integration mode, connection state,
+focused objects, and model counts. `state` includes that status plus all
+capabilities, screens, workspaces, and windows for diagnostics. Unsupported
+actions, disconnected backends, unknown IDs, and backend rejections return 1
+with an explanatory error instead of silently succeeding.
+
 ## Compositor integration
 
 `anushctl` does not edit the skarwm configuration. See
@@ -90,6 +110,10 @@ targets:
 anush.status() -> JSON string
 anush.reload()
 anush.themeMode("light" | "dark")
+wm.status() | capabilities() | screens() | workspaces() | windows() | state()
+wm.workspaceFocus(id) | screenFocus(id)
+wm.windowFocus(id) | windowClose(id)
+wm.windowMoveWorkspace(id, workspaceId) | windowMoveScreen(id, screenId)
 launcher.toggleCentered()
 clipboard.toggle()
 notepad.toggle() | newNote() | save() | close()

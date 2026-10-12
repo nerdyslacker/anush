@@ -32,6 +32,14 @@ Runtime commands:
   wallpaper set FILE             Set the desktop wallpaper
   wallpaper random|restore       Pick a random or restore the last wallpaper
   theme mode light|dark          Change the shell colour mode
+  wm status|capabilities         Show the active WM backend and its features
+  wm screens|workspaces|windows  Show normalized WM state
+  wm state                       Dump all normalized WM state
+  wm workspace focus ID          Focus a workspace
+  wm screen focus ID             Focus a screen
+  wm window focus|close ID       Focus or close a window
+  wm window move-workspace ID WORKSPACE
+  wm window move-screen ID SCREEN
 
 Other:
   help, -h, --help               Show this help
@@ -44,6 +52,36 @@ usage_error :: proc(message: string) -> int {
     fmt.eprintln("anushctl:", message)
     fmt.eprintln("Try 'anushctl --help' for usage.")
     return EXIT_USAGE
+}
+
+run_wm_command :: proc(args: []string) -> int {
+    if len(args) == 1 {
+        switch args[0] {
+        case "status", "capabilities", "screens", "workspaces", "windows", "state":
+            return ipc_call("wm", args[0], nil)
+        }
+    }
+    if len(args) == 3 && args[0] == "workspace" && args[1] == "focus" {
+        return ipc_action_call("wm", "workspaceFocus", []string{args[2]})
+    }
+    if len(args) == 3 && args[0] == "screen" && args[1] == "focus" {
+        return ipc_action_call("wm", "screenFocus", []string{args[2]})
+    }
+    if len(args) == 3 && args[0] == "window" {
+        switch args[1] {
+        case "focus": return ipc_action_call("wm", "windowFocus", []string{args[2]})
+        case "close": return ipc_action_call("wm", "windowClose", []string{args[2]})
+        }
+    }
+    if len(args) == 4 && args[0] == "window" {
+        switch args[1] {
+        case "move-workspace":
+            return ipc_action_call("wm", "windowMoveWorkspace", args[2:4])
+        case "move-screen":
+            return ipc_action_call("wm", "windowMoveScreen", args[2:4])
+        }
+    }
+    return usage_error("expected: wm status|capabilities|screens|workspaces|windows|state | wm workspace focus ID | wm screen focus ID | wm window focus|close ID | wm window move-workspace ID WORKSPACE | wm window move-screen ID SCREEN")
 }
 
 run_cli :: proc(args: []string) -> int {
@@ -160,6 +198,8 @@ run_cli :: proc(args: []string) -> int {
             return usage_error("expected: theme mode light|dark")
         }
         return ipc_call("anush", "themeMode", []string{args[2]})
+    case "wm":
+        return run_wm_command(args[1:])
     case:
         fmt.eprintf("anushctl: unknown command '%s'\n", args[0])
         fmt.eprintln("Try 'anushctl --help' for usage.")

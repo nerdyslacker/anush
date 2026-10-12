@@ -28,6 +28,15 @@ case "$*" in
     *'-d --no-duplicate -p '*) rm -f "$FAKE_QS_STATE" ;;
     *'call anush ping') [ ! -e "$FAKE_QS_STATE" ] ;;
     *'call anush status') printf '%s\n' '{"name":"anush","protocol":1}' ;;
+    *'call wm status') printf '%s\n' '{"backend":"mock","connected":true}' ;;
+    *'call wm capabilities') printf '%s\n' '{"workspaces":true,"focusWindow":true}' ;;
+    *'call wm screens') printf '%s\n' '[{"id":"left"}]' ;;
+    *'call wm workspaces') printf '%s\n' '[{"id":"1"}]' ;;
+    *'call wm windows') printf '%s\n' '[{"id":"42"}]' ;;
+    *'call wm state') printf '%s\n' '{"backend":"mock","windows":[{"id":"42"}]}' ;;
+    *'call wm windowClose denied') printf '%s\n' '{"ok":false,"error":"mock does not support window close"}' ;;
+    *'call wm workspaceFocus '*|*'call wm screenFocus '*|*'call wm windowFocus '*|*'call wm windowClose '*|*'call wm windowMoveWorkspace '*|*'call wm windowMoveScreen '*)
+        printf '%s\n' '{"ok":true}' ;;
 esac
 EOF
 chmod +x "$tmp/bin/qs"
@@ -120,6 +129,33 @@ $binary hotspot clients
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call hotspot clients'
 $binary theme mode light
 assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call anush themeMode light'
+wm_status=$($binary wm status)
+assert_contains "$wm_status" '"backend":"mock"'
+assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call wm status'
+assert_contains "$($binary wm capabilities)" '"focusWindow":true'
+assert_contains "$($binary wm screens)" '"id":"left"'
+assert_contains "$($binary wm workspaces)" '"id":"1"'
+assert_contains "$($binary wm windows)" '"id":"42"'
+wm_state=$($binary wm state)
+assert_contains "$wm_state" '"windows"'
+$binary wm workspace focus 1
+assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call wm workspaceFocus 1'
+$binary wm screen focus left
+assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call wm screenFocus left'
+$binary wm window focus 42
+assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call wm windowFocus 42'
+$binary wm window move-workspace 42 2
+assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call wm windowMoveWorkspace 42 2'
+$binary wm window move-screen 42 right
+assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call wm windowMoveScreen 42 right'
+$binary wm window close 42
+assert_contains "$(tail -n 1 "$FAKE_QS_LOG")" 'call wm windowClose 42'
+set +e
+wm_error=$($binary wm window close denied 2>&1)
+code=$?
+set -e
+[ "$code" -eq 1 ] || { printf 'expected rejected WM action to exit 1\n' >&2; exit 1; }
+assert_contains "$wm_error" 'mock does not support window close'
 $binary lock
 assert_contains "$(tail -n 1 "$FAKE_HELPER_LOG")" 'betterlockscreen -l'
 $binary clipboard daemon

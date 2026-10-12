@@ -282,11 +282,11 @@ restore_wallpaper :: proc() -> int {
         []string{"feh", "--bg-fill", wallpaper}, "restore the wallpaper")
 }
 
-ipc_call :: proc(target, function: string, call_args: []string) -> int {
+ipc_request :: proc(target, function: string, call_args: []string) -> ([]byte, int) {
     root := shell_root()
     if root == "" {
         fmt.eprintln("anushctl: cannot resolve the anush shell directory")
-        return EXIT_RUNTIME
+        return nil, EXIT_RUNTIME
     }
     defer delete(root)
     shell_dir, _ := filepath.join([]string{root, "shell"})
@@ -298,15 +298,50 @@ ipc_call :: proc(target, function: string, call_args: []string) -> int {
     for arg in call_args { append(&command, arg) }
 
     code, out, err_out, started := run_process(command[:])
-    defer delete(out)
     defer delete(err_out)
-    if !started { return EXIT_RUNTIME }
+    if !started {
+        delete(out)
+        return nil, EXIT_RUNTIME
+    }
     if code != 0 {
         if len(err_out) > 0 { fmt.eprint(string(err_out)) }
         fmt.eprintln("anushctl: anush shell is not running or did not accept the command")
-        return EXIT_NOT_RUNNING
+        delete(out)
+        return nil, EXIT_NOT_RUNNING
     }
+    return out, EXIT_OK
+}
+
+ipc_call :: proc(target, function: string, call_args: []string) -> int {
+    out, code := ipc_request(target, function, call_args)
+    defer if out != nil { delete(out) }
+    if code != EXIT_OK { return code }
     if len(out) > 0 { fmt.print(string(out)) }
+    return EXIT_OK
+}
+
+ipc_action_call :: proc(target, function: string, call_args: []string) -> int {
+    out, code := ipc_request(target, function, call_args)
+    defer if out != nil { delete(out) }
+    if code != EXIT_OK { return code }
+
+    result: struct {
+        ok: bool,
+        error: string,
+    }
+    if len(out) == 0 || json.unmarshal(
+            out, &result, allocator = context.temp_allocator) != nil {
+        fmt.eprintln("anushctl: invalid response from the WM service")
+        return EXIT_RUNTIME
+    }
+    if !result.ok {
+        if result.error == "" {
+            fmt.eprintln("anushctl: the WM backend rejected the action")
+        } else {
+            fmt.eprintln("anushctl:", result.error)
+        }
+        return EXIT_RUNTIME
+    }
     return EXIT_OK
 }
 
