@@ -39,8 +39,7 @@ Popout {
     function focusSearch() {
         if (!visible)
             return
-        if (_backingWindow)
-            _backingWindow.requestActivate()
+        requestKeyboardFocus()
         searchInput.forceActiveFocus()
     }
 

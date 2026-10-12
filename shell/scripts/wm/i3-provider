@@ -130,8 +130,11 @@ def raw_snapshot():
 def tree_state(tree):
     windows = []
     workspace_nodes = {}
+    focused_layouts = {}
 
-    def walk(node, output=None, workspace=None, floating=False, dock=False):
+    def walk(node, output=None, workspace=None, floating=False, dock=False,
+             ancestors=None):
+        ancestors = [] if ancestors is None else ancestors
         node_type = str(node.get("type", ""))
         node_name = str(node.get("name") or "")
         if node_type == "output":
@@ -142,6 +145,14 @@ def tree_state(tree):
         floating = floating or node_type == "floating_con"
         dock = dock or node_type == "dockarea"
         window = node.get("window")
+        if node.get("focused") is True and workspace is not None:
+            containers = [item for item in ancestors
+                          if item.get("type") in ("workspace", "con")]
+            if containers:
+                layout = str(containers[-1].get("layout") or "")
+                focused_layouts[workspace] = (
+                    "stacking" if layout == "stacked" else layout
+                )
         if window is not None and not dock:
             properties = node.get("window_properties") or {}
             scratchpad = str(node.get("scratchpad_state", "none")) != "none" \
@@ -166,16 +177,16 @@ def tree_state(tree):
                 "dock": False,
             })
         for child in node.get("nodes", []):
-            walk(child, output, workspace, floating, dock)
+            walk(child, output, workspace, floating, dock, ancestors + [node])
         for child in node.get("floating_nodes", []):
-            walk(child, output, workspace, True, dock)
+            walk(child, output, workspace, True, dock, ancestors + [node])
 
     walk(tree)
-    return windows, workspace_nodes
+    return windows, workspace_nodes, focused_layouts
 
 
 def normalize(raw):
-    windows, workspace_nodes = tree_state(raw.get("tree", {}))
+    windows, workspace_nodes, focused_layouts = tree_state(raw.get("tree", {}))
     raw_workspaces = raw.get("workspaces", [])
     focused_workspace = next(
         (workspace for workspace in raw_workspaces
@@ -208,10 +219,19 @@ def normalize(raw):
     workspaces = []
     for workspace in raw_workspaces:
         output = str(workspace.get("output", ""))
-        index = indexes.get(output, 0)
-        indexes[output] = index + 1
+        fallback_index = indexes.get(output, 0)
+        indexes[output] = fallback_index + 1
+        number = int(workspace.get("num", -1))
+        index = number - 1 if number > 0 else fallback_index
         name = str(workspace.get("name", ""))
         node = workspace_nodes.get(name, {})
+        workspace_layout = str(node.get("workspace_layout") or "")
+        if workspace_layout == "stacked":
+            workspace_layout = "stacking"
+        elif workspace_layout == "default":
+            workspace_layout = ""
+        node_layout = "stacking" if node.get("layout") == "stacked" \
+            else str(node.get("layout") or "")
         workspaces.append({
             "id": name,
             "name": name,
@@ -222,7 +242,8 @@ def normalize(raw):
             "visible": workspace.get("visible") is True,
             "occupied": name in occupied,
             "urgent": workspace.get("urgent") is True,
-            "layout": str(node.get("layout") or ""),
+            "layout": focused_layouts.get(name)
+                or workspace_layout or node_layout,
         })
 
     available = True
@@ -232,6 +253,7 @@ def normalize(raw):
             "screens": True,
             "perScreenWorkspaces": True,
             "workspaces": True,
+            "implicitWorkspaces": True,
             "renameWorkspace": False,
             "windows": True,
             "windowTitles": True,
@@ -244,7 +266,7 @@ def normalize(raw):
             "virtualScreens": False,
             "decorationStyling": False,
             "eventStream": available,
-            "layouts": False,
+            "layouts": available,
             "gaps": available,
             "reload": available,
             "sessionControl": available,
@@ -310,6 +332,9 @@ def action(args):
         command = f'[con_id="{container_id(args[1])}"] scratchpad show'
     elif kind == "gaps" and len(args) == 2:
         command = f"gaps inner all set {max(0, int(args[1]))}"
+    elif kind == "layout" and len(args) == 2 \
+            and args[1] in ("splith", "splitv", "stacking", "tabbed"):
+        command = f"layout {args[1]}"
     elif kind == "reload" and len(args) == 1:
         command = "reload"
     elif kind == "quit" and len(args) == 1:

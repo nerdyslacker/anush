@@ -1,0 +1,179 @@
+--- config.def.h
++++ config.def.h
+@@ -3,7 +3,7 @@
+ /* appearance */
+ static const unsigned int borderpx  = 1;        /* border pixel of windows */
+ static const unsigned int snap      = 32;       /* snap pixel */
+-static const int showbar            = 1;        /* 0 means no bar */
++static const int showbar            = 0;        /* 0 means no bar */
+ static const int topbar             = 1;        /* 0 means bottom bar */
+ static const char *fonts[]          = { "monospace:size=10" };
+ static const char dmenufont[]       = "monospace:size=10";
+@@ -46,7 +46,7 @@
+ };
+ 
+ /* key definitions */
+-#define MODKEY Mod1Mask
++#define MODKEY Mod4Mask
+ #define TAGKEYS(KEY,TAG) \
+ 	{ MODKEY,                       KEY,      view,           {.ui = 1 << TAG} }, \
+ 	{ MODKEY|ControlMask,           KEY,      toggleview,     {.ui = 1 << TAG} }, \
+@@ -59,12 +59,18 @@
+ /* commands */
+ static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() */
+ static const char *dmenucmd[] = { "dmenu_run", "-m", dmenumon, "-fn", dmenufont, "-nb", col_gray1, "-nf", col_gray3, "-sb", col_cyan, "-sf", col_gray4, NULL };
+-static const char *termcmd[]  = { "st", NULL };
++static const char *termcmd[] = { "xterm", NULL };
++static const char *launchercmd[] = { "anushctl", "launcher", "toggle", NULL };
++static const char *clipboardcmd[] = { "anushctl", "clipboard", "toggle", NULL };
++static const char *notescmd[] = { "anushctl", "notes", "toggle", NULL };
+ 
+ static const Key keys[] = {
+ 	/* modifier                     key        function        argument */
+ 	{ MODKEY,                       XK_p,      spawn,          {.v = dmenucmd } },
+ 	{ MODKEY|ShiftMask,             XK_Return, spawn,          {.v = termcmd } },
++	{ MODKEY,                       XK_a,      spawn,          {.v = launchercmd } },
++	{ MODKEY,                       XK_v,      spawn,          {.v = clipboardcmd } },
++	{ MODKEY|ShiftMask,             XK_n,      spawn,          {.v = notescmd } },
+ 	{ MODKEY,                       XK_b,      togglebar,      {0} },
+ 	{ MODKEY,                       XK_j,      focusstack,     {.i = +1 } },
+ 	{ MODKEY,                       XK_k,      focusstack,     {.i = -1 } },
+--- dwm.c
++++ dwm.c
+@@ -218,6 +218,7 @@
+ static void togglefloating(const Arg *arg);
+ static void toggletag(const Arg *arg);
+ static void toggleview(const Arg *arg);
++static void updateanushstate(void);
+ static void unfocus(Client *c, int setfocus);
+ static void unmanage(Client *c, int destroyed);
+ static void unmapnotify(XEvent *e);
+@@ -259,6 +260,7 @@
+ static Drw *drw;
+ static Monitor *mons, *selmon;
+ static Window root, wmcheckwin;
++static Atom anushlayouts, anushsetlayout, anushstate;
+ 
+ /* configuration, allows nested code to access above variables */
+ #include "config.h"
+@@ -391,6 +393,7 @@ arrange(Monitor *m)
+ 		restack(m);
+ 	} else for (m = mons; m; m = m->next)
+ 		arrangemon(m);
++	updateanushstate();
+ }
+ 
+ void
+@@ -835,6 +838,7 @@ focusmon(const Arg *arg)
+ 	unfocus(selmon->sel, 0);
+ 	selmon = m;
+ 	focus(NULL);
++	updateanushstate();
+ }
+ 
+ void
+@@ -1520,6 +1524,7 @@ setlayout(const Arg *arg)
+ 		arrange(selmon);
+ 	else
+ 		drawbar(selmon);
++	updateanushstate();
+ }
+ 
+ /* arg > 1.0 will set mfact absolutely */
+@@ -1579,6 +1584,9 @@ setup(void)
+ 	netatom[NetWMWindowType] = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False);
+ 	netatom[NetWMWindowTypeDialog] = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DIALOG", False);
+ 	netatom[NetClientList] = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
++	anushlayouts = XInternAtom(dpy, "_ANUSH_DWM_LAYOUTS", False);
++	anushsetlayout = XInternAtom(dpy, "_ANUSH_DWM_SET_LAYOUT", False);
++	anushstate = XInternAtom(dpy, "_ANUSH_DWM_STATE", False);
+ 	/* init cursors */
+ 	cursor[CurNormal] = drw_cur_create(drw, XC_left_ptr);
+ 	cursor[CurResize] = drw_cur_create(drw, XC_sizing);
+@@ -1609,6 +1617,7 @@ setup(void)
+ 	XSelectInput(dpy, root, wa.event_mask);
+ 	grabkeys();
+ 	focus(NULL);
++	updateanushstate();
+ }
+ 
+ void
+@@ -1626,6 +1632,7 @@ seturgent(Client *c, int urg)
+ 	wmh->flags = urg ? (wmh->flags | XUrgencyHint) : (wmh->flags & ~XUrgencyHint);
+ 	XSetWMHints(dpy, c->win, wmh);
+ 	XFree(wmh);
++	updateanushstate();
+ }
+ 
+ void
+--- dwm.c
++++ dwm.c
+@@ -1225,6 +1232,23 @@ propertynotify(XEvent *e)
+ 	Window trans;
+ 	XPropertyEvent *ev = &e->xproperty;
+ 
++	if (ev->window == root && ev->atom == anushsetlayout) {
++		Atom actual;
++		int format;
++		unsigned char *data = NULL;
++		unsigned long count, remaining;
++
++		if (XGetWindowProperty(dpy, root, anushsetlayout, 0L, 1L, False,
++			XA_CARDINAL, &actual, &format, &count, &remaining, &data) == Success
++			&& actual == XA_CARDINAL && format == 32 && count == 1 && data
++			&& *(unsigned long *)data < LENGTH(layouts)
++			&& &layouts[*(unsigned long *)data]
++				!= selmon->lt[selmon->sellt])
++			setlayout(&(Arg){.v = &layouts[*(unsigned long *)data]});
++		if (data)
++			XFree(data);
++		return;
++	}
+ 	if ((ev->window == root) && (ev->atom == XA_WM_NAME))
+ 		updatestatus();
+ 	else if (ev->state == PropertyDelete)
+--- dwm.c
++++ dwm.c
+@@ -2077,6 +2100,42 @@ wintomon(Window w)
+ 	return selmon;
+ }
+ 
++void
++updateanushstate(void)
++{
++	Client *c;
++	char *layoutnames, *write;
++	size_t length = 0;
++	unsigned int i;
++	unsigned long state[4] = { selmon->tagset[selmon->seltags], 0, 0, 0 };
++
++	for (c = selmon->clients; c; c = c->next) {
++		state[1] |= c->tags;
++		if (c->isurgent)
++			state[2] |= c->tags;
++	}
++	for (i = 0; i < LENGTH(layouts); i++) {
++		if (selmon->lt[selmon->sellt] == &layouts[i]) {
++			state[3] = i;
++			break;
++		}
++	}
++	XChangeProperty(dpy, root, anushstate, XA_CARDINAL, 32,
++		PropModeReplace, (unsigned char *)state, LENGTH(state));
++	for (i = 0; i < LENGTH(layouts); i++)
++		length += strlen(layouts[i].symbol) + (i > 0);
++	layoutnames = write = ecalloc(length + 1, sizeof(char));
++	for (i = 0; i < LENGTH(layouts); i++) {
++		if (i > 0)
++			*write++ = '\t';
++		memcpy(write, layouts[i].symbol, strlen(layouts[i].symbol));
++		write += strlen(layouts[i].symbol);
++	}
++	XChangeProperty(dpy, root, anushlayouts, XA_STRING, 8,
++		PropModeReplace, (unsigned char *)layoutnames, length);
++	free(layoutnames);
++}
++
+ /* There's no way to check accesses to destroyed windows, thus those cases are
+  * ignored (especially on UnmapNotify's). All other errors call Xlibs
+  * default error handler, which may call exit. */

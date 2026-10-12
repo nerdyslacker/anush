@@ -68,6 +68,7 @@ WindowManagerBackend {
             wmIdentity = String(value.wmIdentity ?? "unknown")
             integration = String(value.integration ?? profile)
             capabilities = value.capabilities ?? ({})
+            if (Array.isArray(value.layouts)) layouts = value.layouts
             screens = Array.isArray(value.screens) ? value.screens : []
             workspaces = Array.isArray(value.workspaces) ? value.workspaces : []
             windows = Array.isArray(value.windows) ? value.windows : []
@@ -84,7 +85,7 @@ WindowManagerBackend {
 
     function runAction(arguments) {
         if (!connected) return false
-        Quickshell.execDetached([provider, "action"].concat(arguments))
+        Quickshell.execDetached([provider, "action", profile].concat(arguments))
         return true
     }
 
@@ -119,6 +120,12 @@ WindowManagerBackend {
         return focused
             ? moveWindowToWorkspace(focused.id, workspaceId)
             : unsupported("moveWindowToWorkspace")
+    }
+
+    function setLayout(command) {
+        if (capabilities.layouts !== true)
+            return unsupported("setLayout")
+        return runAction(["layout", String(command)])
     }
 
     onActiveChanged: {

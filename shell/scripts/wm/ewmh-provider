@@ -235,10 +235,6 @@ def snapshot(profile="ewmh"):
                 "floating": None, "fullscreen": None, "maximized": None,
                 "scratchpad": None, "dock": False,
             })
-    if profile == "dwm":
-        for window in windows:
-            window["workspaceId"] = None
-
     occupied = {
         window["workspaceId"] for window in windows
         if window["workspaceId"] is not None and not window["dock"]
@@ -248,7 +244,11 @@ def snapshot(profile="ewmh"):
         if window["workspaceId"] is not None and window["urgent"] is True
     }
     workspaces = []
-    if profile != "dwm" and "_NET_NUMBER_OF_DESKTOPS" in atoms and count > 0:
+    workspace_control = tools \
+        and "_NET_NUMBER_OF_DESKTOPS" in atoms \
+        and "_NET_CURRENT_DESKTOP" in atoms \
+        and count > 0 and current is not None
+    if workspace_control:
         for index in range(count):
             workspace_id = str(index)
             workspaces.append({
@@ -264,11 +264,12 @@ def snapshot(profile="ewmh"):
                 "urgent": workspace_id in urgent,
             })
 
+    layout_control = profile == "spectrwm" \
+        and os.environ.get("ANUSH_REAL_WM_TEST") == "spectrwm"
     capabilities = {
         "screens": False,
         "perScreenWorkspaces": False,
-        "workspaces": "_NET_NUMBER_OF_DESKTOPS" in atoms
-            and "_NET_CURRENT_DESKTOP" in atoms,
+        "workspaces": workspace_control,
         "renameWorkspace": False,
         "windows": "_NET_CLIENT_LIST" in atoms,
         "windowTitles": "_NET_WM_NAME" in atoms,
@@ -282,25 +283,19 @@ def snapshot(profile="ewmh"):
         "decorationStyling": False,
         "eventStream": fixture_dir() is not None
             or shutil.which("xprop") is not None,
-        "layouts": False,
+        "layouts": layout_control,
         "gaps": False,
         "reload": False,
         "sessionControl": False,
         "keybindings": False,
         "configurationEditor": False,
     }
-    if profile == "dwm":
-        capabilities.update({
-            "workspaces": False,
-            "focusWindow": False,
-            "closeWindow": False,
-            "moveWindowToWorkspace": False,
-        })
     return {
         "connected": identity["connected"],
         "wmName": identity["name"],
         "wmIdentity": normalize_identity(identity["name"]),
-        "integration": "stock" if profile == "dwm" else profile,
+        "integration": "dwm-ewmh" if profile == "dwm" \
+            and workspace_control else "stock" if profile == "dwm" else profile,
         "capabilities": capabilities,
         "screens": [],
         "workspaces": workspaces,
@@ -309,9 +304,11 @@ def snapshot(profile="ewmh"):
 
 
 def action(args):
-    if len(args) < 2:
+    if len(args) < 3:
         raise RuntimeError("missing EWMH action")
-    kind, value = args[0], args[1]
+    profile, kind, value = args[0], args[1], args[2]
+    if profile not in ("ewmh", "spectrwm", "dwm"):
+        raise RuntimeError(f"unknown EWMH profile {profile}")
     command = ["xdotool"]
     if kind == "workspace":
         command.extend(["set_desktop", value])
@@ -319,8 +316,17 @@ def action(args):
         command.extend(["windowactivate", "--sync", value])
     elif kind == "close":
         command.extend(["windowclose", value])
-    elif kind == "move-workspace" and len(args) == 3:
-        command.extend(["set_desktop_for_window", value, args[2]])
+    elif kind == "move-workspace" and len(args) == 4:
+        command.extend(["set_desktop_for_window", value, args[3]])
+    elif kind == "layout" and profile == "spectrwm" \
+            and os.environ.get("ANUSH_REAL_WM_TEST") == "spectrwm":
+        keys = {
+            "vertical": "super+F5", "horizontal": "super+F6",
+            "max": "super+F7", "floating": "super+F8",
+        }
+        if value not in keys:
+            raise RuntimeError(f"unknown spectrwm layout {value}")
+        command.extend(["key", "--clearmodifiers", keys[value]])
     else:
         raise RuntimeError(f"unknown EWMH action {kind}")
     action_log = os.environ.get("ANUSH_EWMH_ACTION_LOG", "")

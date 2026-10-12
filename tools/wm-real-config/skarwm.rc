@@ -1,0 +1,30 @@
+mod_key : super
+outer_gap : 8
+inner_gap : 8
+border_width : 2
+bar_enabled : false
+focus_follows_mouse : false
+animations : false
+workspace-1 : scrolling-tile : 1 : One
+workspace-2 : dwindle : 2 : Two
+workspace-3 : monocle : 3 : Three
+workspace-4 : floating : 4 : Four
+workspace-5 : scrolling-tile : 5 : Five
+workspace-6 : vertical-scrolling-tile : 6 : Six
+workspace-7 : dwindle : 7 : Seven
+workspace-8 : monocle : 8 : Eight
+workspace-9 : floating : 9 : Nine
+workspace : mod + 1 : view 1
+workspace : mod + 2 : view 2
+workspace : mod + 3 : view 3
+workspace : mod + 4 : view 4
+workspace : mod + 5 : view 5
+workspace : mod + 6 : view 6
+workspace : mod + 7 : view 7
+workspace : mod + 8 : view 8
+workspace : mod + 9 : view 9
+bind : mod + Return : "xterm"
+bind : mod + a : "anushctl launcher toggle"
+bind : mod + v : "anushctl clipboard toggle"
+bind : mod + Shift + n : "anushctl notes toggle"
+decorations_enabled : false

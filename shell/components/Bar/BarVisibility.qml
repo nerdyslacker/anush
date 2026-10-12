@@ -24,7 +24,7 @@ Singleton {
             key: "windowList",
             label: "Window list",
             icon: "󰖲",
-            defaultCluster: "center"
+            defaultCluster: "left"
         },
         {
             key: "layout",
@@ -54,7 +54,7 @@ Singleton {
             key: "weather",
             label: "Weather",
             icon: "󰖐",
-            defaultCluster: "right"
+            defaultCluster: "center"
         },
         {
             key: "rss",
@@ -162,7 +162,7 @@ Singleton {
             key: "clock",
             label: "Clock",
             icon: "󰥔",
-            defaultCluster: "right"
+            defaultCluster: "center"
         },
         {
             key: "capsLock",
@@ -185,39 +185,39 @@ Singleton {
     ]
     readonly property var clusterNames: ["left", "center", "right"]
     readonly property var defaultClusters: ({
-            left: ["launcher", "tags", "layout"],
-            center: ["windowList", "title", "scratchpads"],
-            right: ["media", "weather", "rss", "metrics", "battery", "brightness", "volume", "tmux", "micIndicator", "network", "tailscale", "bluetooth", "phone", "keyboard", "clipboard", "colorPicker", "notepad", "tray", "notifications", "clock", "capsLock", "screenshot", "commands"]
+            left: ["launcher", "tags", "layout", "windowList", "title"],
+            center: ["scratchpads", "clock", "weather"],
+            right: ["keyboard", "clipboard", "brightness", "network", "bluetooth", "volume", "tray", "notepad", "commands", "media", "rss", "metrics", "battery", "tmux", "micIndicator", "tailscale", "phone", "colorPicker", "notifications", "capsLock", "screenshot"]
         })
     readonly property var defaults: ({
             launcher: true,
             tags: true,
             windowList: true,
             layout: true,
-            title: true,
+            title: false,
             scratchpads: true,
-            media: true,
+            media: false,
             weather: true,
             rss: false,
-            metrics: true,
-            battery: true,
+            metrics: false,
+            battery: false,
             brightness: true,
             volume: true,
-            tmux: true,
-            micIndicator: true,
+            tmux: false,
+            micIndicator: false,
             network: true,
-            tailscale: true,
+            tailscale: false,
             bluetooth: true,
-            phone: true,
+            phone: false,
             keyboard: true,
             clipboard: true,
-            colorPicker: true,
+            colorPicker: false,
             notepad: true,
             tray: true,
-            notifications: true,
+            notifications: false,
             clock: true,
-            capsLock: true,
-            screenshot: true,
+            capsLock: false,
+            screenshot: false,
             commands: true
         })
     property var widgets: defaults
@@ -246,7 +246,7 @@ Singleton {
 
     function available(key) {
         if (key === "tags")
-            return Wm.capabilities.workspaces === true;
+            return Wm.connected && Wm.capabilities.workspaces === true;
         if (key === "windowList")
             return Wm.capabilities.windows === true;
         if (key === "layout")
@@ -354,6 +354,14 @@ Singleton {
                         next[name].push(key);
                         seen[key] = true;
                     }
+                }
+            }
+        }
+        if (Object.keys(seen).length === 0) {
+            for (const name of clusterNames) {
+                for (const key of defaultClusters[name]) {
+                    next[name].push(key);
+                    seen[key] = true;
                 }
             }
         }

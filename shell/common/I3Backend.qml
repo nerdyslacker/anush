@@ -7,6 +7,12 @@ WindowManagerBackend {
     id: root
 
     name: "i3"
+    layouts: [
+        { name: "Split Horizontal", glyph: "󰙀", command: "splith" },
+        { name: "Split Vertical", glyph: "󱥣", command: "splitv" },
+        { name: "Stacking", glyph: "󰕮", command: "stacking" },
+        { name: "Tabbed", glyph: "󰓩", command: "tabbed" }
+    ]
     readonly property string provider: ShellState.scriptsDir + "/wm/i3-provider"
     property bool refreshPending: false
 
@@ -101,6 +107,21 @@ WindowManagerBackend {
         return runAction(["toggle-scratchpad", String(register)])
     }
     function setGaps(value) { return runAction(["gaps", String(value)]) }
+    function setLayout(command) {
+        const value = String(command)
+        const focused = workspaces.find(workspace => workspace.focused === true)
+        const started = runAction(["layout", value])
+        if (!started) return false
+        if (focused) {
+            workspaces = workspaces.map(workspace =>
+                String(workspace.id) === String(focused.id)
+                    ? Object.assign({}, workspace, { layout: value })
+                    : workspace)
+        }
+        changed()
+        layoutRefreshTimer.restart()
+        return true
+    }
     function reloadWindowManager() { return runAction(["reload"]) }
     function quitWindowManager() { return runAction(["quit"]) }
 
@@ -147,6 +168,11 @@ WindowManagerBackend {
     Timer {
         id: refreshTimer
         interval: 60
+        onTriggered: root.refresh()
+    }
+    Timer {
+        id: layoutRefreshTimer
+        interval: 250
         onTriggered: root.refresh()
     }
     Timer {

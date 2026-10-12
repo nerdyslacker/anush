@@ -1,2 +1,0 @@
-#!/bin/sh
-printf '%s\n' "$@" > "$ANUSH_HERBSTLUFTWM_ACTION_LOG"

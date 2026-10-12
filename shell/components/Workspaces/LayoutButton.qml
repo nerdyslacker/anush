@@ -8,8 +8,10 @@ import "../.."
 BarModule {
     id: root
     property bool restoreWallpaperPicker: false
+    readonly property var currentLayout: Wm.layoutIndex >= 0
+        && Wm.layoutIndex < Wm.layouts.length ? Wm.layouts[Wm.layoutIndex] : null
 
-    icon: Wm.layouts[Wm.layoutIndex].glyph
+    icon: currentLayout?.glyph ?? "󰕮"
     iconColor: Theme.accent
 
     onClicked: mouse => {

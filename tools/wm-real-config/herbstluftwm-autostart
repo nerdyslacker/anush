@@ -1,0 +1,29 @@
+#!/bin/sh
+
+herbstclient emit_hook reload
+herbstclient rename default 1
+herbstclient add 2
+herbstclient add 3
+herbstclient add 4
+herbstclient add 5
+herbstclient add 6
+herbstclient add 7
+herbstclient add 8
+herbstclient add 9
+herbstclient set frame_gap 8
+herbstclient set window_gap 8
+herbstclient set focus_follows_mouse false
+herbstclient rule class=AnushSmokeFloat floating=on
+herbstclient keybind Mod4-Return spawn xterm
+herbstclient keybind Mod4-a spawn anushctl launcher toggle
+herbstclient keybind Mod4-v spawn anushctl clipboard toggle
+herbstclient keybind Mod4-Shift-n spawn anushctl notes toggle
+herbstclient keybind Mod4-1 use 1
+herbstclient keybind Mod4-2 use 2
+herbstclient keybind Mod4-3 use 3
+herbstclient keybind Mod4-4 use 4
+herbstclient keybind Mod4-5 use 5
+herbstclient keybind Mod4-6 use 6
+herbstclient keybind Mod4-7 use 7
+herbstclient keybind Mod4-8 use 8
+herbstclient keybind Mod4-9 use 9

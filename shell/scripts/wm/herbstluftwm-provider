@@ -53,10 +53,13 @@ class HerbstClient:
         self.process.stdin.flush()
         response = {}
         for _ in range(3):
-            response[self.read_field()] = self.read_field()
+            key = self.read_field()
+            response[key] = self.read_field()
         status = int(response.get("STATUS", "1"))
         if check and status != 0:
-            raise RuntimeError(response.get("STDERR", "herbstclient command failed").strip())
+            detail = response.get("STDERR", "").strip()
+            raise RuntimeError(detail or
+                               f"herbstclient command failed: {' '.join(args)}")
         return response.get("STDOUT", "")
 
     def children(self, object_path, pattern):
@@ -106,6 +109,7 @@ def production_state(client):
             "visible": client.get(path + ".visible"),
             "client_count": client.get(path + ".client_count"),
             "urgent_count": client.get(path + ".urgent_count"),
+            "layout": client.get(path + ".tiling.focused_frame.algorithm"),
         })
     clients = []
     for path in client_paths:
@@ -120,10 +124,12 @@ def production_state(client):
             "class": client.get(path + ".class"),
             "instance": client.get(path + ".instance"),
         })
+    focused_client = client.call(
+        "get_attr", "clients.focus.winid", check=False,
+    ).rstrip("\n") if client_paths else "0x0"
     return {
         "focusedMonitor": client.get("monitors.focus.index"),
-        "focusedClient": client.get("clients.focus.winid")
-            if client_paths else "0x0",
+        "focusedClient": focused_client or "0x0",
         "monitors": monitors,
         "tags": tags,
         "clients": clients,
@@ -177,6 +183,7 @@ def normalize(raw):
             "visible": visible,
             "occupied": int(tag.get("client_count", 0)) > 0,
             "urgent": int(tag.get("urgent_count", 0)) > 0,
+            "layout": str(tag.get("layout", "")),
         })
 
     focused_client = str(raw.get("focusedClient", "0x0")).lower()
@@ -223,7 +230,7 @@ def normalize(raw):
             "virtualScreens": False,
             "decorationStyling": False,
             "eventStream": available,
-            "layouts": False,
+            "layouts": available,
             "gaps": available,
             "reload": available,
             "sessionControl": available,
@@ -257,6 +264,9 @@ def action(args):
         command = ["apply_tmp_rule", args[1], f"monitor={args[2]}", "focus=off"]
     elif kind == "gaps" and len(args) == 2:
         command = ["set_attr", "settings.window_gap", args[1]]
+    elif kind == "layout" and len(args) == 2 \
+            and args[1] in ("vertical", "horizontal", "max", "grid"):
+        command = ["set_layout", args[1]]
     elif kind == "reload" and len(args) == 1:
         command = ["reload"]
     elif kind == "quit" and len(args) == 1:
@@ -279,6 +289,10 @@ def install_watches(client):
         for attribute in ("title", "tag", "floating_effectively", "minimized",
                           "class", "instance"):
             client.call("watch", path + "." + attribute, check=False)
+    for path in client.children("tags.", "^[0-9]+$"):
+        client.call(
+            "watch", path + ".tiling.focused_frame.algorithm", check=False,
+        )
 
 
 def monitor():

@@ -50,8 +50,7 @@ Popout {
     function focusSessionInput() {
         if (!visible)
             return
-        if (_backingWindow)
-            _backingWindow.requestActivate()
+        requestKeyboardFocus()
         sessionInput.forceActiveFocus()
     }
 

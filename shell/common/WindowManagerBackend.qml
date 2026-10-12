@@ -13,6 +13,7 @@ Scope {
     property var screens: []
     property var workspaces: []
     property var windows: []
+    property var layouts: []
 
     signal changed()
     signal actionFailed(string action, string reason)

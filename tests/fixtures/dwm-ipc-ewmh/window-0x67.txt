@@ -1,8 +1,0 @@
-_NET_WM_NAME(UTF8_STRING) = "Browser"
-WM_NAME(STRING) = "Browser"
-WM_CLASS(STRING) = "Navigator", "firefox"
-WM_HINTS(WM_HINTS):
-    Client accepts input or input focus: True
-_NET_WM_DESKTOP:  no such atom on any window.
-_NET_WM_STATE(ATOM) = _NET_WM_STATE_FULLSCREEN
-_NET_WM_WINDOW_TYPE(ATOM) = _NET_WM_WINDOW_TYPE_NORMAL

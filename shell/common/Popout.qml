@@ -90,6 +90,19 @@ PopupWindow {
         visible = true
     }
 
+    function requestKeyboardFocus() {
+        if (!visible || !_backingWindow)
+            return
+        _backingWindow.requestActivate()
+        if (!surfaceFocus.running) {
+            surfaceFocus.command = [ShellState.scriptsDir + "/window/focus-popup",
+                String(Quickshell.processId), String(_backingWindow.x),
+                String(_backingWindow.y), String(_backingWindow.width),
+                String(_backingWindow.height)]
+            surfaceFocus.running = true
+        }
+    }
+
     function updatePlacement() {
         if (!visible || !anchorItem)
             return
@@ -173,6 +186,7 @@ PopupWindow {
         function onVisibleChanged() {
             if (root.visible && root.anchorItem) {
                 root.updatePlacement()
+                root.requestKeyboardFocus()
                 inner.forceActiveFocus()
                 enterAnim.restart()
             }
@@ -186,6 +200,10 @@ PopupWindow {
                 root.updatePlacement()
             }
         }
+    }
+
+    Process {
+        id: surfaceFocus
     }
 
     Process {

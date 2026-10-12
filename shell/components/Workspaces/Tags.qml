@@ -7,6 +7,8 @@ import "../.."
 Rectangle {
     id: root
     property var barScreen
+    visible: Wm.connected && Wm.capabilities.workspaces === true
+    enabled: visible
     readonly property string outputName: Wm.outputNameForScreen(barScreen)
     readonly property int totalTagCount: TagConfig.dynamicWorkspaces
         ? Wm.dynamicTagCount : Math.max(TagConfig.count, Wm.tagCount)

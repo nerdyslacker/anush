@@ -118,8 +118,7 @@ Popout {
     function focusSearch() {
         if (!visible)
             return
-        if (_backingWindow)
-            _backingWindow.requestActivate()
+        requestKeyboardFocus()
         search.forceActiveFocus()
     }
 
@@ -546,6 +545,7 @@ Popout {
                         ThemedToolTip {
                             parent: favoriteMouse
                             visible: favoriteMouse.containsMouse
+                            popupType: Controls.Popup.Item
                             text: favoriteButton.favorite
                                 ? "Remove from Favorites" : "Add to Favorites"
                             x: (favoriteMouse.width - width) / 2

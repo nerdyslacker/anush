@@ -18,8 +18,7 @@ Popout {
     function focusLocation() {
         if (!visible)
             return
-        if (_backingWindow)
-            _backingWindow.requestActivate()
+        requestKeyboardFocus()
         locationInput.forceActiveFocus()
     }
 

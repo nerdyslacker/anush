@@ -179,6 +179,8 @@ anushctl theme mode dark
 
 See [`docs/anushctl.md`](docs/anushctl.md) for the full command tree, exit
 codes, config paths, and protocol notes.
+See [`docs/wm-testing.md`](docs/real-wm-testing.md) for isolated sessions
+against locally built real WMs.
 See [`docs/skarwm.md`](docs/skarwm.md) for the required startup line and
 optional skarwm bindings and services.
 See [`docs/widgets/`](docs/widgets/README.md) for a short guide to every bar

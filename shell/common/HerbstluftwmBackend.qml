@@ -7,6 +7,12 @@ WindowManagerBackend {
     id: root
 
     name: "herbstluftwm"
+    layouts: [
+        { name: "Vertical", glyph: "󰙀", command: "vertical" },
+        { name: "Horizontal", glyph: "󱥣", command: "horizontal" },
+        { name: "Max", glyph: "󰍹", command: "max" },
+        { name: "Grid", glyph: "󰕮", command: "grid" }
+    ]
     readonly property string provider:
         ShellState.scriptsDir + "/wm/herbstluftwm-provider"
     property bool refreshPending: false
@@ -197,7 +203,12 @@ WindowManagerBackend {
             recomputeWorkspaceFlags()
         } else if (event === "fullscreen" && fields.length >= 3)
             updateWindow(fields[2], { fullscreen: fields[1] === "on" })
-        else if (event === "attribute_changed")
+        else if (event === "attribute_changed"
+                && String(fields[1] ?? "").match(
+                    /^tags\.[0-9]+\.tiling\.focused_frame\.algorithm$/)) {
+            handled = false
+            refreshTimer.restart()
+        } else if (event === "attribute_changed")
             acceptAttribute(fields)
         else if (["tag_flags", "tag_added", "tag_removed", "tag_renamed",
                 "reload"].indexOf(event) >= 0) {
@@ -235,6 +246,11 @@ WindowManagerBackend {
             : unsupported("moveWindowToWorkspace")
     }
     function setGaps(value) { return runAction(["gaps", String(value)]) }
+    function setLayout(command) {
+        const changed = runAction(["layout", String(command)])
+        if (changed) refreshAfterAction.restart()
+        return changed
+    }
     function reloadWindowManager() { return runAction(["reload"]) }
     function quitWindowManager() { return runAction(["quit"]) }
 
@@ -281,6 +297,11 @@ WindowManagerBackend {
     Timer {
         id: refreshTimer
         interval: 80
+        onTriggered: root.refresh()
+    }
+    Timer {
+        id: refreshAfterAction
+        interval: 150
         onTriggered: root.refresh()
     }
     Timer {

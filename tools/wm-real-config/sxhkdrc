@@ -1,0 +1,17 @@
+super + Return
+	xterm
+
+super + a
+	anushctl launcher toggle
+
+super + v
+	anushctl clipboard toggle
+
+super + shift + n
+	anushctl notes toggle
+
+super + {1-9}
+	bspc desktop -f '^{1-9}'
+
+super + shift + {1-9}
+	bspc node -d '^{1-9}'

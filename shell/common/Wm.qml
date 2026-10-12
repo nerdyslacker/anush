@@ -115,25 +115,18 @@ Singleton {
     readonly property var focusedWorkspace:
         workspaces.find(workspace => workspace.focused === true) ?? null
 
-    readonly property var layouts: [
-        { name: "Scrolling Tile", glyph: "󰙀", command: "scrolling-tile" },
-        { name: "Vertical Scroller", glyph: "󱥣", command: "vertical-scrolling-tile" },
-        { name: "Tabbed", glyph: "󰓩", command: "tabbed" },
-        { name: "Dwindle", glyph: "󰕮", command: "dwindle" },
-        { name: "Monocle", glyph: "󰍹", command: "monocle" },
-        { name: "Floating", glyph: "󰕰", command: "floating" }
-    ]
-    readonly property var workspaceLayoutCommands: [
-        "scrolling-tile", "vertical-scrolling-tile", "dwindle", "monocle", "floating"
-    ]
+    readonly property var layouts: backend.layouts ?? []
+    readonly property var workspaceLayoutCommands: layouts
+        .filter(layout => layout.cycle !== false)
+        .map(layout => String(layout.command))
     readonly property string workspaceLayout: String(
-        focusedWorkspace?.layout ?? "scrolling-tile")
+        focusedWorkspace?.layout ?? "")
     readonly property int layoutIndex: {
         if (workspaceLayout === "scrolling-tile"
                 && focusedWindow?.column_layout === "tabbed")
             return layouts.findIndex(layout => layout.command === "tabbed")
         const index = layouts.findIndex(layout => layout.command === workspaceLayout)
-        return index >= 0 ? index : 0
+        return index
     }
 
     property var lastFocusedWindowByScreen: ({})
@@ -299,7 +292,10 @@ Singleton {
 
     function viewTag(index, screenId) {
         const workspace = workspaceAt(index, screenId)
-        return workspace ? switchWorkspace(workspace.id, screenId) : false
+        if (workspace) return switchWorkspace(workspace.id, screenId)
+        if (!requireCapability("implicitWorkspaces", "createWorkspace"))
+            return false
+        return backend.switchWorkspace(String(index + 1), screenId)
     }
     function toggleViewTag(index, screenId) { return viewTag(index, screenId) }
     function sendToTag(index) {
@@ -327,8 +323,9 @@ Singleton {
     }
     function cycleLayout(direction) {
         if (!requireCapability("layouts", "cycleLayout")) return false
+        if (workspaceLayoutCommands.length === 0) return false
         let index = workspaceLayoutCommands.indexOf(workspaceLayout)
-        if (index < 0) index = 0
+        if (index < 0) index = direction > 0 ? -1 : 0
         const next = (index + direction + workspaceLayoutCommands.length)
             % workspaceLayoutCommands.length
         return backend.setLayout(workspaceLayoutCommands[next])

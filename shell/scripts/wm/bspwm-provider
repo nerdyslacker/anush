@@ -11,11 +11,69 @@ import sys
 
 
 QUOTED = re.compile(r'"(?:\\.|[^"\\])*"')
+LAYOUT_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
+NATIVE_LAYOUTS = ("tiled", "monocle")
+LAYOUT_GLYPHS = {
+    "tiled": "󰙀",
+    "monocle": "󰍹",
+    "tall": "󰯌",
+    "rtall": "󰯍",
+    "wide": "󰯎",
+    "rwide": "󰯏",
+    "grid": "󰕰",
+    "rgrid": "󰕰",
+    "even": "󰕮",
+}
 
 
 def fixture_dir():
     value = os.environ.get("ANUSH_BSPWM_FIXTURE_DIR", "")
     return Path(value) if value else None
+
+
+def bsp_layout_binary():
+    if fixture_dir() is not None:
+        return None
+    configured = os.environ.get("ANUSH_BSP_LAYOUT", "").strip()
+    if configured:
+        return configured if os.access(configured, os.X_OK) else None
+    return shutil.which("bsp-layout")
+
+
+def available_layouts(binary):
+    names = list(NATIVE_LAYOUTS)
+    if binary:
+        result = subprocess.run(
+            [binary, "layouts"], check=False, capture_output=True,
+            text=True, timeout=4,
+        )
+        if result.returncode == 0:
+            for name in result.stdout.splitlines():
+                name = name.strip()
+                if LAYOUT_NAME.fullmatch(name) and name not in names:
+                    names.append(name)
+    return names
+
+
+def layout_registry(names):
+    return [{
+        "name": name.replace("_", " ").replace("-", " ").title(),
+        "glyph": LAYOUT_GLYPHS.get(name, "󰕮"),
+        "command": name,
+    } for name in names]
+
+
+def desktop_layout(binary, desktop):
+    native = str(desktop.get("layout", ""))
+    if not binary:
+        return native
+    result = subprocess.run(
+        [binary, "get", str(desktop.get("name", ""))], check=False,
+        capture_output=True, text=True, timeout=4,
+    )
+    managed = result.stdout.strip() if result.returncode == 0 else ""
+    return managed if managed != "-" and LAYOUT_NAME.fullmatch(managed) \
+        else native
 
 
 def bsp_id(value):
@@ -27,11 +85,11 @@ def load_tree():
     if directory is not None:
         return json.loads((directory / "tree.json").read_text())
     result = subprocess.run(
-        ["bspc", "query", "-T"], check=False, capture_output=True,
+        ["bspc", "wm", "--dump-state"], check=False, capture_output=True,
         text=True, timeout=5,
     )
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "bspc query -T failed")
+        raise RuntimeError(result.stderr.strip() or "bspc wm --dump-state failed")
     return json.loads(result.stdout)
 
 
@@ -120,6 +178,8 @@ def collect_windows(node, monitor, desktop, focused_monitor, titles, result):
 
 def snapshot():
     tree = load_tree()
+    layout_binary = bsp_layout_binary()
+    layout_names = available_layouts(layout_binary)
     titles = fixture_titles()
     focused_monitor = tree.get("focusedMonitorId")
     screens = []
@@ -159,7 +219,7 @@ def snapshot():
                 "visible": active,
                 "occupied": bool(desktop_windows),
                 "urgent": any(item["urgent"] for item in desktop_windows),
-                "layout": str(desktop.get("layout", "")),
+                "layout": desktop_layout(layout_binary, desktop),
             })
     tools = fixture_dir() is not None or shutil.which("bspc") is not None
     titles_available = fixture_dir() is not None or shutil.which("xprop") is not None
@@ -181,13 +241,14 @@ def snapshot():
             "virtualScreens": False,
             "decorationStyling": False,
             "eventStream": tools,
-            "layouts": False,
+            "layouts": tools,
             "gaps": tools,
             "reload": False,
             "sessionControl": False,
             "keybindings": False,
             "configurationEditor": False,
         },
+        "layouts": layout_registry(layout_names),
         "screens": screens,
         "workspaces": workspaces,
         "windows": windows,
@@ -212,6 +273,14 @@ def action(args):
         command = ["bspc", "node", args[1], "--to-monitor", args[2]]
     elif kind == "gaps" and len(args) == 2:
         command = ["bspc", "config", "window_gap", args[1]]
+    elif kind == "layout" and len(args) == 2:
+        layout_binary = bsp_layout_binary()
+        if args[1] not in available_layouts(layout_binary):
+            raise RuntimeError(f"unknown bspwm layout {args[1]}")
+        if layout_binary:
+            command = [layout_binary, "set", args[1]]
+        else:
+            command = ["bspc", "desktop", "focused", "--layout", args[1]]
     else:
         raise RuntimeError(f"unknown bspwm action {kind}")
     result = subprocess.run(command, check=False, timeout=4)

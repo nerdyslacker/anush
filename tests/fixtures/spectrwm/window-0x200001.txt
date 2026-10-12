@@ -1,2 +1,0 @@
-_NET_WM_NAME(UTF8_STRING) = "spectrwm"
-WM_NAME(STRING) = "spectrwm"

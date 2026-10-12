@@ -1,0 +1,266 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+workspace=$(cd "$repo/.." && pwd)
+wm_root=${ANUSH_WM_SOURCE_DIR:-$workspace/WM}
+configs=$repo/tools/wm-real-config
+
+find_executable() {
+    local candidate
+    for candidate in "$@"; do
+        if [[ $candidate == */* && -x $candidate ]]; then
+            printf '%s\n' "$candidate"
+            return
+        fi
+        if [[ $candidate != */* ]] && command -v "$candidate" >/dev/null 2>&1; then
+            command -v "$candidate"
+            return
+        fi
+    done
+    return 1
+}
+
+resolve_wm() {
+    case "$1" in
+        skarwm) find_executable "$workspace/skarwm/build/skarwm" skarwm ;;
+        bspwm) find_executable "$wm_root/bspwm/bspwm" bspwm ;;
+        herbstluftwm)
+            find_executable "$wm_root/herbstluftwm/build/herbstluftwm" herbstluftwm
+            ;;
+        i3) find_executable "$wm_root/i3/build/i3" i3 ;;
+        spectrwm) find_executable "$wm_root/spectrwm/linux/spectrwm" spectrwm ;;
+        dwm) find_executable "$repo/build/wm/dwm/dwm" "$wm_root/dwm/dwm" dwm ;;
+        *) return 1 ;;
+    esac
+}
+
+augment_path() {
+    export PATH="$repo/build:$repo/build/wm/bsp-layout/usr/bin:$workspace/skarwm/build:$wm_root/bspwm:$wm_root/herbstluftwm/build:$wm_root/i3/build:$wm_root/spectrwm/linux:$repo/build/wm/dwm:$wm_root/dwm:$PATH"
+}
+
+wm_command() {
+    local wm=$1 binary
+    binary=$(resolve_wm "$wm")
+    case "$wm" in
+        skarwm) printf '%s\0-c\0%s\0' "$binary" "$configs/skarwm.rc" ;;
+        bspwm) printf '%s\0-c\0%s\0' "$binary" "$configs/bspwmrc" ;;
+        herbstluftwm)
+            printf '%s\0-c\0%s\0--no-tag-import\0' \
+                "$binary" "$configs/herbstluftwm-autostart"
+            ;;
+        i3) printf '%s\0-a\0-c\0%s\0' "$binary" "$configs/i3.conf" ;;
+        spectrwm) printf '%s\0-c\0%s\0' "$binary" "$configs/spectrwm.conf" ;;
+        dwm) printf '%s\0' "$binary" ;;
+    esac
+}
+
+start_wm() {
+    local wm=${WM_SMOKE_WM:?} run_dir=${WM_SMOKE_RUN:?}
+    if [[ -f $run_dir/wm.pid ]] && kill -0 "$(<"$run_dir/wm.pid")" 2>/dev/null; then
+        printf '%s is already running\n' "$wm"
+        return
+    fi
+    augment_path
+    export BSPWM_SOCKET="$run_dir/bspwm.sock"
+    export I3SOCK="$run_dir/i3.sock"
+    export SKARWM_SOCKET="$run_dir/skarwm.sock"
+    local -a command
+    mapfile -d '' -t command < <(wm_command "$wm")
+    nohup "${command[@]}" >>"$run_dir/wm.log" 2>&1 </dev/null &
+    printf '%s\n' "$!" >"$run_dir/wm.pid"
+    printf 'started %s (pid %s)\n' "$wm" "$!"
+}
+
+start_hotkeys() {
+    [[ ${WM_SMOKE_WM:?} == bspwm ]] || return 0
+    local run_dir=${WM_SMOKE_RUN:?}
+    nohup sxhkd -c "$configs/sxhkdrc" \
+        >>"$run_dir/sxhkd.log" 2>&1 </dev/null &
+    printf '%s\n' "$!" >"$run_dir/sxhkd.pid"
+}
+
+stop_pid_file() {
+    local file=$1 label=$2 pid
+    [[ -f $file ]] || return 0
+    pid=$(<"$file")
+    if [[ $pid =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
+        kill -TERM "$pid" 2>/dev/null || true
+        for _ in $(seq 1 30); do
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 0.1
+        done
+        kill -KILL "$pid" 2>/dev/null || true
+    fi
+    : >"$file"
+    printf 'stopped %s\n' "$label"
+}
+
+wait_for_shell() {
+    local expected=$1 attempt state
+    for attempt in $(seq 1 80); do
+        state=$($repo/build/anushctl wm status 2>/dev/null || true)
+        if [[ $expected == connected && $state == *'"connectionState":"connected"'* ]]; then
+            return 0
+        fi
+        if [[ $expected == disconnected && $state != *'"connectionState":"connected"'* ]]; then
+            return 0
+        fi
+        sleep 0.1
+    done
+    [[ -z $state ]] || printf 'last WM status: %s\n' "$state" >&2
+    return 1
+}
+
+open_clients() {
+    xterm -class AnushSmokeOne -name smoke-one -T 'Smoke One' &
+    xterm -class AnushSmokeTwo -name smoke-two -T 'Smoke Two' &
+    xterm -class AnushSmokeFloat -name smoke-float -T 'Smoke Float' &
+}
+
+start_shell() {
+    local run_dir=${WM_SMOKE_RUN:?}
+    if [[ -f $run_dir/anush.pid ]] && kill -0 "$(<"$run_dir/anush.pid")" 2>/dev/null; then
+        return
+    fi
+    nohup qs --no-duplicate -p "$repo/shell" \
+        >>"$run_dir/anush.log" 2>&1 </dev/null &
+    printf '%s\n' "$!" >"$run_dir/anush.pid"
+}
+
+show_status() {
+    printf '%s\n' 'Backend status:'
+    "$repo/build/anushctl" wm status | jq .
+    printf '%s\n' 'Capabilities:'
+    "$repo/build/anushctl" wm capabilities | jq .
+}
+
+dump_state() {
+    "$repo/build/anushctl" wm state | jq .
+}
+
+check_state() {
+    local status state
+    status=$($repo/build/anushctl wm status)
+    state=$($repo/build/anushctl wm state)
+    jq -e '.connectionState == "connected" and (.backend | length > 0)' \
+        >/dev/null <<<"$status"
+    jq -e '.capabilities and (.screens | type == "array") and
+        (.workspaces | type == "array") and (.windows | type == "array")' \
+        >/dev/null <<<"$state"
+    printf 'normalized state is valid; %s windows visible\n' \
+        "$(jq '.windows | length' <<<"$state")"
+}
+
+wait_for_shell_focus() {
+    local shell_pid focused owner
+    shell_pid=$(<"${WM_SMOKE_RUN:?}/anush.pid")
+    for _ in $(seq 1 20); do
+        focused=$(xdotool getwindowfocus 2>/dev/null || true)
+        owner=$(xdotool getwindowpid "$focused" 2>/dev/null || true)
+        if [[ $owner == "$shell_pid" ]]; then
+            return 0
+        fi
+        sleep 0.05
+    done
+    printf 'expected launcher focus owner %s, got window %s owned by %s\n' \
+        "$shell_pid" "${focused:-unknown}" "${owner:-unknown}" >&2
+    return 1
+}
+
+check_ui() {
+    "$repo/build/anushctl" launcher toggle
+    wait_for_shell_focus
+    xdotool type --delay 20 anush-focus-probe
+    xdotool key Escape
+    sleep 0.2
+
+    xdotool key --clearmodifiers super+a
+    wait_for_shell_focus
+    xdotool key Escape
+    printf 'launcher input focus and Super+a binding are working\n'
+}
+
+restart_wm() {
+    stop_pid_file "${WM_SMOKE_RUN:?}/wm.pid" "${WM_SMOKE_WM:?}"
+    if wait_for_shell disconnected; then
+        printf 'anush entered degraded mode\n'
+    else
+        printf 'warning: disconnected state was not observed\n' >&2
+    fi
+    start_wm
+    if wait_for_shell connected; then
+        sleep 1
+        printf 'anush reconnected to %s\n' "$WM_SMOKE_WM"
+        show_status
+    else
+        printf 'reconnect timed out; inspect %s\n' "$WM_SMOKE_RUN" >&2
+        return 1
+    fi
+}
+
+console() {
+    printf '\nReal-WM session: %s on %s\n\n' "$WM_SMOKE_WM" "$DISPLAY"
+    printf '%s\n' \
+        'wm_smoke status    backend and capability summary' \
+        'wm_smoke dump      complete normalized state' \
+        'wm_smoke check     validate the normalized state shape' \
+        'wm_smoke ui        verify launcher focus and its WM keybinding' \
+        'wm_smoke open      open three more real X11 clients' \
+        'wm_smoke restart   kill and restart the WM, checking recovery' \
+        'wm_smoke logs      show runtime log paths' \
+        'anushctl wm ...    run individual normalized actions'
+    export WM_SMOKE_CONTROL
+    wm_smoke() { "$WM_SMOKE_CONTROL" "$@"; }
+    anushctl() { "$repo/build/anushctl" "$@"; }
+    export -f wm_smoke anushctl
+    export PS1="(anush-${WM_SMOKE_WM}) \w \\$ "
+    exec bash --noprofile --norc -i
+}
+
+session_cleanup() {
+    trap - EXIT HUP INT TERM
+    stop_pid_file "${WM_SMOKE_RUN:?}/anush.pid" anush || true
+    stop_pid_file "$WM_SMOKE_RUN/sxhkd.pid" sxhkd || true
+    stop_pid_file "$WM_SMOKE_RUN/wm.pid" "$WM_SMOKE_WM" || true
+}
+
+session() {
+    trap session_cleanup EXIT HUP INT TERM
+    augment_path
+    export ANUSH_REAL_WM_TEST=$WM_SMOKE_WM
+    start_wm
+    start_hotkeys
+    for _ in $(seq 1 50); do
+        xprop -root _NET_SUPPORTING_WM_CHECK >/dev/null 2>&1 && break
+        sleep 0.1
+    done
+    start_shell
+    if ! wait_for_shell connected; then
+        printf 'WM service did not connect; inspect %s/anush.log\n' "$WM_SMOKE_RUN" >&2
+    fi
+    open_clients
+    sleep 1
+    check_state >"$WM_SMOKE_RUN/readiness.log"
+    xterm -class AnushSmokeControl -name smoke-control \
+        -T "anush ${WM_SMOKE_WM} control" -e "$0" console &
+    while :; do sleep 30; done
+}
+
+command_name=${1:-}
+case "$command_name" in
+    resolve) resolve_wm "${2:-}" ;;
+    session) session ;;
+    console) console ;;
+    status) show_status ;;
+    dump) dump_state ;;
+    check) check_state ;;
+    ui) check_ui ;;
+    open) open_clients ;;
+    restart) restart_wm ;;
+    logs) printf '%s\n' "$WM_SMOKE_RUN" "$WM_SMOKE_RUN"/*.log ;;
+    start) start_wm ;;
+    stop) stop_pid_file "${WM_SMOKE_RUN:?}/wm.pid" "${WM_SMOKE_WM:?}" ;;
+    *) printf 'wm-real-control: unknown command: %s\n' "$command_name" >&2; exit 2 ;;
+esac

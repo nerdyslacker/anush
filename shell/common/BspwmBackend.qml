@@ -57,6 +57,7 @@ WindowManagerBackend {
             snapshotRetryTimer.stop()
             connected = true
             capabilities = value.capabilities ?? ({})
+            layouts = Array.isArray(value.layouts) ? value.layouts : []
             screens = Array.isArray(value.screens) ? value.screens : []
             workspaces = Array.isArray(value.workspaces) ? value.workspaces : []
             windows = Array.isArray(value.windows) ? value.windows : []
@@ -197,6 +198,16 @@ WindowManagerBackend {
             : unsupported("moveWindowToWorkspace")
     }
     function setGaps(value) { return runAction(["gaps", String(value)]) }
+    function setLayout(command) {
+        const value = String(command)
+        const focused = workspaces.find(workspace => workspace.focused === true)
+        const started = runAction(["layout", value])
+        if (!started) return false
+        if (focused) updateLayout(focused.id, value)
+        changed()
+        layoutRefreshTimer.restart()
+        return true
+    }
 
     onActiveChanged: {
         if (active) start()
@@ -241,6 +252,11 @@ WindowManagerBackend {
     Timer {
         id: refreshTimer
         interval: 60
+        onTriggered: root.refresh()
+    }
+    Timer {
+        id: layoutRefreshTimer
+        interval: 250
         onTriggered: root.refresh()
     }
     Timer {

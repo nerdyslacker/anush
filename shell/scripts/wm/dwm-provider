@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
+import ast
 import json
 import os
 from pathlib import Path
+import re
 import socket
 import struct
 import subprocess
@@ -10,6 +12,7 @@ import sys
 
 
 MAGIC = b"DWM-IPC"
+RUN_COMMAND = 0
 GET_MONITORS = 1
 GET_TAGS = 2
 GET_CLIENT = 4
@@ -24,6 +27,15 @@ EVENT_NAMES = [
     "focused_state_change_event",
 ]
 EWMH_PROVIDER = Path(__file__).with_name("ewmh-provider")
+ANUSH_STATE = "_ANUSH_DWM_STATE"
+ANUSH_LAYOUTS = "_ANUSH_DWM_LAYOUTS"
+ANUSH_SET_LAYOUT = "_ANUSH_DWM_SET_LAYOUT"
+
+LAYOUT_METADATA = {
+    "[]=": ("Tiled", "󰙀"),
+    "><>": ("Floating", "󰕰"),
+    "[M]": ("Monocle", "󰍹"),
+}
 
 
 def fixture_dir():
@@ -116,6 +128,17 @@ def ipc_snapshot():
         connection.close()
 
 
+def ipc_command(command, arguments):
+    connection = connect_ipc()
+    try:
+        request(connection, RUN_COMMAND, {
+            "command": command,
+            "args": arguments,
+        })
+    finally:
+        connection.close()
+
+
 def ewmh_snapshot():
     result = subprocess.run(
         [str(EWMH_PROVIDER), "snapshot", "dwm"], check=False,
@@ -124,6 +147,57 @@ def ewmh_snapshot():
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or "EWMH snapshot failed")
     return json.loads(result.stdout)
+
+
+def anush_state():
+    result = subprocess.run(
+        ["xprop", "-root", ANUSH_STATE], check=False,
+        capture_output=True, text=True, timeout=4,
+    )
+    if result.returncode != 0 or "=" not in result.stdout:
+        return None
+    values = [int(value, 0) for value in re.findall(
+        r"(?<![A-Za-z_])(?:0x[0-9a-fA-F]+|[0-9]+)",
+        result.stdout.split("=", 1)[1],
+    )]
+    return values[:4] if len(values) >= 4 else None
+
+
+def anush_layout_symbols():
+    result = subprocess.run(
+        ["xprop", "-root", ANUSH_LAYOUTS], check=False,
+        capture_output=True, text=True, timeout=4,
+    )
+    if result.returncode != 0 or "=" not in result.stdout:
+        return []
+    try:
+        value = ast.literal_eval(result.stdout.split("=", 1)[1].strip())
+    except (SyntaxError, ValueError):
+        return []
+    if not isinstance(value, str):
+        return []
+    return value.split("\t") if value else []
+
+
+def layout_registry(symbols):
+    duplicates = {symbol for symbol in symbols if symbols.count(symbol) > 1}
+    layouts = []
+    for index, symbol in enumerate(symbols):
+        name, glyph = LAYOUT_METADATA.get(
+            symbol, (symbol or f"Layout {index + 1}", "󰕮"),
+        )
+        if symbol in duplicates:
+            name = f"{name} {index + 1}"
+        layouts.append({
+            "name": name,
+            "glyph": glyph,
+            "command": f"dwm-layout:{index}",
+        })
+    return layouts
+
+
+def layout_command(symbols, index):
+    return f"dwm-layout:{index}" if 0 <= index < len(symbols) else ""
 
 
 def rectangle(value):
@@ -142,7 +216,6 @@ def normalize(raw, metadata):
     metadata_windows = {
         str(window.get("id")): window for window in metadata.get("windows", [])
     }
-
     screens = []
     workspaces = []
     selected_clients = set()
@@ -250,12 +323,115 @@ def normalize(raw, metadata):
     }
 
 
+def normalize_anush(metadata, state, symbols):
+    selected, occupied, urgent, layout_index = state
+    layout = layout_command(symbols, layout_index)
+    workspaces = []
+    for index in range(9):
+        mask = 1 << index
+        visible = bool(selected & mask)
+        workspaces.append({
+            "id": str(mask),
+            "name": str(index + 1),
+            "index": index,
+            "screenId": None,
+            "active": visible,
+            "focused": visible,
+            "visible": visible,
+            "occupied": bool(occupied & mask),
+            "urgent": bool(urgent & mask),
+            "layout": layout if visible else "",
+        })
+    value = dict(metadata)
+    capabilities = dict(metadata.get("capabilities", {}))
+    capabilities.update({
+        "perScreenWorkspaces": False,
+        "workspaces": True,
+        "layouts": True,
+        "eventStream": True,
+    })
+    value.update({
+        "connected": True,
+        "integration": "dwm-anush",
+        "capabilities": capabilities,
+        "layouts": layout_registry(symbols),
+        "workspaces": workspaces,
+    })
+    return value
+
+
 def snapshot():
     metadata = ewmh_snapshot()
+    state = anush_state()
+    symbols = anush_layout_symbols() if state is not None else []
     try:
-        return normalize(ipc_snapshot(), metadata)
+        value = normalize(ipc_snapshot(), metadata)
+        if symbols:
+            value["layouts"] = layout_registry(symbols)
+            value["capabilities"]["layouts"] = True
+            current = layout_command(symbols, state[3])
+            for workspace in value["workspaces"]:
+                if workspace.get("visible"):
+                    workspace["layout"] = current
+        return value
     except (OSError, RuntimeError, ValueError, json.JSONDecodeError):
-        return metadata
+        return normalize_anush(metadata, state, symbols) \
+            if state is not None else metadata
+
+
+def action(args):
+    if args and args[0] == "dwm":
+        args = args[1:]
+    if len(args) != 2:
+        raise RuntimeError("invalid dwm action")
+    kind, value = args
+    if kind == "workspace":
+        state = anush_state()
+        if state is None and ":" in value:
+            _, mask_value = value.rsplit(":", 1)
+            mask = int(mask_value, 0)
+            if mask <= 0 or mask & (mask - 1):
+                raise RuntimeError(f"invalid dwm tag mask {mask_value}")
+            ipc_command("view", [{
+                "type": "ARG_TYPE_UINT",
+                "value": mask,
+            }])
+            return
+        if state is None:
+            result = subprocess.run(
+                [str(EWMH_PROVIDER), "action", "dwm", "workspace", value],
+                check=False, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, timeout=4,
+            )
+            if result.returncode != 0:
+                raise RuntimeError("workspace failed")
+            return
+        mask = int(value, 0)
+        if mask <= 0 or mask & (mask - 1) or mask > 1 << 8:
+            raise RuntimeError(f"invalid dwm tag mask {value}")
+        command = ["xdotool", "set_desktop", str(mask.bit_length() - 1)]
+    elif kind == "layout":
+        if anush_state() is None:
+            raise RuntimeError("dwm does not expose anush layout control")
+        match = re.fullmatch(r"dwm-layout:([0-9]+)", value)
+        symbols = anush_layout_symbols()
+        index = int(match.group(1)) if match else -1
+        if index < 0 or index >= len(symbols):
+            raise RuntimeError(f"unknown dwm layout {value}")
+        result = subprocess.run([
+            "xprop", "-root", "-f", ANUSH_SET_LAYOUT, "32c",
+            "-set", ANUSH_SET_LAYOUT, str(index),
+        ], check=False, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, timeout=4)
+        if result.returncode != 0:
+            raise RuntimeError("layout failed")
+        return
+    else:
+        raise RuntimeError(f"unknown dwm action {kind}")
+    result = subprocess.run(command, check=False, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, timeout=4)
+    if result.returncode != 0:
+        raise RuntimeError(f"{kind} failed")
 
 
 def monitor_ipc():
@@ -288,6 +464,10 @@ def monitor():
     try:
         monitor_ipc()
     except (OSError, RuntimeError, ValueError, json.JSONDecodeError):
+        if anush_state() is not None:
+            os.execvp("xprop", ["xprop", "-spy", "-root", ANUSH_STATE,
+                                ANUSH_LAYOUTS,
+                                "_NET_CLIENT_LIST", "_NET_ACTIVE_WINDOW"])
         os.execv(EWMH_PROVIDER, [str(EWMH_PROVIDER), "monitor"])
 
 
@@ -298,6 +478,8 @@ def main():
             print(json.dumps(snapshot()))
         elif command == "monitor":
             monitor()
+        elif command == "action":
+            action(sys.argv[2:])
         else:
             raise RuntimeError(f"unknown Dwm provider command {command}")
     except (OSError, RuntimeError, ValueError, subprocess.SubprocessError,

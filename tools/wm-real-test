@@ -1,0 +1,313 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+workspace=$(cd "$repo/.." && pwd)
+wm_root=${ANUSH_WM_SOURCE_DIR:-$workspace/WM}
+control=$repo/tools/wm-real-control
+supported=(skarwm bspwm herbstluftwm i3 spectrwm dwm)
+run_dir=
+runtime_dir=
+xephyr_pid=
+session_pid=
+
+usage() {
+    cat <<'EOF'
+Usage: tools/wm-real-test COMMAND [ARGUMENTS]
+
+Commands:
+  doctor [WM]                 Check tools and locally built WM binaries
+  build WM|all                Build cloned WMs without installing them
+  run WM [--display :N]       Run a real WM and anush inside Xephyr
+         [--size WIDTHxHEIGHT] [--multi] [--backend auto|NAME]
+
+Supported WMs: skarwm, bspwm, herbstluftwm, i3, spectrwm, dwm
+EOF
+}
+
+is_supported() {
+    local wanted=$1 item
+    for item in "${supported[@]}"; do
+        [[ $item == "$wanted" ]] && return 0
+    done
+    return 1
+}
+
+require_tool() {
+    command -v "$1" >/dev/null 2>&1 || {
+        printf 'wm-real-test: missing required command: %s\n' "$1" >&2
+        return 1
+    }
+}
+
+doctor() {
+    local wanted=${1:-} failed=0 item
+    for item in Xephyr dbus-run-session xterm xdotool xprop xrandr jq qs; do
+        if command -v "$item" >/dev/null 2>&1; then
+            printf '%-18s %s\n' "$item" "$(command -v "$item")"
+        else
+            printf '%-18s missing\n' "$item"
+            failed=1
+        fi
+    done
+    if [[ -z $wanted || $wanted == bspwm ]]; then
+        if command -v sxhkd >/dev/null 2>&1; then
+            printf '%-18s %s\n' sxhkd "$(command -v sxhkd)"
+        else
+            printf '%-18s missing (required for bspwm keybindings)\n' sxhkd
+            failed=1
+        fi
+        if [[ -x $repo/build/wm/bsp-layout/usr/bin/bsp-layout ]]; then
+            printf '%-18s %s\n' bsp-layout \
+                "$repo/build/wm/bsp-layout/usr/bin/bsp-layout"
+        elif [[ -d $wm_root/bsp-layout ]]; then
+            printf '%-18s not built (run: tools/wm-real-test build bspwm)\n' \
+                bsp-layout
+            failed=1
+        else
+            printf '%-18s not installed (optional extra bspwm layouts)\n' \
+                bsp-layout
+        fi
+    fi
+    for item in "${supported[@]}"; do
+        [[ -z $wanted || $wanted == "$item" ]] || continue
+        if binary=$(
+            ANUSH_WM_SOURCE_DIR=$wm_root "$control" resolve "$item" 2>/dev/null
+        ); then
+            printf '%-18s %s\n' "$item" "$binary"
+        else
+            printf '%-18s not built\n' "$item"
+            failed=1
+        fi
+    done
+    return "$failed"
+}
+
+build_one() {
+    local wm=$1
+    printf 'Building %s...\n' "$wm"
+    case "$wm" in
+        skarwm)
+            make -C "$workspace/skarwm"
+            ;;
+        bspwm)
+            make -C "$wm_root/bspwm"
+            if [[ -f $wm_root/bsp-layout/Makefile ]]; then
+                make -C "$wm_root/bsp-layout" \
+                    DESTDIR="$repo/build/wm/bsp-layout" PREFIX=/usr install
+            fi
+            ;;
+        herbstluftwm)
+            cmake -S "$wm_root/herbstluftwm" \
+                -B "$wm_root/herbstluftwm/build" \
+                -DCMAKE_BUILD_TYPE=Debug
+            cmake --build "$wm_root/herbstluftwm/build" \
+                --target herbstluftwm herbstclient -j "$(nproc)"
+            ;;
+        i3)
+            if [[ ! -f $wm_root/i3/build/build.ninja ]]; then
+                meson setup "$wm_root/i3/build" "$wm_root/i3" \
+                    --buildtype=debug -Ddocs=false
+            fi
+            meson compile -C "$wm_root/i3/build"
+            ;;
+        spectrwm)
+            make -C "$wm_root/spectrwm/linux"
+            ;;
+        dwm)
+            local target=$repo/build/wm/dwm
+            mkdir -p "$target"
+            cp "$wm_root/dwm/Makefile" "$wm_root/dwm/config.mk" \
+                "$wm_root/dwm/config.def.h" "$wm_root/dwm/drw.c" \
+                "$wm_root/dwm/drw.h" "$wm_root/dwm/dwm.c" \
+                "$wm_root/dwm/util.c" "$wm_root/dwm/util.h" "$target/"
+            patch -d "$target" -p0 <"$repo/tools/wm-real-config/dwm-anush.patch"
+            patch -d "$target" -p0 \
+                <"$repo/tools/wm-real-config/dwm-quickshell-extbar.patch"
+            cp "$target/config.def.h" "$target/config.h"
+            make -C "$target"
+            ;;
+    esac
+}
+
+build_command() {
+    local wanted=${1:-}
+    [[ -n $wanted ]] || { usage >&2; return 2; }
+    if [[ $wanted == all ]]; then
+        local item failed=0
+        for item in "${supported[@]}"; do
+            build_one "$item" || failed=1
+        done
+        return "$failed"
+    fi
+    is_supported "$wanted" || {
+        printf 'wm-real-test: unsupported WM: %s\n' "$wanted" >&2
+        return 2
+    }
+    build_one "$wanted"
+}
+
+unused_display() {
+    local number
+    for number in $(seq 90 119); do
+        if prepare_display "$number"; then
+            printf ':%s\n' "$number"
+            return
+        fi
+    done
+    printf 'wm-real-test: no unused display in :90..:119\n' >&2
+    return 1
+}
+
+prepare_display() {
+    local number=$1 lock=/tmp/.X${1}-lock socket=/tmp/.X11-unix/X${1}
+    local modified now
+
+    if DISPLAY=:$number xdpyinfo >/dev/null 2>&1; then
+        return 1
+    fi
+    if [[ -e $socket ]]; then
+        return 1
+    fi
+    if [[ -e $lock ]]; then
+        modified=$(stat -c %Y "$lock")
+        now=$(date +%s)
+        ((now - modified >= 10)) || return 1
+        rm -f -- "$lock"
+        printf 'wm-real-test: removed stale X11 lock for :%s\n' "$number" >&2
+    fi
+}
+
+run_command() {
+    local wm=${1:-} display= size=1600x900 multi=false backend=auto
+    [[ -n $wm ]] || { usage >&2; return 2; }
+    shift
+    is_supported "$wm" || {
+        printf 'wm-real-test: unsupported WM: %s\n' "$wm" >&2
+        return 2
+    }
+    while (($#)); do
+        case "$1" in
+            --display) display=${2:-}; shift 2 ;;
+            --size) size=${2:-}; shift 2 ;;
+            --multi) multi=true; shift ;;
+            --backend) backend=${2:-}; shift 2 ;;
+            *) printf 'wm-real-test: unknown option: %s\n' "$1" >&2; return 2 ;;
+        esac
+    done
+    [[ $size =~ ^[0-9]+x[0-9]+$ ]] || {
+        printf 'wm-real-test: invalid size: %s\n' "$size" >&2
+        return 2
+    }
+
+    local tool
+    for tool in Xephyr dbus-run-session xterm xdotool xprop xdpyinfo jq qs setsid; do
+        require_tool "$tool"
+    done
+    if [[ $wm == bspwm ]]; then
+        require_tool sxhkd
+    fi
+    ANUSH_WM_SOURCE_DIR=$wm_root "$control" resolve "$wm" >/dev/null || {
+        printf 'wm-real-test: %s is not built; run tools/wm-real-test build %s\n' \
+            "$wm" "$wm" >&2
+        return 1
+    }
+    [[ -x $repo/build/anushctl ]] || make -C "$repo"
+    if [[ -n $display ]]; then
+        [[ $display =~ ^:([0-9]+)$ ]] || {
+            printf 'wm-real-test: invalid display: %s\n' "$display" >&2
+            return 2
+        }
+        prepare_display "${BASH_REMATCH[1]}" || {
+            printf 'wm-real-test: display %s is already in use\n' "$display" >&2
+            return 1
+        }
+    else
+        display=$(unused_display)
+    fi
+
+    run_dir=$(mktemp -d "/tmp/anush-wm-${wm}.XXXXXX")
+    runtime_dir=$run_dir/runtime
+    mkdir -p "$runtime_dir" "$run_dir/config" "$run_dir/state" "$run_dir/cache"
+    chmod 700 "$runtime_dir"
+
+    cleanup() {
+        trap - EXIT HUP INT TERM
+        if [[ -n ${session_pid:-} ]] && kill -0 "$session_pid" 2>/dev/null; then
+            kill -TERM -- "-$session_pid" 2>/dev/null || true
+            wait "$session_pid" 2>/dev/null || true
+        fi
+        if [[ -n ${xephyr_pid:-} ]] && kill -0 "$xephyr_pid" 2>/dev/null; then
+            kill -TERM -- "-$xephyr_pid" 2>/dev/null || true
+            wait "$xephyr_pid" 2>/dev/null || true
+        fi
+        printf '\nLogs preserved in %s\n' "$run_dir"
+    }
+    trap cleanup EXIT HUP INT TERM
+
+    setsid Xephyr "$display" -screen "$size" -ac -br -noreset \
+        >"$run_dir/xephyr.log" 2>&1 &
+    xephyr_pid=$!
+    local ready=false attempt
+    for attempt in $(seq 1 50); do
+        if DISPLAY=$display xdpyinfo >/dev/null 2>&1; then
+            ready=true
+            break
+        fi
+        kill -0 "$xephyr_pid" 2>/dev/null || break
+        sleep 0.1
+    done
+    [[ $ready == true ]] || {
+        printf 'wm-real-test: Xephyr failed; see %s/xephyr.log\n' "$run_dir" >&2
+        return 1
+    }
+
+    if [[ $multi == true ]]; then
+        local width height output half
+        width=${size%x*}
+        height=${size#*x}
+        half=$((width / 2))
+        output=$(DISPLAY=$display xrandr --query | awk '$2 == "connected" {print $1; exit}')
+        DISPLAY=$display xrandr --setmonitor LEFT \
+            "${half}/200x${height}/200+0+0" "$output"
+        DISPLAY=$display xrandr --setmonitor RIGHT \
+            "$((width - half))/200x${height}/200+${half}+0" none
+    fi
+
+    printf 'Starting %s on %s\n' "$wm" "$display"
+    printf 'Runtime: %s\n' "$run_dir"
+    setsid env \
+        DISPLAY="$display" \
+        XDG_RUNTIME_DIR="$runtime_dir" \
+        XDG_CONFIG_HOME="$run_dir/config" \
+        XDG_STATE_HOME="$run_dir/state" \
+        XDG_CACHE_HOME="$run_dir/cache" \
+        ANUSH_ROOT="$repo" \
+        ANUSH_STATE_DIR="$run_dir/state/anush" \
+        ANUSH_CONFIG_DIR="$run_dir/config/anush" \
+        ANUSH_WM_SOURCE_DIR="$wm_root" \
+        ANUSH_WM_BACKEND="$backend" \
+        WM_SMOKE_WM="$wm" \
+        WM_SMOKE_RUN="$run_dir" \
+        WM_SMOKE_CONTROL="$control" \
+        DBUS_SESSION_BUS_ADDRESS= \
+        dbus-run-session -- "$control" session \
+        >"$run_dir/session.log" 2>&1 &
+    session_pid=$!
+
+    printf 'Use the control terminal inside Xephyr. Close Xephyr or press Ctrl-C here to stop.\n'
+    while kill -0 "$xephyr_pid" 2>/dev/null \
+            && kill -0 "$session_pid" 2>/dev/null; do
+        sleep 1
+    done
+}
+
+command_name=${1:-}
+case "$command_name" in
+    doctor) shift; doctor "${1:-}" ;;
+    build) shift; build_command "$@" ;;
+    run) shift; run_command "$@" ;;
+    help|-h|--help|'') usage ;;
+    *) printf 'wm-real-test: unknown command: %s\n' "$command_name" >&2; usage >&2; exit 2 ;;
+esac

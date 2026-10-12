@@ -30,6 +30,14 @@ WindowManagerBackend {
         keybindings: true,
         configurationEditor: true
     })
+    layouts: [
+        { name: "Scrolling Tile", glyph: "󰙀", command: "scrolling-tile" },
+        { name: "Vertical Scroller", glyph: "󱥣", command: "vertical-scrolling-tile" },
+        { name: "Tabbed", glyph: "󰓩", command: "tabbed", cycle: false },
+        { name: "Dwindle", glyph: "󰕮", command: "dwindle" },
+        { name: "Monocle", glyph: "󰍹", command: "monocle" },
+        { name: "Floating", glyph: "󰕰", command: "floating" }
+    ]
 
     readonly property string msgPath: "skarwm-msg"
     property var rawOutputs: []

@@ -1,0 +1,27 @@
+#!/bin/sh
+
+[ "$#" -eq 5 ] || exit 2
+command -v xdotool >/dev/null 2>&1 || exit 0
+
+pid=$1
+wanted_x=$2
+wanted_y=$3
+wanted_width=$4
+wanted_height=$5
+match=
+
+for window in $(xdotool search --pid "$pid" 2>/dev/null); do
+    geometry=$(xdotool getwindowgeometry --shell "$window" 2>/dev/null) || continue
+    actual_x=$(printf '%s\n' "$geometry" | sed -n 's/^X=//p')
+    actual_y=$(printf '%s\n' "$geometry" | sed -n 's/^Y=//p')
+    actual_width=$(printf '%s\n' "$geometry" | sed -n 's/^WIDTH=//p')
+    actual_height=$(printf '%s\n' "$geometry" | sed -n 's/^HEIGHT=//p')
+    if [ "$actual_x" = "$wanted_x" ] && [ "$actual_y" = "$wanted_y" ] \
+            && [ "$actual_width" = "$wanted_width" ] \
+            && [ "$actual_height" = "$wanted_height" ]; then
+        match=$window
+    fi
+done
+
+[ -n "$match" ] || exit 0
+xdotool windowfocus "$match" >/dev/null 2>&1
