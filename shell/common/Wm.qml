@@ -83,6 +83,10 @@ Singleton {
         let highest = 1
         for (const workspace of workspaces)
             highest = Math.max(highest, Number(workspace.index) + 1)
+        for (const id of Object.keys(workspaceConfigurations)) {
+            const configured = Number(id)
+            if (isFinite(configured)) highest = Math.max(highest, configured)
+        }
         return highest
     }
     readonly property int dynamicTagCount: {

@@ -9,13 +9,16 @@ Popout {
     property bool draftDynamicWorkspaces: TagConfig.dynamicWorkspaces
     property bool draftLimitVisibleTags: TagConfig.limitVisibleTags
     property int draftVisibleTagLimit: TagConfig.visibleTagLimit
+    readonly property bool canConfigureTagCount:
+        Wm.capabilities.implicitWorkspaces === true
 
     cardWidth: 270
     cardHeight: content.implicitHeight + 2 * cardPadding
 
     onVisibleChanged: {
         if (visible) {
-            draftCount = TagConfig.count
+            draftCount = root.canConfigureTagCount
+                ? Math.max(TagConfig.count, Wm.tagCount) : TagConfig.count
             draftShowNumbers = TagConfig.showNumbers
             draftDynamicWorkspaces = TagConfig.dynamicWorkspaces
             draftLimitVisibleTags = TagConfig.limitVisibleTags
@@ -119,6 +122,7 @@ Popout {
 
         Row {
             id: visibleTagsRow
+            visible: root.canConfigureTagCount
             width: parent.width
             height: 28
             opacity: root.draftDynamicWorkspaces ? 0.42 : 1

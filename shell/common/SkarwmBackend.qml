@@ -11,6 +11,7 @@ WindowManagerBackend {
         screens: true,
         perScreenWorkspaces: true,
         workspaces: true,
+        implicitWorkspaces: true,
         renameWorkspace: false,
         windows: true,
         windowTitles: true,
@@ -110,7 +111,7 @@ WindowManagerBackend {
             for (const entry of entries) {
                 const id = Number(entry?.workspace)
                 const icon = String(entry?.icon ?? "")
-                if (isFinite(id) && id >= 1 && icon !== "")
+                if (isFinite(id) && id >= 1)
                     next[String(Math.round(id))] = {
                         icon: icon, name: String(entry?.name ?? "")
                     }

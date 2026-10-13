@@ -10,8 +10,14 @@ Rectangle {
     visible: Wm.connected && Wm.capabilities.workspaces === true
     enabled: visible
     readonly property string outputName: Wm.outputNameForScreen(barScreen)
+    readonly property bool implicitWorkspaces:
+        Wm.capabilities.implicitWorkspaces === true
+    readonly property int availableTagCount: implicitWorkspaces
+        ? Math.max(TagConfig.count, Wm.tagCount) : Wm.tagCount
     readonly property int totalTagCount: TagConfig.dynamicWorkspaces
-        ? Wm.dynamicTagCount : Math.max(TagConfig.count, Wm.tagCount)
+        ? (implicitWorkspaces ? Wm.dynamicTagCount
+            : Math.min(Wm.dynamicTagCount, availableTagCount))
+        : availableTagCount
     readonly property int displayedTagCount: TagConfig.limitVisibleTags
         ? Math.min(totalTagCount, TagConfig.visibleTagLimit) : totalTagCount
     readonly property int pageTagCount: Math.max(0, Math.min(displayedTagCount,
@@ -43,6 +49,10 @@ Rectangle {
     }
 
     function clampPage() {
+        if (displayedTagCount >= totalTagCount) {
+            pageStart = 0
+            return
+        }
         const lastPage = Math.max(0,
             Math.floor((totalTagCount - 1) / displayedTagCount) * displayedTagCount)
         pageStart = Math.max(0, Math.min(pageStart, lastPage))
