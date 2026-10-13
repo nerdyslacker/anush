@@ -157,6 +157,8 @@ def normalize_identity(name):
         return "herbstluftwm"
     if compact == "dwm" or compact.startswith("dwm"):
         return "dwm"
+    if compact == "openbox" or compact.startswith("openbox"):
+        return "openbox"
     return compact or "unknown"
 
 
@@ -206,7 +208,7 @@ def window_snapshot(window_id, active_id, atoms):
 
 
 def snapshot(profile="ewmh"):
-    if profile not in ("ewmh", "spectrwm", "dwm"):
+    if profile not in ("ewmh", "spectrwm", "dwm", "openbox"):
         raise RuntimeError(f"unknown EWMH profile {profile}")
     root_values = properties(xprop("root", ROOT_PROPERTIES))
     identity = wm_identity(root_values)
@@ -266,6 +268,8 @@ def snapshot(profile="ewmh"):
 
     layout_control = profile == "spectrwm" \
         and os.environ.get("ANUSH_REAL_WM_TEST") == "spectrwm"
+    openbox_control = profile == "openbox" \
+        and shutil.which("openbox") is not None
     capabilities = {
         "screens": False,
         "perScreenWorkspaces": False,
@@ -285,8 +289,8 @@ def snapshot(profile="ewmh"):
             or shutil.which("xprop") is not None,
         "layouts": layout_control,
         "gaps": False,
-        "reload": False,
-        "sessionControl": False,
+        "reload": openbox_control,
+        "sessionControl": openbox_control,
         "keybindings": False,
         "configurationEditor": False,
     }
@@ -304,22 +308,33 @@ def snapshot(profile="ewmh"):
 
 
 def action(args):
-    if len(args) < 3:
+    if len(args) < 2:
         raise RuntimeError("missing EWMH action")
-    profile, kind, value = args[0], args[1], args[2]
-    if profile not in ("ewmh", "spectrwm", "dwm"):
+    profile, kind = args[0], args[1]
+    value = args[2] if len(args) > 2 else ""
+    if profile not in ("ewmh", "spectrwm", "dwm", "openbox"):
         raise RuntimeError(f"unknown EWMH profile {profile}")
-    command = ["xdotool"]
-    if kind == "workspace":
+    if profile == "openbox" and kind == "reload" and len(args) == 2:
+        command = ["openbox", "--reconfigure"]
+    elif profile == "openbox" and kind == "quit" and len(args) == 2:
+        command = ["openbox", "--exit"]
+    elif len(args) < 3:
+        raise RuntimeError("missing EWMH action value")
+    elif kind == "workspace":
+        command = ["xdotool"]
         command.extend(["set_desktop", value])
     elif kind == "focus":
+        command = ["xdotool"]
         command.extend(["windowactivate", "--sync", value])
     elif kind == "close":
+        command = ["xdotool"]
         command.extend(["windowclose", value])
     elif kind == "move-workspace" and len(args) == 4:
+        command = ["xdotool"]
         command.extend(["set_desktop_for_window", value, args[3]])
     elif kind == "layout" and profile == "spectrwm" \
             and os.environ.get("ANUSH_REAL_WM_TEST") == "spectrwm":
+        command = ["xdotool"]
         keys = {
             "vertical": "super+F5", "horizontal": "super+F6",
             "max": "super+F7", "floating": "super+F8",

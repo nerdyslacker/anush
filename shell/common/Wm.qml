@@ -20,7 +20,8 @@ Singleton {
     readonly property string selectedBackendName: {
         if (requestedBackend === "auto") {
             if (!detectionComplete) return "detecting"
-            if (["skarwm", "bspwm", "herbstluftwm", "i3", "spectrwm", "dwm"]
+            if (["skarwm", "bspwm", "herbstluftwm", "i3", "spectrwm", "dwm",
+                    "openbox"]
                     .indexOf(detectedWmIdentity) >= 0)
                 return detectedWmIdentity
             return "ewmh"
@@ -37,8 +38,9 @@ Singleton {
                     ? herbstluftwmBackend : selectedBackendName === "i3"
                         ? i3Backend : selectedBackendName === "spectrwm"
                             ? spectrwmBackend : selectedBackendName === "dwm"
-                                ? dwmBackend : selectedBackendName === "ewmh"
-                                    ? ewmhBackend : unavailableBackend
+                                ? dwmBackend : selectedBackendName === "openbox"
+                                    ? openboxBackend : selectedBackendName === "ewmh"
+                                        ? ewmhBackend : unavailableBackend
     readonly property string backendName: String(backend.name)
     readonly property string backendIntegration: String(backend.integration ?? "")
     readonly property bool connected: backend.connected === true
@@ -469,6 +471,10 @@ Singleton {
         id: dwmBackend
         active: ShellState.ready && root.selectedBackendName === "dwm"
     }
+    OpenboxBackend {
+        id: openboxBackend
+        active: ShellState.ready && root.selectedBackendName === "openbox"
+    }
     WindowManagerBackend {
         id: unavailableBackend
         name: root.selectedBackendName
@@ -479,6 +485,7 @@ Singleton {
             && root.selectedBackendName !== "i3"
             && root.selectedBackendName !== "spectrwm"
             && root.selectedBackendName !== "dwm"
+            && root.selectedBackendName !== "openbox"
             && root.selectedBackendName !== "ewmh"
     }
 

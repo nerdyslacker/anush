@@ -38,6 +38,7 @@ WindowManagerBackend {
         reconnectTimer.stop()
         snapshotRetryTimer.stop()
         refreshTimer.stop()
+        actionRefreshTimer.stop()
         reconcileTimer.stop()
         refreshPending = false
         snapshotQuery.running = false
@@ -86,6 +87,7 @@ WindowManagerBackend {
     function runAction(arguments) {
         if (!connected) return false
         Quickshell.execDetached([provider, "action", profile].concat(arguments))
+        actionRefreshTimer.restart()
         return true
     }
 
@@ -172,6 +174,11 @@ WindowManagerBackend {
     Timer {
         id: refreshTimer
         interval: 80
+        onTriggered: root.refresh()
+    }
+    Timer {
+        id: actionRefreshTimer
+        interval: 500
         onTriggered: root.refresh()
     }
     Timer {

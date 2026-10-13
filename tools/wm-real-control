@@ -32,12 +32,16 @@ resolve_wm() {
         i3) find_executable "$wm_root/i3/build/i3" i3 ;;
         spectrwm) find_executable "$wm_root/spectrwm/linux/spectrwm" spectrwm ;;
         dwm) find_executable "$repo/build/wm/dwm/dwm" "$wm_root/dwm/dwm" dwm ;;
+        openbox)
+            find_executable "$repo/build/wm/openbox/install/bin/openbox" openbox
+            ;;
         *) return 1 ;;
     esac
 }
 
 augment_path() {
-    export PATH="$repo/build:$repo/build/wm/bsp-layout/usr/bin:$workspace/skarwm/build:$wm_root/bspwm:$wm_root/herbstluftwm/build:$wm_root/i3/build:$wm_root/spectrwm/linux:$repo/build/wm/dwm:$wm_root/dwm:$PATH"
+    export PATH="$repo/build:$repo/build/wm/bsp-layout/usr/bin:$repo/build/wm/openbox/install/bin:$workspace/skarwm/build:$wm_root/bspwm:$wm_root/herbstluftwm/build:$wm_root/i3/build:$wm_root/spectrwm/linux:$repo/build/wm/dwm:$wm_root/dwm:$PATH"
+    export XDG_DATA_DIRS="$repo/build/wm/openbox/install/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
 }
 
 wm_command() {
@@ -53,6 +57,10 @@ wm_command() {
         i3) printf '%s\0-a\0-c\0%s\0' "$binary" "$configs/i3.conf" ;;
         spectrwm) printf '%s\0-c\0%s\0' "$binary" "$configs/spectrwm.conf" ;;
         dwm) printf '%s\0' "$binary" ;;
+        openbox)
+            printf '%s\0--sm-disable\0--config-file\0%s\0' \
+                "$binary" "$configs/openbox-rc.xml"
+            ;;
     esac
 }
 

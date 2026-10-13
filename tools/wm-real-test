@@ -6,7 +6,7 @@ repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 workspace=$(cd "$repo/.." && pwd)
 wm_root=${ANUSH_WM_SOURCE_DIR:-$workspace/WM}
 control=$repo/tools/wm-real-control
-supported=(skarwm bspwm herbstluftwm i3 spectrwm dwm)
+supported=(skarwm bspwm herbstluftwm i3 spectrwm dwm openbox)
 run_dir=
 runtime_dir=
 xephyr_pid=
@@ -22,7 +22,7 @@ Commands:
   run WM [--display :N]       Run a real WM and anush inside Xephyr
          [--size WIDTHxHEIGHT] [--multi] [--backend auto|NAME]
 
-Supported WMs: skarwm, bspwm, herbstluftwm, i3, spectrwm, dwm
+Supported WMs: skarwm, bspwm, herbstluftwm, i3, spectrwm, dwm, openbox
 EOF
 }
 
@@ -127,6 +127,23 @@ build_one() {
                 <"$repo/tools/wm-real-config/dwm-quickshell-extbar.patch"
             cp "$target/config.def.h" "$target/config.h"
             make -C "$target"
+            ;;
+        openbox)
+            local source=$wm_root/openbox
+            local target=$repo/build/wm/openbox
+            local prefix=$target/install
+            command -v autopoint >/dev/null 2>&1 || {
+                printf 'wm-real-test: autopoint is required to bootstrap Openbox\n' >&2
+                return 1
+            }
+            [[ -x $source/configure ]] || (cd "$source" && ./bootstrap)
+            mkdir -p "$target/build"
+            if [[ ! -f $target/build/Makefile ]]; then
+                (cd "$target/build" && "$source/configure" \
+                    --prefix="$prefix" --sysconfdir="$prefix/etc")
+            fi
+            make -C "$target/build" -j "$(nproc)"
+            make -C "$target/build" install
             ;;
     esac
 }

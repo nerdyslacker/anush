@@ -78,10 +78,10 @@ development it can be selected explicitly, including the deterministic mock:
 ```
 
 Selectable implementations are `skarwm`, `bspwm`, `herbstluftwm`, `i3`,
-`spectrwm`, `dwm`, `ewmh`, and `mock`. `auto` reads the running WM identity from
-`_NET_SUPPORTING_WM_CHECK` and `_NET_WM_NAME`; it selects dedicated adapters
-for verified skarwm, bspwm, herbstluftwm, i3, spectrwm, and dwm identities and
-otherwise uses EWMH.
+`spectrwm`, `dwm`, `openbox`, `ewmh`, and `mock`. `auto` reads the running WM
+identity from `_NET_SUPPORTING_WM_CHECK` and `_NET_WM_NAME`; it selects
+dedicated adapters for verified skarwm, bspwm, herbstluftwm, i3, spectrwm,
+dwm, and Openbox identities and otherwise uses EWMH.
 `ANUSH_WM_BACKEND` overrides configuration for a single shell process.
 
 This is loader-level composition rather than a JSON `include` extension. It is

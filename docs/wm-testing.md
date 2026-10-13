@@ -17,6 +17,7 @@ Experimental/
     ├── dwm/
     ├── herbstluftwm/
     ├── i3/
+    ├── openbox/
     └── spectrwm/
 ```
 
@@ -34,12 +35,13 @@ Individual builds are supported as well:
 tools/wm-real-test build bspwm
 tools/wm-real-test build herbstluftwm
 tools/wm-real-test build i3
+tools/wm-real-test build openbox
 tools/wm-real-test build spectrwm
 tools/wm-real-test build dwm
 tools/wm-real-test build skarwm
 ```
 
-Builds stay in their source trees and are never installed system-wide.
+Builds stay inside the workspace and are never installed system-wide.
 When `WM/bsp-layout` is present, building bspwm stages it under
 `anush/build/wm/bsp-layout` and adds it only to harness sessions. Its `layouts`
 command is used at runtime, so layout scripts added to that installation appear
@@ -56,6 +58,11 @@ The bspwm session also needs `sxhkd`, matching a normal bspwm installation:
 sudo xbps-install -S sxhkd
 ```
 
+Building the cloned Openbox source requires its normal Autotools dependencies,
+including `autopoint`. On Void, `autopoint` is supplied by the Gettext
+development tools. Openbox is configured and installed only under
+`anush/build/wm/openbox`; nothing is installed system-wide.
+
 The dwm build is copied to `build/wm/dwm` before its test-only configuration is
 applied. The cloned dwm source is left untouched. This variant disables dwm's
 bar, adopts Quickshell panels as EWMH docks, and follows their live struts so
@@ -71,6 +78,7 @@ and optional dwm IPC are absent.
 ```sh
 tools/wm-real-test run bspwm
 tools/wm-real-test run i3 --display :96
+tools/wm-real-test run openbox
 tools/wm-real-test run skarwm --multi
 tools/wm-real-test run herbstluftwm --backend herbstluftwm
 ```
@@ -133,6 +141,12 @@ including unknown layouts whose visible dwm symbol is used as their picker
 name. Stock dwm has no protocol for enumerating the complete table, so this
 discovery requires the harness patch or an equivalent integration in the
 installed dwm.
+Openbox is a stacking WM, so its layout capability is deliberately false and
+the layout picker remains hidden.
+The harness configuration supports click-to-focus, title-bar movement and
+resizing, title-bar window controls, `Super+Shift+F` maximize,
+`Super+Shift+Z` minimize, `Super+Shift+M` move, and `Super+Q` or `Alt+F4`
+close.
 
 `wm_smoke ui` opens the launcher directly, verifies that its input surface owns
 keyboard focus, types a harmless search probe, closes it, and repeats the focus
@@ -165,6 +179,8 @@ Expected scope differs by backend:
 - bspwm, herbstluftwm, and i3: native state, events, focus, movement, close,
   and restart recovery;
 - spectrwm: the verified EWMH subset and global workspace limitations;
+- Openbox: global EWMH workspaces, window metadata, focus, movement, close,
+  reconfigure, session exit, and restart recovery; layout controls are absent;
 - stock dwm: window metadata without fabricated tag or layout support;
 - the harness dwm variant: nine real tags and native layout controls through
   its test-only state property;
