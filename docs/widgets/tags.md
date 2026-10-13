@@ -3,6 +3,10 @@
 Shows the current, occupied, and urgent skarwm tags. Optional paging limits how
 many tags appear on the bar at once.
 
+Tag settings control the workspace count where the WM supports it, dynamic
+workspaces, numeric labels, and a per-page visible-tag limit. Selecting a
+workspace by another method automatically reveals its page.
+
 ## Actions
 
 - **Left click a tag:** View that tag.

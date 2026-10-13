@@ -23,6 +23,7 @@ WindowManagerBackend {
         scratchpad: true,
         virtualScreens: true,
         decorationStyling: true,
+        windowRadius: true,
         eventStream: true,
         layouts: true,
         gaps: true,
@@ -32,11 +33,11 @@ WindowManagerBackend {
         configurationEditor: true
     })
     layouts: [
-        { name: "Scrolling Tile", glyph: "󰙀", command: "scrolling-tile" },
-        { name: "Vertical Scroller", glyph: "󱥣", command: "vertical-scrolling-tile" },
+        { name: "Scrolling Tile", glyph: "󰕭", command: "scrolling-tile" },
+        { name: "Vertical Scroller", glyph: "󰯋", command: "vertical-scrolling-tile" },
         { name: "Tabbed", glyph: "󰓩", command: "tabbed", cycle: false },
-        { name: "Dwindle", glyph: "󰕮", command: "dwindle" },
-        { name: "Monocle", glyph: "󰍹", command: "monocle" },
+        { name: "Dwindle", glyph: "󰕴", command: "dwindle" },
+        { name: "Monocle", glyph: "", command: "monocle" },
         { name: "Floating", glyph: "󰕰", command: "floating" }
     ]
 
@@ -390,6 +391,9 @@ WindowManagerBackend {
                     root.connected = true
                     const change = String(event.change)
                     if (change.startsWith("ui-")) {
+                        if (change === "ui-notice"
+                                && String(event.text ?? "") === "Configuration reloaded")
+                            return
                         root.uiEvent(event)
                         return
                     }

@@ -240,6 +240,7 @@ def snapshot():
             "scratchpad": False,
             "virtualScreens": False,
             "decorationStyling": False,
+            "windowRadius": False,
             "eventStream": tools,
             "layouts": tools,
             "gaps": tools,

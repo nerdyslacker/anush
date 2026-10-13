@@ -125,25 +125,32 @@ build_one() {
             patch -d "$target" -p0 <"$repo/tools/wm-real-config/dwm-anush.patch"
             patch -d "$target" -p0 \
                 <"$repo/tools/wm-real-config/dwm-quickshell-extbar.patch"
+            patch -d "$target" -p0 \
+                <"$repo/tools/wm-real-config/dwm-anush-gaps.patch"
             cp "$target/config.def.h" "$target/config.h"
             make -C "$target"
             ;;
         openbox)
-            local source=$wm_root/openbox
+            local upstream=$wm_root/openbox
             local target=$repo/build/wm/openbox
+            local source=$target/source
             local prefix=$target/install
             command -v autopoint >/dev/null 2>&1 || {
                 printf 'wm-real-test: autopoint is required to bootstrap Openbox\n' >&2
                 return 1
             }
+            mkdir -p "$source"
+            tar --exclude=.git -C "$upstream" -cf - . | tar -C "$source" -xf -
+            patch -d "$source" -p0 -N \
+                <"$repo/tools/wm-real-config/openbox-drag-snap.patch"
             [[ -x $source/configure ]] || (cd "$source" && ./bootstrap)
-            mkdir -p "$target/build"
-            if [[ ! -f $target/build/Makefile ]]; then
-                (cd "$target/build" && "$source/configure" \
+            mkdir -p "$target/anush-build"
+            if [[ ! -f $target/anush-build/Makefile ]]; then
+                (cd "$target/anush-build" && "$source/configure" \
                     --prefix="$prefix" --sysconfdir="$prefix/etc")
             fi
-            make -C "$target/build" -j "$(nproc)"
-            make -C "$target/build" install
+            make -C "$target/anush-build" -j "$(nproc)"
+            make -C "$target/anush-build" install
             ;;
     esac
 }
@@ -247,6 +254,8 @@ run_command() {
     run_dir=$(mktemp -d "/tmp/anush-wm-${wm}.XXXXXX")
     runtime_dir=$run_dir/runtime
     mkdir -p "$runtime_dir" "$run_dir/config" "$run_dir/state" "$run_dir/cache"
+    mkdir -p "$run_dir/config/anush"
+    cp -a "$repo/config/." "$run_dir/config/anush/"
     chmod 700 "$runtime_dir"
 
     cleanup() {
@@ -300,6 +309,7 @@ run_command() {
         XDG_CONFIG_HOME="$run_dir/config" \
         XDG_STATE_HOME="$run_dir/state" \
         XDG_CACHE_HOME="$run_dir/cache" \
+        XDG_DATA_HOME="$run_dir/data" \
         ANUSH_ROOT="$repo" \
         ANUSH_STATE_DIR="$run_dir/state/anush" \
         ANUSH_CONFIG_DIR="$run_dir/config/anush" \

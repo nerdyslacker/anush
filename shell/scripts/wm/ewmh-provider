@@ -6,8 +6,10 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import subprocess
 import sys
+import tempfile
 
 
 ROOT_PROPERTIES = [
@@ -162,6 +164,59 @@ def normalize_identity(name):
     return compact or "unknown"
 
 
+def spectrwm_process():
+    wanted_display = os.environ.get("DISPLAY", "")
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            if (entry / "comm").read_text().strip() != "spectrwm":
+                continue
+            environment = (entry / "environ").read_bytes().split(b"\0")
+            display = next((value.split(b"=", 1)[1].decode()
+                            for value in environment
+                            if value.startswith(b"DISPLAY=")), "")
+            if display == wanted_display:
+                return int(entry.name), (entry / "cmdline").read_bytes().split(b"\0")
+        except (OSError, UnicodeDecodeError):
+            continue
+    return None, []
+
+
+def spectrwm_config():
+    configured = os.environ.get("ANUSH_SPECTRWM_CONFIG", "")
+    if configured:
+        return Path(configured)
+    _, arguments = spectrwm_process()
+    for index, argument in enumerate(arguments[:-1]):
+        if argument == b"-c":
+            return Path(os.fsdecode(arguments[index + 1])).expanduser()
+    return Path.home() / ".spectrwm.conf"
+
+
+def set_spectrwm_gap(value):
+    path = spectrwm_config()
+    if not path.is_file() or not os.access(path, os.W_OK):
+        raise RuntimeError(f"spectrwm config is not writable: {path}")
+    gap = max(0, min(40, int(value)))
+    config = path.read_text()
+    pattern = r"(?m)^[ \t]*tile_gap[ \t]*=.*$"
+    replacement = f"tile_gap = {gap}"
+    config = (re.sub(pattern, replacement, config) if re.search(pattern, config)
+              else config.rstrip() + "\n" + replacement + "\n")
+    with tempfile.NamedTemporaryFile(
+            mode="w", dir=path.parent, prefix=path.name + ".anush-gap.",
+            delete=False) as temporary:
+        temporary.write(config)
+        temporary_path = Path(temporary.name)
+    temporary_path.chmod(path.stat().st_mode)
+    temporary_path.replace(path)
+    process, _ = spectrwm_process()
+    if process is None:
+        raise RuntimeError("spectrwm process was not found")
+    os.kill(process, signal.SIGUSR1)
+
+
 def window_snapshot(window_id, active_id, atoms):
     values = properties(xprop(window_id, WINDOW_PROPERTIES))
     classes = strings(values.get("WM_CLASS", ""))
@@ -268,6 +323,10 @@ def snapshot(profile="ewmh"):
 
     layout_control = profile == "spectrwm" \
         and os.environ.get("ANUSH_REAL_WM_TEST") == "spectrwm"
+    spectrwm_gap_control = profile == "spectrwm" \
+        and spectrwm_process()[0] is not None \
+        and spectrwm_config().is_file() \
+        and os.access(spectrwm_config(), os.W_OK)
     openbox_control = profile == "openbox" \
         and shutil.which("openbox") is not None
     capabilities = {
@@ -285,10 +344,11 @@ def snapshot(profile="ewmh"):
         "scratchpad": False,
         "virtualScreens": False,
         "decorationStyling": False,
+        "windowRadius": False,
         "eventStream": fixture_dir() is not None
             or shutil.which("xprop") is not None,
         "layouts": layout_control,
-        "gaps": False,
+        "gaps": spectrwm_gap_control,
         "reload": openbox_control,
         "sessionControl": openbox_control,
         "keybindings": False,
@@ -342,6 +402,12 @@ def action(args):
         if value not in keys:
             raise RuntimeError(f"unknown spectrwm layout {value}")
         command.extend(["key", "--clearmodifiers", keys[value]])
+    elif kind == "gaps" and profile == "spectrwm":
+        if fixture_dir() is not None:
+            command = ["spectrwm-gap", value]
+        else:
+            set_spectrwm_gap(value)
+            return
     else:
         raise RuntimeError(f"unknown EWMH action {kind}")
     action_log = os.environ.get("ANUSH_EWMH_ACTION_LOG", "")

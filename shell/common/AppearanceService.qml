@@ -12,18 +12,22 @@ Singleton {
 
     property var iconThemes: []
     property var cursorThemes: []
+    property var nerdFonts: ["JetBrainsMono Nerd Font"]
     property string iconTheme: ""
     property string cursorTheme: ""
     property string currentAccent: ""
     property var _iconsFound: []
     property var _cursorsFound: []
+    property var _fontsFound: []
     property bool _ensured: false
 
     function refresh() {
         iconLister.running = false
         cursorLister.running = false
+        fontLister.running = false
         iconLister.running = true
         cursorLister.running = true
+        fontLister.running = true
         if (iconTheme === "") iconCurrent.running = true
         if (cursorTheme === "") cursorCurrent.running = true
     }
@@ -112,6 +116,37 @@ Singleton {
                     root._cursorsFound.push(root.cursorTheme)
                 root.cursorThemes = root._cursorsFound.sort((a, b) =>
                     a.localeCompare(b))
+            }
+        }
+    }
+
+    Process {
+        id: fontLister
+        command: ["fc-list", "--format=%{family}\\n"]
+        stdout: SplitParser {
+            onRead: line => {
+                for (const entry of line.split(",")) {
+                    const family = entry.trim()
+                    if (family.indexOf(" Nerd Font") <= 0
+                            || family.startsWith("Symbols Nerd Font")
+                            || root._fontsFound.indexOf(family) >= 0)
+                        continue
+                    root._fontsFound.push(family)
+                }
+            }
+        }
+        onRunningChanged: {
+            if (running) {
+                root._fontsFound = []
+            } else {
+                const selected = String(Theme.fontFamily)
+                if (root._fontsFound.indexOf(selected) < 0)
+                    root._fontsFound.push(selected)
+                root.nerdFonts = root._fontsFound.sort((a, b) => {
+                    if (a === Theme.defaultFontFamily) return -1
+                    if (b === Theme.defaultFontFamily) return 1
+                    return a.localeCompare(b)
+                })
             }
         }
     }

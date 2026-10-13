@@ -1,0 +1,83 @@
+--- openbox/moveresize.c
++++ openbox/moveresize.c
+@@ -43,6 +43,7 @@
+ /* how far windows move and resize with the keyboard arrows */
+ #define KEY_DIST 8
+ #define SYNC_TIMEOUTS 4
++#define EDGE_SNAP_DISTANCE 8
+ 
+ gboolean moveresize_in_progress = FALSE;
+ ObClient *moveresize_client = NULL;
+@@ -74,6 +75,7 @@
+ static void do_move(gboolean keyboard, gint keydist);
+ static void do_resize(void);
+ static void do_edge_warp(gint x, gint y);
++static void snap_move_to_pointer_edge(ObClient *client);
+ static void cancel_edge_warp();
+ #ifdef SYNC
+ static gboolean sync_timeout_func(gpointer data);
+@@ -309,8 +311,54 @@
+ #endif
+ }
+ 
++static void snap_move_to_pointer_edge(ObClient *client)
++{
++    const Rect *physical;
++    Rect *area;
++    guint monitor;
++    gint px, py, x, y, w, h, logical_w, logical_h;
++    gboolean left, right, top;
++
++    if (!screen_pointer_pos(&px, &py))
++        return;
++
++    monitor = screen_find_monitor_point(px, py);
++    physical = screen_physical_area_monitor(monitor);
++    area = screen_area(client->desktop, monitor, NULL);
++    left = px <= physical->x + EDGE_SNAP_DISTANCE;
++    right = px >= RECT_RIGHT(*physical) - EDGE_SNAP_DISTANCE;
++    top = py <= physical->y + EDGE_SNAP_DISTANCE;
++
++    if (!left && !right && !top) {
++        g_slice_free(Rect, area);
++        return;
++    }
++
++    if (top && !left && !right) {
++        client_maximize(client, TRUE, 0);
++        g_slice_free(Rect, area);
++        return;
++    }
++
++    w = area->width / 2;
++    h = area->height;
++    x = left ? area->x : area->x + area->width - w;
++    y = area->y;
++    w -= client->frame->size.left + client->frame->size.right;
++    h -= client->frame->size.top + client->frame->size.bottom;
++
++    frame_frame_gravity(client->frame, &x, &y);
++    client_try_configure(client, &x, &y, &w, &h,
++                         &logical_w, &logical_h, TRUE);
++    client_configure(client, x, y, w, h, TRUE, TRUE, FALSE);
++    g_slice_free(Rect, area);
++}
++
+ void moveresize_end(gboolean cancel)
+ {
++    gboolean snap = !cancel && moving &&
++        corner == OBT_PROP_ATOM(NET_WM_MOVERESIZE_MOVE);
++
+     ungrab_keyboard();
+     ungrab_pointer();
+ 
+@@ -341,6 +389,9 @@
+                      (cancel ? start_ch : cur_h),
+                      TRUE, TRUE, FALSE);
+ 
++    if (snap)
++        snap_move_to_pointer_edge(moveresize_client);
++
+     /* restore the client's maximized state. do this after putting the window
+        back in its original spot to minimize visible flicker */
+     if (cancel && (was_max_horz || was_max_vert)) {

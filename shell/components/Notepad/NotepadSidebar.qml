@@ -26,6 +26,20 @@ PanelWindow {
         && BarVisibility.barPosition === "left" ? barGap : edgeGap
     readonly property int rightInset: barOnScreen
         && BarVisibility.barPosition === "right" ? barGap : edgeGap
+    readonly property int directBarPadding: BarVisibility.fitContent
+        && BarVisibility.floating ? 2 * Theme.surfaceGap : 0
+    readonly property int directBarOffset: BarVisibility.floating
+        ? Theme.surfaceGap : 0
+    readonly property int directBarInset: Theme.effectiveBarHeight
+        + directBarPadding + directBarOffset + barGap
+    readonly property int directTopInset: barOnScreen
+        && BarVisibility.barPosition === "top" ? directBarInset : edgeGap
+    readonly property int directBottomInset: barOnScreen
+        && BarVisibility.barPosition === "bottom" ? directBarInset : edgeGap
+    readonly property int directLeftInset: barOnScreen
+        && BarVisibility.barPosition === "left" ? directBarInset : edgeGap
+    readonly property int directRightInset: barOnScreen
+        && BarVisibility.barPosition === "right" ? directBarInset : edgeGap
     readonly property int availableWidth: Math.max(1,
         Number(modelData?.width ?? 680) - leftInset - rightInset)
     // Keep the native window stable at the largest supported size. Resizing a
@@ -34,6 +48,8 @@ PanelWindow {
     readonly property int hostWidth: Math.min(availableWidth, 680)
     readonly property int drawerWidth: Math.min(hostWidth,
         NotepadState.extended ? 680 : 420)
+    readonly property bool directX11Overlay: Wm.backendName === "i3"
+        || Wm.backendName === "spectrwm"
 
     screen: modelData
     anchors.top: true
@@ -50,8 +66,37 @@ PanelWindow {
     aboveWindows: true
     focusable: true
     color: "transparent"
-    visible: windowActive
+    visible: !directX11Overlay && windowActive
     mask: Region { item: drawer }
+
+    Window {
+        id: directOverlay
+
+        transientParent: null
+        x: Number(root.modelData?.x ?? 0) + (NotepadState.side === "left"
+            ? root.directLeftInset
+            : Number(root.modelData?.width ?? width) - root.directRightInset - width)
+        y: Number(root.modelData?.y ?? 0) + root.directTopInset
+        width: Math.min(root.drawerWidth, Math.max(1,
+            Number(root.modelData?.width ?? root.drawerWidth)
+                - root.directLeftInset - root.directRightInset))
+        height: Math.max(1, Number(root.modelData?.height ?? 1)
+            - root.directTopInset - root.directBottomInset)
+        flags: Qt.X11BypassWindowManagerHint
+            | Qt.FramelessWindowHint
+            | Qt.WindowStaysOnTopHint
+        color: Theme.background
+        visible: root.directX11Overlay && root.windowActive
+
+        onVisibleChanged: {
+            if (visible && root.shouldShow) {
+                raise()
+                root.beginEditorFocus()
+            } else {
+                focusRetry.stop()
+            }
+        }
+    }
 
     function syncEditor() {
         if (editor.text === NotepadState.text)
@@ -64,11 +109,18 @@ PanelWindow {
     }
 
     function focusEditor() {
-        if (!visible || !shouldShow)
-            return
-        if (root.contentItem && root.contentItem.window)
-            root.contentItem.window.requestActivate()
+        const hostVisible = directX11Overlay ? directOverlay.visible : visible
+        if (!hostVisible || !shouldShow)
+            return false
+        const window = directX11Overlay ? directOverlay
+            : root.contentItem && root.contentItem.window
+                ? root.contentItem.window : null
+        if (window) {
+            if (directX11Overlay) window.raise()
+            window.requestActivate()
+        }
         editor.forceActiveFocus()
+        return editor.activeFocus && (!window || window.active)
     }
 
     function beginEditorFocus() {
@@ -109,15 +161,19 @@ PanelWindow {
         } else if (windowActive) {
             focusRetry.stop()
             drawerShown = false
-            closeWindow.restart()
+            if (directX11Overlay)
+                windowActive = false
+            else
+                closeWindow.restart()
         }
     }
 
     onVisibleChanged: {
-        if (visible && shouldShow)
+        if (visible && shouldShow) {
             root.beginEditorFocus()
-        else
+        } else {
             focusRetry.stop()
+        }
     }
 
     Connections {
@@ -140,20 +196,21 @@ PanelWindow {
         repeat: true
         onTriggered: {
             root.focusAttempts++
-            root.focusEditor()
-            if (root.focusAttempts >= 5)
+            const focused = root.focusEditor()
+            if ((root.directX11Overlay && focused)
+                    || root.focusAttempts >= 5)
                 stop()
         }
     }
 
     Shortcut {
         sequence: "Escape"
-        enabled: root.visible
+        enabled: root.directX11Overlay ? root.shouldShow : root.visible
         onActivated: NotepadState.close()
     }
     Shortcut {
         sequence: "Ctrl+N"
-        enabled: root.visible
+        enabled: root.directX11Overlay ? root.shouldShow : root.visible
         onActivated: NotepadState.createNote()
     }
 
@@ -189,14 +246,16 @@ PanelWindow {
 
     Rectangle {
         id: drawer
+        parent: root.directX11Overlay
+            ? directOverlay.contentItem : root.contentItem
         property real revealProgress: root.drawerShown ? 1 : 0
         readonly property real restingX: NotepadState.side === "left"
-            ? 0 : root.width - width
+            ? 0 : parent.width - width
         readonly property real hiddenOffset: NotepadState.side === "left"
             ? -width : width
 
         width: root.drawerWidth
-        height: root.height
+        height: parent.height
         // Pin the visible edge while width changes. Sliding is expressed as
         // real geometry so Quickshell's window mask follows the animation.
         x: restingX + (1 - revealProgress) * hiddenOffset
@@ -206,10 +265,12 @@ PanelWindow {
         radius: Theme.radiusLarge
 
         Behavior on revealProgress {
+            enabled: !root.directX11Overlay
             NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
         }
 
         Behavior on width {
+            enabled: !root.directX11Overlay
             NumberAnimation { duration: 240; easing.type: Easing.InOutCubic }
         }
         Behavior on color { ColorAnimation { duration: 250 } }
@@ -223,8 +284,7 @@ PanelWindow {
             height: 34
 
             Text {
-                anchors.left: titleIcon.right
-                anchors.leftMargin: 9
+                anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Notepad"
                 color: Theme.foreground

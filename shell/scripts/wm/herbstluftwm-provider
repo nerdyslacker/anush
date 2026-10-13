@@ -229,6 +229,7 @@ def normalize(raw):
             "scratchpad": False,
             "virtualScreens": False,
             "decorationStyling": False,
+            "windowRadius": False,
             "eventStream": available,
             "layouts": available,
             "gaps": available,

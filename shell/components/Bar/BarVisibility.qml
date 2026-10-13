@@ -250,7 +250,8 @@ Singleton {
         if (key === "windowList")
             return Wm.capabilities.windows === true;
         if (key === "layout")
-            return Wm.capabilities.layouts === true;
+            return Wm.capabilities.layouts === true
+                || (Wm.connected && Wm.backendName === "openbox");
         if (key === "title")
             return Wm.capabilities.windowTitles === true
                 && !Wm.decorationsEnabled;

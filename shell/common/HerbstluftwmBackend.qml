@@ -9,8 +9,8 @@ WindowManagerBackend {
     name: "herbstluftwm"
     layouts: [
         { name: "Vertical", glyph: "󰙀", command: "vertical" },
-        { name: "Horizontal", glyph: "󱥣", command: "horizontal" },
-        { name: "Max", glyph: "󰍹", command: "max" },
+        { name: "Horizontal", glyph: "󰯋", command: "horizontal" },
+        { name: "Max", glyph: "", command: "max" },
         { name: "Grid", glyph: "󰕮", command: "grid" }
     ]
     readonly property string provider:

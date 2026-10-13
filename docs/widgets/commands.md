@@ -25,3 +25,17 @@ back automatically if skarwm rejects the reload.
 
 Bar Layout can also be opened by right-clicking empty space on the bar, even
 when the Commands widget is hidden.
+
+Bar Layout controls position, monitor visibility, fit-to-content mode, floating
+insets, separated sections, height, scale, opacity, widget visibility, and the
+three widget clusters. Its height follows the longest cluster and becomes
+scrollable only when it reaches the available screen edge.
+
+The display settings entry stages XRandR mode, refresh, scale, orientation,
+primary output, mirroring, and monitor positions. Disruptive changes must be
+confirmed within 15 seconds or the rollback watchdog restores the previous
+layout.
+
+On first launch, `anushctl start` seeds the bundled Fastfetch configuration and
+links Fastfetch's standard config path to it. An existing regular config is
+preserved as `config.jsonc.pre-anush`; colors follow the active anush theme.

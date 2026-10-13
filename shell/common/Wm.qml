@@ -141,6 +141,10 @@ Singleton {
     property bool picomAvailable: false
     property bool picomEnabled: false
     property bool picomBusy: false
+    property bool picomPreferenceLoaded: false
+    property string appliedWmSettingsBackend: ""
+    property int appliedGap: -1
+    property int appliedDecorations: -1
 
     function compatibilityOutputs() {
         return screens.map(screen => {
@@ -339,7 +343,10 @@ Singleton {
     function setGaps(value, persist) {
         const next = Math.min(40, Math.max(0, Math.round(value)))
         gaps = next
-        if (capabilities.gaps === true) backend.setGaps(next)
+        if (capabilities.gaps === true && backend.setGaps(next)) {
+            appliedWmSettingsBackend = backendName
+            appliedGap = next
+        }
         if (persist !== false)
             ShellState.updateSection("windowManager", { gap: next })
     }
@@ -352,8 +359,12 @@ Singleton {
         ShellState.updateSection("windowManager", {
             decorations: decorationsEnabled
         })
-        if (capabilities.decorationStyling === true)
-            backend.setDecorationsEnabled(decorationsEnabled)
+        if (capabilities.decorationStyling === true) {
+            if (backend.setDecorationsEnabled(decorationsEnabled)) {
+                appliedWmSettingsBackend = backendName
+                appliedDecorations = decorationsEnabled ? 1 : 0
+            }
+        }
     }
     function toggleScratchpad(register) {
         return requireCapability("scratchpad", "toggleScratchpad")
@@ -400,10 +411,14 @@ Singleton {
         picomStatus.running = false
         picomStatus.running = true
     }
-    function setPicomEnabled(enabled) {
+    function setPicomEnabled(enabled, persist) {
         if (picomBusy) return
         picomEnabled = enabled === true
         picomBusy = true
+        if (persist !== false) {
+            picomPreferenceLoaded = true
+            ShellState.updateSection("windowManager", { picom: picomEnabled })
+        }
         picomControl.command = [ShellState.scriptsDir + "/theme/picom-control",
             picomEnabled ? "enable" : "disable", msgPath]
         picomControl.running = true
@@ -413,9 +428,26 @@ Singleton {
         const saved = Number(ShellState.state.windowManager.gap)
         if (!isNaN(saved)) gaps = Math.min(40, Math.max(0, Math.round(saved)))
         decorationsEnabled = ShellState.state.windowManager.decorations === true
-        if (connected && capabilities.gaps === true) backend.setGaps(gaps)
-        if (connected && capabilities.decorationStyling === true)
-            backend.setDecorationsEnabled(decorationsEnabled)
+        const savedPicom = ShellState.state.windowManager.picom
+        if (!picomPreferenceLoaded && typeof savedPicom === "boolean") {
+            picomPreferenceLoaded = true
+            setPicomEnabled(savedPicom, false)
+        }
+        if (!connected)
+            return
+        if (appliedWmSettingsBackend !== backendName) {
+            appliedWmSettingsBackend = backendName
+            appliedGap = -1
+            appliedDecorations = -1
+        }
+        if (capabilities.gaps === true && appliedGap !== gaps
+                && backend.setGaps(gaps))
+            appliedGap = gaps
+        const decorationsValue = decorationsEnabled ? 1 : 0
+        if (capabilities.decorationStyling === true
+                && appliedDecorations !== decorationsValue
+                && backend.setDecorationsEnabled(decorationsEnabled))
+            appliedDecorations = decorationsValue
     }
 
     function detectWindowManager() {
@@ -504,6 +536,9 @@ Singleton {
         function onPhysicalOutputConnected() { root.physicalOutputConnected() }
         function onPhysicalOutputDisconnected() { root.physicalOutputDisconnected() }
         function onConnectedChanged() {
+            root.appliedWmSettingsBackend = ""
+            root.appliedGap = -1
+            root.appliedDecorations = -1
             if (root.connected) root.loadWindowManagerState()
             else root.lastFocusedWindowByScreen = ({})
         }

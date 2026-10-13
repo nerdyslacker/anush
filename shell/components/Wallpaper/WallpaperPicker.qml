@@ -101,14 +101,7 @@ Popout {
     function apply(path) {
         if (path === "")
             return
-        Quickshell.execDetached([
-            Theme.scriptsDir + "/theme/wallpaper-theme",
-            path,
-            Theme.wallpaperThemeEnabled ? "true" : "false",
-            Theme.mode,
-            Wm.msgPath
-        ])
-        visible = false
+        Theme.applyWallpaper(path)
     }
 
     Connections {

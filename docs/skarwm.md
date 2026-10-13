@@ -29,12 +29,9 @@ autostart : "picom --config ${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config
 This line is required for separated-section transparency unless another X11
 compositor is already started elsewhere.
 
-The Layout picker's **Picom compositor** switch manages this line. Disabling
-comments it out and stops Picom; enabling uncomments it and executes the exact
-quoted command. If the line is absent, enabling the switch adds the command
-above to the active skarwm configuration. The switch is hidden when Picom is
-not installed. An installed Picom with no matching autostart line is shown as
-disabled until the user enables it.
+The Layout picker's **Picom compositor** switch starts or stops Anush's Picom
+instance and stores the preference in Anush state. It does not rewrite this rc
+entry or reload skarwm. The switch is hidden when Picom is not installed.
 
 ## Optional key bindings
 
@@ -63,6 +60,13 @@ autostart : "anushctl clipboard daemon"
 autostart : "xss-lock -- anushctl lock"
 ```
 
-Window-border, corner-radius, and decoration controls in anush update the
-active skarwm configuration reported by `skarwm-msg`. They do not require a
-second anush-owned rc template.
+Window-border, corner-radius, decoration, and theme controls use `skarwm-msg`
+to update the running WM without rewriting its rc file.
+
+While anush is connected through skarwm's shell UI subscription, automatic rc
+hot reload is suspended. Shell controls apply gaps, window radius, and
+decorations through live IPC commands, then persist their values without
+reloading the WM or closing open popups. Anush persists them in its own state;
+the skarwm rc remains the standalone fallback. Explicit reload commands and **Save &
+Reload** in the skarwm editor still reload the configuration. Normal automatic
+hot reload resumes as soon as the shell disconnects.

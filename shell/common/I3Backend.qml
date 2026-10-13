@@ -9,7 +9,7 @@ WindowManagerBackend {
     name: "i3"
     layouts: [
         { name: "Split Horizontal", glyph: "󰙀", command: "splith" },
-        { name: "Split Vertical", glyph: "󱥣", command: "splitv" },
+        { name: "Split Vertical", glyph: "󰯋", command: "splitv" },
         { name: "Stacking", glyph: "󰕮", command: "stacking" },
         { name: "Tabbed", glyph: "󰓩", command: "tabbed" }
     ]

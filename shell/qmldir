@@ -100,6 +100,7 @@ Rss components/Rss/Rss.qml
 RssPopup components/Rss/RssPopup.qml
 Tags components/Workspaces/Tags.qml
 LayoutButton components/Workspaces/LayoutButton.qml
+LayoutDiagram components/Workspaces/LayoutDiagram.qml
 LayoutPicker components/Workspaces/LayoutPicker.qml
 TagSettingsPopup components/Workspaces/TagSettingsPopup.qml
 Title components/Workspaces/Title.qml

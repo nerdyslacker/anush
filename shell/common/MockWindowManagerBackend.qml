@@ -22,6 +22,7 @@ WindowManagerBackend {
         scratchpad: false,
         virtualScreens: false,
         decorationStyling: false,
+        windowRadius: false,
         eventStream: true,
         layouts: false,
         gaps: false,

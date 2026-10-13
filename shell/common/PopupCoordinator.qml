@@ -3,11 +3,25 @@ pragma Singleton
 import QtQuick
 import Quickshell
 
-// Small, opt-in coordinator for popups which must be mutually exclusive.
-// Existing independent popups keep their current behaviour; connectivity
-// popups announce themselves here so Network and Bluetooth cannot overlap.
+// Keeps one shell popup active while retaining named coordination events for
+// related views such as Network, Bluetooth, and Hotspot.
 Singleton {
     signal opening(string name, var owner)
+    property var activePopup: null
+
+    function activate(owner) {
+        if (activePopup === owner)
+            return
+        const previous = activePopup
+        activePopup = owner
+        if (previous && previous.visible)
+            previous.visible = false
+    }
+
+    function deactivate(owner) {
+        if (activePopup === owner)
+            activePopup = null
+    }
 
     function requestOpen(name, owner) {
         opening(name, owner)

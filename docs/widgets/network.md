@@ -20,6 +20,14 @@ Shows the active network transport, VPN state, connectivity, and hotspot state.
 
   ![Network Right Click](screenshots/network_right_click.png)
 
+Hotspot profiles and secrets remain owned by NetworkManager. A second wireless
+adapter uses NetworkManager sharing. Same-radio sharing uses `create_ap`,
+`hostapd`, `dnsmasq`, and scoped iptables rules so NetworkManager does not fight
+the virtual AP. AP capabilities and associated stations are read through `iw`.
+The optional station limit requires the installed root-owned helper and polkit
+policy; running that helper from a writable source checkout is intentionally
+unsupported.
+
 VPN support depends on the matching client and NetworkManager plugin being
 installed. Install the implementations needed by your profiles:
 

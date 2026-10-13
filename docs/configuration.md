@@ -84,6 +84,21 @@ dedicated adapters for verified skarwm, bspwm, herbstluftwm, i3, spectrwm,
 dwm, and Openbox identities and otherwise uses EWMH.
 `ANUSH_WM_BACKEND` overrides configuration for a single shell process.
 
+The layout picker stores gap and decoration choices in `windowManager`. Its
+Picom switch is also persisted there after the first explicit toggle; a missing
+or `null` `picom` value leaves an independently managed compositor untouched.
+The UI font is stored as `theme.fontFamily`. The picker lists installed Nerd
+Font text families reported by Fontconfig and uses JetBrainsMono Nerd Font by
+default; the symbol-only Nerd Font family remains reserved for icons.
+Window radius is stored as `theme.cornerRadius` and is applied to the shell and
+to a window manager only when its adapter advertises nondisruptive live radius
+support. The slider remains available on every backend for changing shell
+surfaces. Currently skarwm also applies it to windows through its native corner
+setting and a live IPC command. The value remains in Anush state and does not
+rewrite or reload the active skarwm rc file. Anush does not reset a running
+Picom instance because that reinitializes the compositor and flashes the
+desktop.
+
 This is loader-level composition rather than a JSON `include` extension. It is
 smaller, hides prefix-specific paths, gives every QML consumer the same
 effective object, and leaves standard JSON tooling usable.

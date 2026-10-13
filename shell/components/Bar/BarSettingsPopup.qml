@@ -8,7 +8,14 @@ Popout {
     id: root
 
     property real availableScreenHeight: 1080
-    readonly property real heightLimit: Math.min(680, Math.max(1, availableScreenHeight - 2 * screenMargin))
+    readonly property real heightLimit: Math.max(1,
+        availableScreenHeight - 2 * screenMargin)
+    readonly property real widgetViewportLimit: Math.max(96,
+        heightLimit - 2 * cardPadding - layoutTitle.implicitHeight
+            - content.spacing - layoutDescription.implicitHeight
+            - widgetHeadings.height - widgetsColumn.spacing * 2)
+    readonly property bool widgetContentConstrained:
+        widgetSections.implicitHeight > widgetViewportLimit
 
     cardWidth: 790
     cardHeight: Math.min(content.implicitHeight + 2 * cardPadding, heightLimit)
@@ -568,9 +575,8 @@ Popout {
                 Flickable {
                     id: widgetLayoutFlick
                     width: parent.width
-                    height: Math.min(widgetSections.implicitHeight, Math.max(96,
-                        controlsColumn.implicitHeight - layoutDescription.implicitHeight
-                        - widgetHeadings.height - widgetsColumn.spacing * 2))
+                    height: Math.min(widgetSections.implicitHeight,
+                        root.widgetViewportLimit)
                     contentWidth: width
                     contentHeight: widgetSections.implicitHeight
                     clip: true
@@ -579,7 +585,9 @@ Popout {
                     Controls.ScrollBar.vertical: Controls.ScrollBar {
                         id: layoutScrollBar
                         width: 8
-                        policy: Controls.ScrollBar.AsNeeded
+                        policy: root.widgetContentConstrained
+                            ? Controls.ScrollBar.AlwaysOn
+                            : Controls.ScrollBar.AlwaysOff
                         interactive: true
 
                         background: Rectangle {

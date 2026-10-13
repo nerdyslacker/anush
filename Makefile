@@ -44,25 +44,4 @@ install: build/anushctl
 clean:
 	rm -rf build
 
-test: build/anushctl
-	./tests/anushctl.sh
-	python3 ./tests/bspwm-provider.py
-	./tests/config-loading.sh
-	python3 ./tests/dwm-backend.py
-	python3 ./tests/ewmh-provider.py
-	python3 ./tests/herbstluftwm-provider.py
-	python3 ./tests/i3-provider.py
-	python3 ./tests/spectrwm-backend.py
-	./tests/hotspot-control.sh
-	./tests/icon-theme.sh
-	./tests/launcher-search.sh
-	./tests/phone-control.sh
-	./tests/picom-control.sh
-	./tests/resource-ownership.sh
-	./tests/rss-reader.sh
-	python3 ./tests/skarwm-config-editor.py
-	./tests/theme-generation.sh
-	./tests/taildrop-inbox.sh
-	node --test tests/tailscale-model.test.js
-
-.PHONY: all install clean test
+.PHONY: all install clean

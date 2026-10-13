@@ -27,4 +27,9 @@ blocks are not listed.
 
 - **Right click:** Open the launcher icon editor.
 
+  Choose an icon-theme icon, a searchable distribution logo, or an image file.
+  Images inside the anush config directory are stored as relative paths. A
+  missing custom image falls back to the built-in anush icon; **Reset** removes
+  the customization.
+
   ![Launcher Right Click](screenshots/launcher_right_click.png)

@@ -3,6 +3,11 @@
 Displays application icons for windows on the current tag. Windows from the
 same application are grouped together.
 
+Each bar normally shows only windows on its output and the workspace currently
+visible there. The persistent cross-monitor option removes the output filter
+but keeps the bar's workspace filter. It is stored as
+`windowList.showWindowsFromAllMonitors`.
+
 ## Actions
 
 - **Left click an application:** Focus its window, or open a chooser when the application has multiple windows.

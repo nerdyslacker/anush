@@ -1,87 +1,87 @@
 #!/usr/bin/env python3
 
-"""Toggle the Picom autostart owned by the user's skarwm configuration."""
+"""Control the Picom instance owned by Anush."""
 
 from __future__ import annotations
 
 import json
 import os
 from pathlib import Path
-import re
+import shlex
 import shutil
+import signal
 import subprocess
 import sys
+import time
 
 
-DEFAULT_COMMAND = (
-    "picom --config "
-    "${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/skarwm/anush}"
-    "/picom/picom.conf ${ANUSH_PICOM_ARGS:---no-use-damage} -b"
-)
-AUTOSTART = re.compile(
-    r'^(?P<indent>\s*)(?P<comment>#\s*)?autostart\s*:\s*'
-    r'"(?P<command>[^"]*\bpicom\b[^"]*)"\s*$'
-)
+def picom_config() -> Path:
+    configured = os.environ.get("ANUSH_CONFIG_DIR", "")
+    if configured:
+        candidate = Path(configured) / "picom/picom.conf"
+        if candidate.is_file():
+            return candidate
+    return Path(__file__).resolve().parents[3] / "config/picom/picom.conf"
 
 
-def active_config(message: str) -> Path:
-    if message:
-        try:
-            result = subprocess.run(
-                [message, "get-version"], check=False, capture_output=True,
-                text=True, timeout=3,
-            )
-            payload = json.loads(result.stdout)
-            path = payload.get("loaded_config_file_name", "")
-            if path:
-                return Path(path)
-        except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
-            pass
-    if os.environ.get("SKARWM_CONFIG"):
-        return Path(os.environ["SKARWM_CONFIG"])
-    config_home = Path(os.environ.get(
-        "XDG_CONFIG_HOME", Path.home() / ".config"))
-    return config_home / "skarwm/config.rc"
-
-
-def find_picom(lines: list[str]):
-    for index, line in enumerate(lines):
-        match = AUTOSTART.match(line.rstrip("\n"))
-        if match:
-            return index, match
-    return None, None
-
-
-def atomic_write(path: Path, text: str) -> None:
-    temporary = path.with_name(f".{path.name}.anush-{os.getpid()}")
-    try:
-        temporary.write_text(text)
-        temporary.chmod(path.stat().st_mode)
-        os.replace(temporary, path)
-    finally:
-        temporary.unlink(missing_ok=True)
+def picom_command(config: Path) -> list[str]:
+    arguments = shlex.split(os.environ.get(
+        "ANUSH_PICOM_ARGS", "--no-use-damage"))
+    return ["picom", "--config", str(config), *arguments, "-b"]
 
 
 def stop_picom() -> None:
-    try:
-        subprocess.run(
-            ["pkill", "-x", "picom"], check=False,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-    except OSError:
-        pass
+    for process in picom_pids():
+        try:
+            os.kill(process, signal.SIGTERM)
+        except (OSError, ProcessLookupError):
+            pass
+    for _ in range(20):
+        if not picom_running():
+            return
+        time.sleep(0.05)
 
 
-def start_picom(command: str) -> None:
+def picom_pids() -> list[int]:
+    wanted_display = os.environ.get("DISPLAY", "")
+    processes = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            if (entry / "comm").read_text().strip() != "picom":
+                continue
+            environment = (entry / "environ").read_bytes().split(b"\0")
+            display = next((value.split(b"=", 1)[1].decode()
+                            for value in environment
+                            if value.startswith(b"DISPLAY=")), "")
+            if wanted_display and display != wanted_display:
+                continue
+            processes.append(int(entry.name))
+        except (OSError, UnicodeDecodeError, StopIteration, ValueError):
+            continue
+    return processes
+
+
+def picom_running() -> bool:
+    return bool(picom_pids())
+
+
+def start_picom(command: list[str]) -> bool:
     stop_picom()
     try:
         subprocess.Popen(
-            ["sh", "-c", command], stdin=subprocess.DEVNULL,
+            command, stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
     except OSError as error:
         raise SystemExit(f"picom control: cannot start Picom: {error}")
+    for _ in range(20):
+        if picom_running():
+            return True
+        time.sleep(0.05)
+    return False
 
 
 def main() -> int:
@@ -92,46 +92,27 @@ def main() -> int:
         return 2
 
     action = sys.argv[1]
-    message = sys.argv[2] if len(sys.argv) == 3 else "skarwm-msg"
-    path = active_config(message)
-    if not path.is_file():
-        print(f"picom control: skarwm config does not exist: {path}",
-              file=sys.stderr)
-        return 1
-
-    lines = path.read_text().splitlines(keepends=True)
-    index, match = find_picom(lines)
-    enabled = match is not None and match.group("comment") is None
-    command = match.group("command") if match is not None else DEFAULT_COMMAND
+    config = picom_config()
+    command = picom_command(config)
     available = shutil.which("picom") is not None
+    enabled = picom_running()
 
     if action == "enable":
         if not available:
             print("picom control: Picom is not installed", file=sys.stderr)
             return 1
-        if match is None:
-            if lines and not lines[-1].endswith("\n"):
-                lines[-1] += "\n"
-            lines.append(f'autostart : "{command}"\n')
-        else:
-            lines[index] = (
-                f'{match.group("indent")}autostart : "{command}"\n')
-        atomic_write(path, "".join(lines))
-        start_picom(command)
+        if not start_picom(command):
+            print("picom control: Picom exited during startup", file=sys.stderr)
+            return 1
         enabled = True
     elif action == "disable":
-        if match is not None and enabled:
-            lines[index] = (
-                f'{match.group("indent")}# autostart : "{command}"\n')
-            atomic_write(path, "".join(lines))
         stop_picom()
         enabled = False
-
     print(json.dumps({
         "available": available,
         "enabled": enabled,
-        "config": str(path),
-        "command": command,
+        "config": str(config),
+        "command": shlex.join(command),
     }, separators=(",", ":")))
     return 0
 

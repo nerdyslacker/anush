@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+
+def color(value):
+    if not re.fullmatch(r"#[0-9A-Fa-f]{6}", value):
+        raise SystemExit(f"apply-openbox-theme: invalid color: {value}")
+    return value.upper()
+
+
+def write(path, contents):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+            mode="w", dir=path.parent, prefix=path.name + ".",
+            delete=False) as temporary:
+        temporary.write(contents)
+        temporary_path = Path(temporary.name)
+    temporary_path.replace(path)
+
+
+def main():
+    if len(sys.argv) != 9:
+        raise SystemExit(
+            "usage: apply-openbox-theme BACKGROUND SURFACE ACTIVE_SURFACE "
+            "INACTIVE_SURFACE FOREGROUND DISABLED ACCENT OUTLINE"
+        )
+
+    (background, surface, active_surface, inactive_surface, foreground,
+     disabled, accent, outline) = map(color, sys.argv[1:])
+    data_home = Path(os.environ.get(
+        "XDG_DATA_HOME", Path.home() / ".local/share"))
+    theme = data_home / "themes/Anush-Openbox/openbox-3"
+
+    write(theme / "themerc", f"""border.width: 1
+padding.width: 6
+padding.height: 4
+window.handle.width: 2
+window.label.text.justify: center
+menu.title.text.justify: center
+
+window.active.border.color: {accent}
+window.inactive.border.color: {outline}
+window.active.title.bg: flat solid
+window.active.title.bg.color: {active_surface}
+window.active.label.bg: parentrelative
+window.active.label.text.color: {foreground}
+window.active.button.unpressed.image.color: {accent}
+window.active.button.pressed.image.color: {foreground}
+window.active.button.hover.image.color: {foreground}
+window.inactive.title.bg: flat solid
+window.inactive.title.bg.color: {inactive_surface}
+window.inactive.label.bg: parentrelative
+window.inactive.label.text.color: {disabled}
+window.inactive.button.unpressed.image.color: {disabled}
+window.inactive.button.hover.image.color: {foreground}
+
+window.client.padding.width: 0
+window.client.padding.height: 0
+window.active.client.color: {background}
+window.inactive.client.color: {background}
+window.active.handle.bg: flat solid
+window.active.handle.bg.color: {accent}
+window.active.grip.bg: flat solid
+window.active.grip.bg.color: {accent}
+window.inactive.handle.bg: flat solid
+window.inactive.handle.bg.color: {outline}
+window.inactive.grip.bg: flat solid
+window.inactive.grip.bg.color: {outline}
+
+menu.border.color: {accent}
+menu.border.width: 1
+menu.title.bg: flat solid
+menu.title.bg.color: {surface}
+menu.title.text.color: {accent}
+menu.items.bg: flat solid
+menu.items.bg.color: {background}
+menu.items.text.color: {foreground}
+menu.items.disabled.text.color: {disabled}
+menu.items.active.bg: flat solid
+menu.items.active.bg.color: {accent}
+menu.items.active.text.color: {background}
+
+osd.bg: flat solid
+osd.bg.color: {background}
+osd.label.text.color: {foreground}
+osd.border.color: {accent}
+osd.hilight.bg: flat solid
+osd.hilight.bg.color: {accent}
+osd.unhilight.bg: flat solid
+osd.unhilight.bg.color: {surface}
+""")
+
+    buttons = {
+        "max.xbm": """#define max_width 10
+#define max_height 10
+static unsigned char max_bits[] = {
+ 0xFF, 0x03, 0x01, 0x02, 0x01, 0x02, 0x01, 0x02, 0x01, 0x02, 0x01, 0x02,
+ 0x01, 0x02, 0x01, 0x02, 0x01, 0x02, 0xFF, 0x03 };
+""",
+        "max_toggled.xbm": """#define max_toggled_width 10
+#define max_toggled_height 10
+static unsigned char max_toggled_bits[] = {
+ 0x00, 0x00, 0x00, 0x00, 0xFC, 0x00, 0x84, 0x00, 0x84, 0x00, 0x84, 0x00,
+ 0x84, 0x00, 0xFC, 0x00, 0x00, 0x00, 0x00, 0x00 };
+""",
+        "shade.xbm": """#define shade_width 10
+#define shade_height 10
+static unsigned char shade_bits[] = {
+ 0x30, 0x00, 0x48, 0x00, 0x84, 0x00, 0x02, 0x01, 0x01, 0x02, 0x00, 0x00,
+ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+""",
+        "shade_toggled.xbm": """#define shade_toggled_width 10
+#define shade_toggled_height 10
+static unsigned char shade_toggled_bits[] = {
+ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02,
+ 0x02, 0x01, 0x84, 0x00, 0x48, 0x00, 0x30, 0x00 };
+""",
+        "desk.xbm": """#define desk_width 10
+#define desk_height 10
+static unsigned char desk_bits[] = {
+ 0x00, 0x00, 0x00, 0x00, 0xCC, 0x00, 0xCC, 0x00, 0x00, 0x00, 0x00, 0x00,
+ 0xCC, 0x00, 0xCC, 0x00, 0x00, 0x00, 0x00, 0x00 };
+""",
+        "desk_toggled.xbm": """#define desk_toggled_width 8
+#define desk_toggled_height 8
+static unsigned char desk_toggled_bits[] = {
+ 0x00, 0x7E, 0x7E, 0x7E, 0x7E, 0x7E, 0x7E, 0x00 };
+""",
+        "close.xbm": """#define close_width 10
+#define close_height 10
+static unsigned char close_bits[] = {
+ 0x01, 0x02, 0x02, 0x01, 0x84, 0x00, 0x48, 0x00, 0x30, 0x00, 0x30, 0x00,
+ 0x48, 0x00, 0x84, 0x00, 0x02, 0x01, 0x01, 0x02 };
+""",
+        "iconify.xbm": """#define iconify_width 10
+#define iconify_height 10
+static unsigned char iconify_bits[] = {
+ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+ 0x00, 0x00, 0xFF, 0x03, 0xFF, 0x03, 0x00, 0x00 };
+""",
+    }
+    for name, contents in buttons.items():
+        write(theme / name, contents)
+
+    openbox = shutil.which("openbox")
+    if openbox and os.environ.get("ANUSH_ACCENT_NO_RELOAD") != "1":
+        subprocess.run(
+            [openbox, "--reconfigure"], check=False,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+if __name__ == "__main__":
+    main()

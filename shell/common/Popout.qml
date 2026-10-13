@@ -32,13 +32,20 @@ PopupWindow {
     property real centerRectY: 0
     property real centerRectWidth: 0
     property real centerRectHeight: 0
+    property real pressCardX: 0
+    property real pressCardY: 0
+    property real pressCardWidth: 0
+    property real pressCardHeight: 0
+    property bool pressBoundsValid: false
+    property bool outsideWatcherArmed: false
+    property int openGeneration: 0
     readonly property string openDirection: positionAtPoint || positionCentered
         ? "free" : BarVisibility.barPosition
 
     default property alias content: inner.data
 
     visible: false
-    grabFocus: true
+    grabFocus: false
     color: "transparent"
 
     anchor {
@@ -101,6 +108,15 @@ PopupWindow {
                 String(_backingWindow.height)]
             surfaceFocus.running = true
         }
+    }
+
+    function rememberPressBounds() {
+        const origin = card.mapToGlobal(0, 0)
+        pressCardX = origin.x
+        pressCardY = origin.y
+        pressCardWidth = card.width
+        pressCardHeight = card.height
+        pressBoundsValid = true
     }
 
     function updatePlacement() {
@@ -184,11 +200,23 @@ PopupWindow {
     Connections {
         target: root
         function onVisibleChanged() {
-            if (root.visible && root.anchorItem) {
-                root.updatePlacement()
-                root.requestKeyboardFocus()
-                inner.forceActiveFocus()
-                enterAnim.restart()
+            root.pressBoundsValid = false
+            outsideArmTimer.stop()
+            root.outsideWatcherArmed = false
+            root.openGeneration++
+            if (root.visible) {
+                PopupCoordinator.activate(root)
+                if (root.anchorItem) {
+                    root.updatePlacement()
+                    root.requestKeyboardFocus()
+                    inner.forceActiveFocus()
+                    enterAnim.restart()
+                }
+                outsideArmTimer.restart()
+            } else {
+                PopupCoordinator.deactivate(root)
+                surfaceFocus.running = false
+                pointerPosition.running = false
             }
         }
     }
@@ -206,21 +234,33 @@ PopupWindow {
         id: surfaceFocus
     }
 
+    Timer {
+        id: outsideArmTimer
+        interval: 180
+        onTriggered: root.outsideWatcherArmed = root.visible
+    }
+
     Process {
         id: outsideClickWatcher
-        running: root.visible && root.closeOnOutside
+        running: root.visible && root.outsideWatcherArmed
+            && root.closeOnOutside
             && !root.suspendOutsideClose
         command: ["xinput", "test-xi2", "--root"]
         stdout: SplitParser {
             onRead: line => {
-                if (line.indexOf("(RawButtonPress)") !== -1 && !pointerPosition.running)
+                if (line.indexOf("(RawButtonPress)") !== -1
+                        && !pointerPosition.running) {
+                    root.rememberPressBounds()
+                    pointerPosition.openGeneration = root.openGeneration
                     pointerPosition.running = true
+                }
             }
         }
     }
 
     Process {
         id: pointerPosition
+        property int openGeneration: -1
         command: ["xdotool", "getmouselocation", "--shell"]
         stdout: StdioCollector {
             onStreamFinished: {
@@ -228,15 +268,23 @@ PopupWindow {
                     return
                 const xMatch = text.match(/(?:^|\n)X=(-?\d+)/)
                 const yMatch = text.match(/(?:^|\n)Y=(-?\d+)/)
-                if (!root.visible || !xMatch || !yMatch)
+                if (!root.visible || pointerPosition.openGeneration
+                        !== root.openGeneration || !xMatch || !yMatch)
                     return
 
                 const pointerX = Number(xMatch[1])
                 const pointerY = Number(yMatch[1])
-                const origin = card.mapToGlobal(0, 0)
+                const origin = root.pressBoundsValid
+                    ? Qt.point(root.pressCardX, root.pressCardY)
+                    : card.mapToGlobal(0, 0)
+                const width = root.pressBoundsValid
+                    ? root.pressCardWidth : card.width
+                const height = root.pressBoundsValid
+                    ? root.pressCardHeight : card.height
+                root.pressBoundsValid = false
                 const outside = pointerX < origin.x || pointerY < origin.y
-                    || pointerX >= origin.x + card.width
-                    || pointerY >= origin.y + card.height
+                    || pointerX >= origin.x + width
+                    || pointerY >= origin.y + height
                 if (outside)
                     root.visible = false
             }

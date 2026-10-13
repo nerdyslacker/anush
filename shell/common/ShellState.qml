@@ -118,6 +118,7 @@ Singleton {
                 preset: "srcery-dark",
                 iconTheme: "",
                 cursorTheme: "",
+                fontFamily: "JetBrainsMono Nerd Font",
                 wallpaperEnabled: true,
                 palette: null,
                 cornerRadius: 0,
@@ -126,7 +127,8 @@ Singleton {
             windowManager: {
                 backend: "auto",
                 gap: 8,
-                decorations: false
+                decorations: false,
+                picom: null
             },
             desktop: {
                 nightLight: false,

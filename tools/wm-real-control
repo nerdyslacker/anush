@@ -55,7 +55,10 @@ wm_command() {
                 "$binary" "$configs/herbstluftwm-autostart"
             ;;
         i3) printf '%s\0-a\0-c\0%s\0' "$binary" "$configs/i3.conf" ;;
-        spectrwm) printf '%s\0-c\0%s\0' "$binary" "$configs/spectrwm.conf" ;;
+        spectrwm)
+            printf '%s\0-c\0%s\0' "$binary" \
+                "${ANUSH_SPECTRWM_CONFIG:-$configs/spectrwm.conf}"
+            ;;
         dwm) printf '%s\0' "$binary" ;;
         openbox)
             printf '%s\0--sm-disable\0--config-file\0%s\0' \
@@ -238,6 +241,10 @@ session() {
     trap session_cleanup EXIT HUP INT TERM
     augment_path
     export ANUSH_REAL_WM_TEST=$WM_SMOKE_WM
+    if [[ $WM_SMOKE_WM == spectrwm ]]; then
+        export ANUSH_SPECTRWM_CONFIG="$WM_SMOKE_RUN/spectrwm.conf"
+        cp "$configs/spectrwm.conf" "$ANUSH_SPECTRWM_CONFIG"
+    fi
     start_wm
     start_hotkeys
     for _ in $(seq 1 50); do

@@ -9,8 +9,14 @@ Popout {
     id: root
 
     readonly property var accents: Theme.accentNames
+    readonly property bool layoutsAvailable: Wm.capabilities.layouts === true
+    readonly property bool gapsAvailable: Wm.capabilities.gaps === true
+    readonly property bool decorationsAvailable:
+        Wm.capabilities.decorationStyling === true
+    readonly property bool compactAppearance: !layoutsAvailable
+        && !gapsAvailable && !decorationsAvailable
 
-    cardWidth: 740
+    cardWidth: compactAppearance ? 380 : 740
     cardHeight: content.implicitHeight + 2 * cardPadding
 
     onVisibleChanged: if (visible) {
@@ -103,6 +109,7 @@ Popout {
     component ThemeSelector: Controls.ComboBox {
         id: selector
         required property string selectedValue
+        property bool previewModelFont: false
         signal selected(string value)
 
         width: parent.width
@@ -148,7 +155,8 @@ Popout {
             contentItem: Text {
                 text: option.modelData
                 color: option.highlighted ? Theme.selfg : Theme.foreground
-                font.family: Theme.fontFamily
+                font.family: selector.previewModelFont
+                    ? String(option.modelData) : Theme.fontFamily
                 font.pixelSize: Theme.fontSize - 1
                 verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideRight
@@ -430,13 +438,15 @@ Popout {
         }
     }
 
-    Row {
+    Grid {
         id: content
         anchors.left: parent.left
         anchors.right: parent.right
+        columns: root.compactAppearance ? 1 : 3
         spacing: 14
 
-        readonly property real columnWidth: (width - middleSeparator.width - spacing * 2) / 2
+        readonly property real columnWidth: root.compactAppearance
+            ? width : (width - middleSeparator.width - spacing * 2) / 2
 
         Column {
             id: layoutColumn
@@ -445,10 +455,12 @@ Popout {
 
             SectionLabel {
                 text: "Workspace layout"
+                visible: root.layoutsAvailable
             }
 
             Grid {
                 id: layoutGrid
+                visible: root.layoutsAvailable
                 width: parent.width
                 columns: 2
                 spacing: 5
@@ -477,12 +489,21 @@ Popout {
                         Column {
                             anchors.centerIn: parent
                             spacing: 2
-                            Text {
+
+                            Item {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: layoutTile.modelData.glyph
-                                color: layoutTile.current ? Theme.selfg : Theme.cyan
-                                font.family: Theme.iconFontFamily
-                                font.pixelSize: Theme.iconSize
+                                width: 28
+                                height: 18
+
+                                LayoutDiagram {
+                                    anchors.fill: parent
+                                    layoutData: layoutTile.modelData
+                                    masterColor: layoutTile.current
+                                        ? Theme.selfg : Theme.cyan
+                                    paneColor: layoutTile.current
+                                        ? Qt.alpha(Theme.selfg, 0.55)
+                                        : Qt.alpha(Theme.fg, 0.38)
+                                }
                             }
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
@@ -528,13 +549,14 @@ Popout {
                     checked: Wm.picomEnabled
                     enabled: !Wm.picomBusy
                     opacity: enabled ? 1 : 0.55
-                    onToggled: Wm.setPicomEnabled(!Wm.picomEnabled)
+                    onToggled: Wm.setPicomEnabled(!Wm.picomEnabled, true)
                 }
             }
 
             Item {
+                visible: root.decorationsAvailable
                 width: parent.width
-                height: 30
+                height: visible ? 30 : 0
 
                 Text {
                     anchors.left: parent.left
@@ -554,6 +576,7 @@ Popout {
             }
 
             TweakSlider {
+                visible: root.gapsAvailable
                 label: "window gap"
                 from: 0
                 to: 40
@@ -572,10 +595,20 @@ Popout {
                 applyFn: value => Theme.cornerRadius = Math.max(0, Math.round(value))
                 persistFn: value => Theme.persistCornerRadius(value)
             }
+
+            Text {
+                width: parent.width
+                text: "Enable picom to apply the radius to windows."
+                wrapMode: Text.WordWrap
+                color: Wm.picomEnabled ? Theme.foregroundMuted : Theme.brightOrange
+                font.family: Theme.fontFamily
+                font.pixelSize: Math.max(8, Theme.fontSize - 3)
+            }
         }
 
         Rectangle {
             id: middleSeparator
+            visible: !root.compactAppearance
             width: 1
             height: Math.max(layoutColumn.implicitHeight, appearanceColumn.implicitHeight)
             color: Theme.foregroundMuted
@@ -787,6 +820,17 @@ Popout {
                         }
                     }
                 }
+            }
+
+            SectionLabel {
+                text: "UI font"
+            }
+
+            ThemeSelector {
+                selectedValue: Theme.fontFamily
+                model: AppearanceService.nerdFonts
+                previewModelFont: true
+                onSelected: value => Theme.setFontFamily(value)
             }
 
             SectionLabel {

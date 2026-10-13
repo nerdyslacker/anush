@@ -11,8 +11,23 @@ BarModule {
     readonly property var currentLayout: Wm.layoutIndex >= 0
         && Wm.layoutIndex < Wm.layouts.length ? Wm.layouts[Wm.layoutIndex] : null
 
-    icon: currentLayout?.glyph ?? "󰕮"
+    icon: currentLayout ? "" : "󰕮"
+    compactIcon: icon
     iconColor: Theme.accent
+    implicitWidth: Theme.moduleHeight
+    tooltip: Wm.capabilities.layouts === true
+        ? "Layouts and appearance" : "Desktop appearance"
+
+    LayoutDiagram {
+        parent: root
+        anchors.centerIn: parent
+        visible: root.currentLayout !== null
+        width: Math.round(21 * Theme.barScale)
+        height: Math.round(15 * Theme.barScale)
+        layoutData: root.currentLayout
+        masterColor: Theme.accent
+        paneColor: Qt.alpha(Theme.fg, 0.48)
+    }
 
     onClicked: mouse => {
         if (mouse.button === Qt.RightButton) {
@@ -26,7 +41,10 @@ BarModule {
             picker.visible = !picker.visible
         }
     }
-    onScrolled: direction => Wm.cycleLayout(direction)
+    onScrolled: direction => {
+        if (Wm.capabilities.layouts === true)
+            Wm.cycleLayout(direction)
+    }
 
     LayoutPicker {
         id: picker

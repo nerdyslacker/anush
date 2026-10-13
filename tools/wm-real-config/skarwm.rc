@@ -28,3 +28,13 @@ bind : mod + a : "anushctl launcher toggle"
 bind : mod + v : "anushctl clipboard toggle"
 bind : mod + Shift + n : "anushctl notes toggle"
 decorations_enabled : false
+decoration_color_source : explicit
+decoration_accent : #d59a72
+decoration_active_background : #333a46
+decoration_inactive_background : #262e3d
+decoration_active_foreground : #d59a72
+decoration_inactive_foreground : #d59a72
+decoration_active_border : #d59a72
+decoration_inactive_border : #d59a72
+corner_radius : 0
+autostart : "picom --config /tmp/anush-wm-skarwm.TTV7pT/config/anush/picom/picom.conf --no-use-damage -b"

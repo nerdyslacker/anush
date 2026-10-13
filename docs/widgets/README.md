@@ -13,6 +13,7 @@ placeholders are intentionally left in place for project screenshots.
 | [Scratchpads](scratchpads.md) | Registered scratchpad windows |
 | [Media](media.md) | MPRIS playback status and controls |
 | [Weather](weather.md) | Current conditions and forecast |
+| [RSS reader](rss.md) | RSS and Atom feeds |
 | [System metrics](system-metrics.md) | CPU, memory, and disk usage |
 | [Battery](battery.md) | Charge and power controls |
 | [Brightness](brightness.md) | Per-display brightness controls |

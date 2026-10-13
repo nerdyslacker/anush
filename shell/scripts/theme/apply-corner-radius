@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Keep skarwm's client corners in sync with the shell appearance setting.
+# Keep skarwm's native window corners in sync without reloading its config.
 set -u
 
 radius=${1:-}
@@ -11,44 +11,4 @@ esac
 [ "$radius" -le 4096 ] || exit 2
 
 message=$(command -v "$wm_message" 2>/dev/null || true)
-if [ -z "$message" ]; then
-    message=$(command -v skarwm-msg 2>/dev/null || true)
-fi
-active_config=
-if [ -n "$message" ]; then
-    active_config=$(
-        "$message" get-version 2>/dev/null \
-            | sed -n 's/.*"loaded_config_file_name":"\([^"]*\)".*/\1/p'
-    )
-fi
-if [ -n "$active_config" ]; then
-    config_file=$active_config
-elif [ -n "${SKARWM_CONFIG:-}" ]; then
-    config_file=$SKARWM_CONFIG
-elif [ -n "${XDG_CONFIG_HOME:-}" ]; then
-    config_file=$XDG_CONFIG_HOME/skarwm/config.rc
-elif [ -n "${HOME:-}" ]; then
-    config_file=$HOME/.config/skarwm/config.rc
-else
-    config_file=
-fi
-
-[ -n "$config_file" ] && [ -f "$config_file" ] \
-    && [ -w "$config_file" ] || exit 0
-
-temporary=$(mktemp "${config_file}.corner-radius.XXXXXX") || exit 1
-trap 'rm -f "$temporary"' EXIT HUP INT TERM
-
-if grep -Eq '^[[:space:]]*corner_radius[[:space:]]*:' "$config_file"; then
-    sed -E "/^[[:space:]]*corner_radius[[:space:]]*:/ s/(:[[:space:]]*)[0-9]+/\1$radius/" \
-        "$config_file" > "$temporary" || exit 1
-else
-    sed '$a\
-corner_radius : '"$radius" "$config_file" > "$temporary" || exit 1
-fi
-
-chmod 644 "$temporary"
-mv "$temporary" "$config_file"
-trap - EXIT HUP INT TERM
-
-[ -z "$message" ] || "$message" reload >/dev/null 2>&1 || true
+[ -z "$message" ] || "$message" corner-radius "$radius" >/dev/null 2>&1 || true

@@ -13,7 +13,38 @@ WindowManagerBackend {
     property string wmIdentity: "unknown"
     property string integration: ""
     property bool refreshPending: false
+    property string defaultLayout: ""
+    property var rememberedLayouts: ({})
     readonly property string provider: ShellState.scriptsDir + "/wm/" + providerName
+
+    function withRememberedLayouts(values) {
+        return values.map(workspace => {
+            const id = String(workspace.id)
+            const reported = String(workspace.layout ?? "")
+            const remembered = String(rememberedLayouts[id] ?? "")
+            const layout = reported !== "" ? reported
+                : remembered !== "" ? remembered : defaultLayout
+            return layout !== ""
+                ? Object.assign({}, workspace, { layout: layout }) : workspace
+        })
+    }
+
+    function rememberFocusedLayout(command) {
+        const next = Object.assign({}, rememberedLayouts)
+        let found = false
+        for (const workspace of workspaces) {
+            if (workspace.focused === true) {
+                next[String(workspace.id)] = command
+                found = true
+            }
+        }
+        if (!found) return
+        rememberedLayouts = next
+        workspaces = withRememberedLayouts(workspaces.map(workspace =>
+            workspace.focused === true
+                ? Object.assign({}, workspace, { layout: command }) : workspace))
+        changed()
+    }
 
     function clearState() {
         connected = false
@@ -71,7 +102,8 @@ WindowManagerBackend {
             capabilities = value.capabilities ?? ({})
             if (Array.isArray(value.layouts)) layouts = value.layouts
             screens = Array.isArray(value.screens) ? value.screens : []
-            workspaces = Array.isArray(value.workspaces) ? value.workspaces : []
+            workspaces = withRememberedLayouts(
+                Array.isArray(value.workspaces) ? value.workspaces : [])
             windows = Array.isArray(value.windows) ? value.windows : []
             changed()
             if (previousIntegration !== ""
@@ -127,7 +159,16 @@ WindowManagerBackend {
     function setLayout(command) {
         if (capabilities.layouts !== true)
             return unsupported("setLayout")
-        return runAction(["layout", String(command)])
+        const value = String(command)
+        const started = runAction(["layout", value])
+        if (started) rememberFocusedLayout(value)
+        return started
+    }
+
+    function setGaps(value) {
+        if (capabilities.gaps !== true)
+            return unsupported("setGaps")
+        return runAction(["gaps", String(value)])
     }
 
     onActiveChanged: {

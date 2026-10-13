@@ -42,7 +42,7 @@ Singleton {
     property string applicationThemeStatus: ""
     property string wallpaperPresetStatus: ""
     property bool wallpaperPaletteRefreshAttempted: false
-    property bool externalAppearanceInitialized: false
+    property string externalAppearanceSignature: ""
     readonly property var activePreset: presetForId(presetId)
     readonly property bool matugenThemeGenerated:
         wallpaperThemeEnabled
@@ -53,6 +53,9 @@ Singleton {
     // A single persisted appearance value feeds every non-circular surface.
     // Keep the tiers integral so borders and clipping stay pixel-aligned.
     property int cornerRadius: 0
+    property bool cornerRadiusStateLoaded: false
+    property int appliedCornerRadius: -1
+    property string appliedCornerRadiusBackend: ""
     readonly property int radiusSmall: Math.round(cornerRadius * 0.5)
     readonly property int radiusMedium: cornerRadius
     readonly property int radiusLarge: Math.round(cornerRadius * 1.5)
@@ -157,7 +160,8 @@ Singleton {
         return Qt.tint(root.background, Qt.alpha(root.foreground, opacity))
     }
 
-    readonly property string fontFamily: "JetBrainsMono Nerd Font"
+    readonly property string defaultFontFamily: "JetBrainsMono Nerd Font"
+    property string fontFamily: defaultFontFamily
     // Patched text fonts scale individual icon sets differently. Prefer the
     // dedicated symbol font so bar glyphs retain consistent visual bounds.
     readonly property string iconFontFamily: "Symbols Nerd Font Mono"
@@ -270,7 +274,11 @@ Singleton {
             root.activeBorder.toString(),
             root.activeBorder.toString(),
             ShellState.state.windowManager.decorations === true
-                ? "true" : "false"
+                ? "true" : "false",
+            root.background.toString(),
+            root.surface.toString(),
+            root.disabled.toString(),
+            root.outline.toString()
         ])
         AppearanceService.applyAccent(selected.toString())
     }
@@ -290,9 +298,28 @@ Singleton {
         ShellState.updateSection("bar", { backgroundOpacity: barBackgroundOpacity })
     }
 
+    function setFontFamily(value) {
+        const selected = String(value ?? "").trim()
+        if (selected === "") return
+        fontFamily = selected
+        ShellState.updateSection("theme", { fontFamily: selected })
+    }
+
     function persistCornerRadius(value) {
         cornerRadius = Math.max(0, Math.round(Number(value) || 0))
         ShellState.updateSection("theme", { cornerRadius: cornerRadius })
+        applyExternalCornerRadius()
+    }
+
+    function applyExternalCornerRadius() {
+        if (!cornerRadiusStateLoaded
+                || Wm.capabilities.windowRadius !== true)
+            return
+        if (appliedCornerRadius === cornerRadius
+                && appliedCornerRadiusBackend === Wm.backendName)
+            return
+        appliedCornerRadius = cornerRadius
+        appliedCornerRadiusBackend = Wm.backendName
         Quickshell.execDetached([
             root.scriptsDir + "/theme/apply-corner-radius",
             String(cornerRadius),
@@ -310,6 +337,20 @@ Singleton {
         ]
         applicationThemeStatus = "Applying " + target.toUpperCase() + " theme…"
         applicationThemeProcess.running = true
+    }
+
+    function runPaletteCommand(command) {
+        paletteProcess.running = false
+        paletteProcess.command = command
+        paletteProcess.running = true
+    }
+
+    function applyWallpaper(path) {
+        runPaletteCommand([
+            root.scriptsDir + "/theme/wallpaper-theme",
+            String(path), wallpaperThemeEnabled ? "true" : "false",
+            mode, Wm.msgPath
+        ])
     }
 
     function saveWallpaperPreset(name) {
@@ -348,14 +389,14 @@ Singleton {
 
         const palette = ShellState.state.theme.palette
         if (wallpaperThemeEnabled && palette?.image) {
-            Quickshell.execDetached([
+            runPaletteCommand([
                 root.scriptsDir + "/theme/generate-wallpaper-theme",
                 String(palette.image), next,
                 "--wm-msg", Wm.msgPath
             ])
         } else if (!wallpaperThemeEnabled
                 && activePreset?.generatorDefault === true) {
-            Quickshell.execDetached([
+            runPaletteCommand([
                 root.scriptsDir + "/theme/generate-wallpaper-theme",
                 "--default", next, accent.toString(),
                 "--wm-msg", Wm.msgPath
@@ -403,7 +444,7 @@ Singleton {
         if (enabled) {
             const image = String(wallpaperPath ?? "")
             if (image !== "") {
-                Quickshell.execDetached([
+                runPaletteCommand([
                     root.scriptsDir + "/theme/generate-wallpaper-theme",
                     image, mode,
                     "--wm-msg", Wm.msgPath
@@ -420,7 +461,7 @@ Singleton {
                 usePresetAccent: true
             })
             if (activePreset?.generatorDefault === true) {
-                Quickshell.execDetached([
+                runPaletteCommand([
                     root.scriptsDir + "/theme/generate-wallpaper-theme",
                     "--default", mode, accent.toString(),
                     "--wm-msg", Wm.msgPath
@@ -480,7 +521,7 @@ Singleton {
         applySemanticPalette(p)
     }
 
-    function applyWallpaperPalette(data) {
+    function applyWallpaperPalette(data, propagateExternal) {
         const colors = data?.semantic
         const ansi = data?.ansi
         if (!colors || !Array.isArray(ansi) || ansi.length < 16)
@@ -544,16 +585,15 @@ Singleton {
         darkGreen = Qt.darker(green, 1.8)
         dimGreen = Qt.darker(green, 1.45)
         darkBlue = Qt.darker(blue, 1.8)
-        // Keep the user's accent slot selected; its color now comes from the
-        // generated palette and is propagated to external components too.
-        applyExternalAccent(accentName)
+        if (propagateExternal !== false)
+            applyExternalAccent(accentName)
     }
 
-    function applyActivePalette() {
+    function applyActivePalette(propagateExternal) {
         const palette = ShellState.state.theme.palette
         if (wallpaperThemeEnabled && palette
                 && String(palette.mode ?? "dark") === mode)
-            applyWallpaperPalette(palette)
+            applyWallpaperPalette(palette, propagateExternal)
         else
             applyPresetPalette()
     }
@@ -571,6 +611,8 @@ Singleton {
         accentName = normalizedAccentName(theme.accent, "orange")
         customAccent = normalizeCustomAccent(theme.customAccent) || "#6574A8"
         usePresetAccent = theme.usePresetAccent !== false
+        fontFamily = String(theme.fontFamily ?? "").trim()
+            || defaultFontFamily
         mode = theme.mode === "light" ? "light" : "dark"
         const savedPreset = String(theme.preset ?? "")
         let selected = presetForId(savedPreset)
@@ -583,10 +625,22 @@ Singleton {
         }
         wallpaperThemeEnabled = theme.wallpaperEnabled === true
         cornerRadius = Math.max(0, Math.round(Number(theme.cornerRadius) || 0))
-        const firstExternalSync = !externalAppearanceInitialized
-        externalAppearanceInitialized = true
-        applyActivePalette()
-        if (firstExternalSync && !wallpaperThemeEnabled)
+        cornerRadiusStateLoaded = true
+        applyExternalCornerRadius()
+        const appearanceSignature = JSON.stringify({
+            preset: presetId,
+            mode: mode,
+            wallpaperEnabled: wallpaperThemeEnabled,
+            palette: theme.palette,
+            accent: accentName,
+            customAccent: customAccent,
+            usePresetAccent: usePresetAccent
+        })
+        const appearanceChanged = appearanceSignature
+            !== externalAppearanceSignature
+        externalAppearanceSignature = appearanceSignature
+        applyActivePalette(false)
+        if (appearanceChanged)
             applyExternalAccent(accentName)
         const palette = theme.palette
         if (wallpaperThemeEnabled && !wallpaperPaletteRefreshAttempted
@@ -595,7 +649,7 @@ Singleton {
             const image = palette?.image
                 ? String(palette.image)
                 : root.packageConfigDir + "/wallpaper/minimal.png"
-            Quickshell.execDetached([
+            runPaletteCommand([
                 root.scriptsDir + "/theme/generate-wallpaper-theme",
                 image, mode,
                 "--wm-msg", Wm.msgPath
@@ -640,6 +694,20 @@ Singleton {
     }
 
     Process {
+        id: paletteProcess
+        stderr: StdioCollector { id: paletteError }
+        onExited: exitCode => {
+            if (exitCode === 0)
+                ShellState.reloadEffective()
+            else {
+                const detail = paletteError.text.trim()
+                console.warn("wallpaper theme:", detail !== ""
+                    ? detail : "generator exited with " + exitCode)
+            }
+        }
+    }
+
+    Process {
         id: wallpaperPresetProcess
         stdout: StdioCollector { id: wallpaperPresetOutput }
         stderr: StdioCollector { id: wallpaperPresetError }
@@ -666,6 +734,17 @@ Singleton {
         function onStateChanged() { if (root.presetsReady) root.loadState() }
         function onReadyChanged() {
             if (ShellState.ready && root.presetsReady) root.loadState()
+        }
+    }
+
+    Connections {
+        target: Wm
+        function onCapabilitiesChanged() { root.applyExternalCornerRadius() }
+        function onBackendNameChanged() { root.applyExternalCornerRadius() }
+        function onConnectedChanged() {
+            if (!Wm.connected) return
+            root.applyExternalAccent(root.accentName)
+            root.applyExternalCornerRadius()
         }
     }
 }
