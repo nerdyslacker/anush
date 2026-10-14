@@ -47,6 +47,7 @@ WindowManagerBackend {
     property var registeredScratchpads: []
     property string activeWinId: ""
     property string title: ""
+    property bool refreshPending: false
 
     function clearState() {
         connected = false
@@ -64,10 +65,7 @@ WindowManagerBackend {
         if (!active) return
         snapshotRetryTimer.stop()
         versionQuery.running = true
-        workspaceQuery.running = true
-        workspaceConfigQuery.running = true
-        windowQuery.running = true
-        outputQuery.running = true
+        refresh()
         eventSubscription.running = true
         reconcileTimer.start()
     }
@@ -75,7 +73,9 @@ WindowManagerBackend {
     function stop() {
         reconnectTimer.stop()
         snapshotRetryTimer.stop()
+        refreshTimer.stop()
         reconcileTimer.stop()
+        refreshPending = false
         versionQuery.running = false
         workspaceQuery.running = false
         workspaceConfigQuery.running = false
@@ -87,19 +87,30 @@ WindowManagerBackend {
 
     function refresh() {
         if (!active) return
-        workspaceQuery.running = false
+        refreshTimer.stop()
+        if (workspaceQuery.running || workspaceConfigQuery.running
+                || windowQuery.running || outputQuery.running) {
+            refreshPending = true
+            return
+        }
+        refreshPending = false
         workspaceQuery.running = true
-        windowQuery.running = false
         windowQuery.running = true
-        workspaceConfigQuery.running = false
         workspaceConfigQuery.running = true
-        outputQuery.running = false
         outputQuery.running = true
     }
 
-    function snapshotFailed(source) {
+    function snapshotFinished() {
+        if (!workspaceQuery.running && !workspaceConfigQuery.running
+                && !windowQuery.running && !outputQuery.running
+                && refreshPending)
+            refreshTimer.restart()
+    }
+
+    function snapshotFailed(source, resetState) {
         console.warn("skarwm " + source + " query failed")
-        clearState()
+        if (resetState === true)
+            clearState()
         if (active) snapshotRetryTimer.restart()
     }
 
@@ -333,12 +344,12 @@ WindowManagerBackend {
                     root.connected = String(value?.human_readable ?? "")
                         .toLowerCase().indexOf("skarwm") !== -1
                 } catch (error) {
-                    if (root.active) root.snapshotFailed("version")
+                    if (root.active) root.snapshotFailed("version", true)
                 }
             }
         }
         onExited: code => {
-            if (code !== 0 && root.active) root.snapshotFailed("version")
+            if (code !== 0 && root.active) root.snapshotFailed("version", true)
         }
     }
 
@@ -349,6 +360,7 @@ WindowManagerBackend {
         stdout: SplitParser { onRead: line => root.acceptWorkspaces(line) }
         onExited: code => {
             if (code !== 0 && root.active) root.snapshotFailed("workspace")
+            root.snapshotFinished()
         }
     }
 
@@ -357,6 +369,7 @@ WindowManagerBackend {
         command: [Theme.scriptsDir + "/skarwm/config-editor", "read"]
         running: false
         stdout: SplitParser { onRead: line => root.acceptWorkspaceConfig(line) }
+        onExited: root.snapshotFinished()
     }
 
     Process {
@@ -366,6 +379,7 @@ WindowManagerBackend {
         stdout: SplitParser { onRead: line => root.acceptWindows(line) }
         onExited: code => {
             if (code !== 0 && root.active) root.snapshotFailed("window")
+            root.snapshotFinished()
         }
     }
 
@@ -376,6 +390,7 @@ WindowManagerBackend {
         stdout: SplitParser { onRead: line => root.acceptOutputs(line) }
         onExited: code => {
             if (code !== 0 && root.active) root.snapshotFailed("output")
+            root.snapshotFinished()
         }
     }
 
@@ -418,6 +433,11 @@ WindowManagerBackend {
         }
     }
 
+    Timer {
+        id: refreshTimer
+        interval: 60
+        onTriggered: root.refresh()
+    }
     Timer {
         id: reconnectTimer
         interval: 2000
