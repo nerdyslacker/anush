@@ -39,6 +39,8 @@ PopupWindow {
     property bool pressBoundsValid: false
     property bool outsideWatcherArmed: false
     property int openGeneration: 0
+    property bool awaitingFirstFrame: false
+    property real surfaceOpacity: 0
     readonly property string openDirection: positionAtPoint || positionCentered
         ? "free" : BarVisibility.barPosition
 
@@ -47,6 +49,31 @@ PopupWindow {
     visible: false
     grabFocus: false
     color: "transparent"
+
+    // A freshly mapped X11 popup can briefly expose an old compositor pixmap
+    // before Qt submits its first frame. Set the native opacity before it maps,
+    // then reveal it after Qt has had multiple presentation intervals to clear
+    // and populate the surface.
+    function setSurfaceOpacity(value) {
+        root.surfaceOpacity = value
+        if (root._backingWindow)
+            root._backingWindow.opacity = value
+    }
+
+    Component.onCompleted: root.setSurfaceOpacity(0)
+    onWindowConnected: root.setSurfaceOpacity(root.surfaceOpacity)
+
+    Timer {
+        id: firstFrameGate
+        interval: 50
+        onTriggered: {
+            if (!root.visible || !root.awaitingFirstFrame)
+                return
+            root.awaitingFirstFrame = false
+            root.setSurfaceOpacity(1)
+            enterAnim.restart()
+        }
+    }
 
     anchor {
         window: root.anchorItem ? root.anchorItem.QsWindow.window : null
@@ -205,16 +232,24 @@ PopupWindow {
             root.outsideWatcherArmed = false
             root.openGeneration++
             if (root.visible) {
+                enterAnim.stop()
+                card.opacity = 0
+                root.setSurfaceOpacity(0)
+                root.awaitingFirstFrame = true
+                firstFrameGate.restart()
                 PopupCoordinator.activate(root)
                 if (root.anchorItem) {
                     root.updatePlacement()
                     root.requestKeyboardFocus()
                     inner.forceActiveFocus()
-                    enterAnim.restart()
                 }
                 outsideArmTimer.restart()
             } else {
                 PopupCoordinator.deactivate(root)
+                root.awaitingFirstFrame = false
+                firstFrameGate.stop()
+                root.setSurfaceOpacity(0)
+                enterAnim.stop()
                 surfaceFocus.running = false
                 pointerPosition.running = false
             }

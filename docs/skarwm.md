@@ -23,7 +23,7 @@ the unused area around separated bar sections is rendered black. To use the
 anush Picom defaults, add:
 
 ```text
-autostart : "picom --config ${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/skarwm/anush}/picom/picom.conf ${ANUSH_PICOM_ARGS:---no-use-damage} -b"
+autostart : "picom --config ${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/skarwm/anush}/picom/picom.conf ${ANUSH_PICOM_ARGS:-} -b"
 ```
 
 This line is required for separated-section transparency unless another X11
