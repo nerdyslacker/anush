@@ -41,7 +41,10 @@ WindowManagerBackend {
         { name: "Floating", glyph: "󰕰", command: "floating" }
     ]
 
-    readonly property string msgPath: "skarwm-msg"
+    readonly property string msgPath: {
+        const configured = String(Quickshell.env("SKARWM_MSG") ?? "")
+        return configured !== "" ? configured : "skarwm-msg"
+    }
     property var rawOutputs: []
     property var workspaceConfigurations: ({})
     property var registeredScratchpads: []

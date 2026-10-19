@@ -134,6 +134,16 @@ ensure_fastfetch_config :: proc(config_dir: string) {
 configure_shell_environment :: proc(root: string) {
     configure_icon_theme_environment()
 
+    skarwm_msg_buf: [4096]u8
+    if os.get_env_buf(skarwm_msg_buf[:], "SKARWM_MSG") == "" {
+        skarwm_msg, _ := filepath.join(
+            []string{root, "..", "skarwm", "build", "skarwm-msg"})
+        defer delete(skarwm_msg)
+        if os.exists(skarwm_msg) {
+            _ = os.set_env("SKARWM_MSG", skarwm_msg)
+        }
+    }
+
     package_config := fmt.aprintf("%s/config", root)
     defer delete(package_config)
     _ = os.set_env("ANUSH_PACKAGE_CONFIG_DIR", package_config)

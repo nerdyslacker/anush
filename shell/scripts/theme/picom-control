@@ -25,9 +25,9 @@ def picom_config() -> Path:
 
 
 def picom_command(config: Path) -> list[str]:
-    # The bundled config enables damage tracking. Disabling it here overrides
-    # the config and makes short ARGB popup fades arrive in coarse redraw
-    # bursts on some X11 drivers. Keep extra arguments opt-in.
+    # Damage tracking is disabled in the bundled config because mapping ARGB
+    # popup surfaces can otherwise leave parts of underlying windows stale.
+    # Keep extra arguments opt-in so users can override that choice explicitly.
     arguments = shlex.split(os.environ.get("ANUSH_PICOM_ARGS", ""))
     return ["picom", "--config", str(config), *arguments, "-b"]
 

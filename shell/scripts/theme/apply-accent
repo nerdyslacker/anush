@@ -71,6 +71,16 @@ secondary_sgr=$(hex_to_sgr "$secondary")
 
 config_dir=${ANUSH_CONFIG_DIR:-$(CDPATH= cd "$(dirname "$0")/../../../config" && pwd)}
 message=$(command -v "$wm_message" 2>/dev/null || true)
+if [ -z "$message" ]; then
+    message=$(command -v skarwm-msg 2>/dev/null || true)
+fi
+active_config=
+if [ -n "$message" ]; then
+    active_config=$(
+        "$message" get-version 2>/dev/null \
+            | sed -n 's/.*"loaded_config_file_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+    )
+fi
 
 rewrite() {
     file=$1
@@ -87,6 +97,39 @@ rewrite() {
     fi
 }
 
+rewrite_key() {
+    file=$1
+    key=$2
+    value=$3
+    [ -f "$file" ] && [ -w "$file" ] || return 0
+
+    temporary=$(mktemp "${file}.accent.XXXXXX") || return 1
+    if grep -Eq "^[[:space:]]*${key}[[:space:]]*:" "$file"; then
+        sed -E "s|^[[:space:]]*${key}[[:space:]]*:.*$|${key} : ${value}|" \
+            "$file" > "$temporary" || { rm -f "$temporary"; return 1; }
+    else
+        sed '$a\
+'"${key} : ${value}" "$file" > "$temporary" \
+            || { rm -f "$temporary"; return 1; }
+    fi
+    chmod 644 "$temporary"
+    mv "$temporary" "$file"
+}
+
+rewrite_decoration_palette() {
+    file=$1
+    [ -z "$decorations_enabled" ] \
+        || rewrite_key "$file" decorations_enabled "$decorations_enabled"
+    rewrite_key "$file" decoration_color_source explicit
+    rewrite_key "$file" decoration_accent "$accent"
+    rewrite_key "$file" decoration_active_background "$decoration_active_background"
+    rewrite_key "$file" decoration_inactive_background "$decoration_inactive_background"
+    rewrite_key "$file" decoration_active_foreground "$decoration_active_foreground"
+    rewrite_key "$file" decoration_inactive_foreground "$decoration_inactive_foreground"
+    rewrite_key "$file" decoration_active_border "$decoration_active_border"
+    rewrite_key "$file" decoration_inactive_border "$decoration_inactive_border"
+}
+
 rewrite "$config_dir/rofi/colors.rasi" \
     "/^[[:space:]]*(accent|border|prompt-fg):/ s/#[0-9A-Fa-f]{6}/$accent/"
 
@@ -98,6 +141,34 @@ rewrite "$config_dir/dunst/dunstrc" \
 
 rewrite "$config_dir/fastfetch/config.jsonc" \
     "/THEME: fastfetch_primary/ s|38;2;[0-9]+;[0-9]+;[0-9]+|$accent_sgr|; /THEME: fastfetch_foreground/ s|38;2;[0-9]+;[0-9]+;[0-9]+|$foreground_sgr|; /THEME: fastfetch_secondary/ s|38;2;[0-9]+;[0-9]+;[0-9]+|$secondary_sgr|"
+
+# Keep the configuration used at the next skarwm startup in sync with the
+# live palette. Otherwise a missing IPC client (or a restart) restores the old
+# focus border even though every application already uses the new accent.
+if [ -n "$active_config" ]; then
+    wm_config=$active_config
+elif [ -n "${SKARWM_CONFIG:-}" ]; then
+    wm_config=$SKARWM_CONFIG
+elif [ -n "${XDG_CONFIG_HOME:-}" ]; then
+    if [ -f "$XDG_CONFIG_HOME/skarwm/skarwm.rc" ]; then
+        wm_config=$XDG_CONFIG_HOME/skarwm/skarwm.rc
+    else
+        wm_config=$XDG_CONFIG_HOME/skarwm/config.rc
+    fi
+elif [ -n "${HOME:-}" ]; then
+    if [ -f "$HOME/.config/skarwm/skarwm.rc" ]; then
+        wm_config=$HOME/.config/skarwm/skarwm.rc
+    else
+        wm_config=$HOME/.config/skarwm/config.rc
+    fi
+else
+    wm_config=
+fi
+if [ -n "$wm_config" ]; then
+    rewrite "$wm_config" \
+        "/^[[:space:]]*sel_outer_border[[:space:]]*:/ s/#[0-9A-Fa-f]{6}/$accent/"
+    rewrite_decoration_palette "$wm_config"
+fi
 
 [ -z "$message" ] || "$message" theme-colors \
     "$accent" "$decoration_active_background" \

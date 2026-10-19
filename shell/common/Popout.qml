@@ -48,7 +48,10 @@ PopupWindow {
 
     visible: false
     grabFocus: false
-    color: "transparent"
+    // X11 only preserves the transparent pixels around rounded corners while
+    // a compositor owns the screen. Fall back to a fully opaque surface when
+    // Picom is off instead of exposing those pixels as a black rectangle.
+    color: Wm.picomEnabled ? "transparent" : Theme.bg
 
     // A freshly mapped X11 popup can briefly expose an old compositor pixmap
     // before Qt submits its first frame. Set the native opacity before it maps,
@@ -233,10 +236,19 @@ PopupWindow {
             root.openGeneration++
             if (root.visible) {
                 enterAnim.stop()
-                card.opacity = 0
-                root.setSurfaceOpacity(0)
-                root.awaitingFirstFrame = true
-                firstFrameGate.restart()
+                enterScale.xScale = 1
+                enterScale.yScale = 1
+                if (Wm.picomEnabled) {
+                    card.opacity = 0
+                    root.setSurfaceOpacity(0)
+                    root.awaitingFirstFrame = true
+                    firstFrameGate.restart()
+                } else {
+                    card.opacity = 1
+                    root.setSurfaceOpacity(1)
+                    root.awaitingFirstFrame = false
+                    firstFrameGate.stop()
+                }
                 PopupCoordinator.activate(root)
                 if (root.anchorItem) {
                     root.updatePlacement()
@@ -335,21 +347,29 @@ PopupWindow {
         id: card
         anchors.fill: parent
 
-        transform: Translate { id: slide; y: 0 }
+        // Keep the animation inside the native X11 surface. Translating this
+        // full-size card moved ten pixels beyond the surface boundary, so the
+        // leading edge was visibly clipped until the animation completed.
+        transform: Scale {
+            id: enterScale
+            origin.x: card.width / 2
+            origin.y: card.height / 2
+            xScale: 1
+            yScale: 1
+        }
 
         ParallelAnimation {
             id: enterAnim
-            NumberAnimation { target: slide
-                              property: root.openDirection === "left"
-                                  || root.openDirection === "right" ? "x" : "y"
-                              from: root.openDirection === "bottom"
-                                  || root.openDirection === "right" ? 10 : -10
-                              to: 0
+            NumberAnimation { target: enterScale; property: "xScale"
+                              from: 0.98; to: 1
+                              duration: 160; easing.type: Easing.OutCubic }
+            NumberAnimation { target: enterScale; property: "yScale"
+                              from: 0.98; to: 1
                               duration: 160; easing.type: Easing.OutCubic }
             NumberAnimation { target: card; property: "opacity"; from: 0; to: 1
                               duration: 160 }
         }
-        radius: Theme.radiusLarge
+        radius: Wm.picomEnabled ? Theme.radiusLarge : 0
         color: Theme.bg
         border.width: 1
         border.color: Qt.alpha(Theme.accent, 0.4)
