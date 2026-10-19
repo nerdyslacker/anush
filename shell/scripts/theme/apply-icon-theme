@@ -139,13 +139,22 @@ def dark_accent(accent: str) -> str:
 
 def recolour_svg(text: str, accent: str) -> str:
     text = re.sub(r"#5294e2", accent, text, flags=re.IGNORECASE)
-    return re.sub(r"#4877b1", dark_accent(accent), text,
+    text = re.sub(r"#4877b1", dark_accent(accent), text,
                   flags=re.IGNORECASE)
+    # Papirus uses symbolic color-scheme roles instead of its regular blue
+    # palette for several 16px XDG folders (Public, Documents, Downloads,
+    # Videos, and others). Tint their primary glyph as well or those compact
+    # Thunar icons fall through to the inherited theme's old color.
+    return re.sub(
+        r"(\.ColorScheme-Text\s*\{\s*color\s*:\s*)#[0-9a-fA-F]{6}",
+        rf"\g<1>{accent}", text)
 
 
-def overlay_name(theme: str) -> str:
+def overlay_name(theme: str, accent: str) -> str:
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", theme).strip("-.").casefold()
-    return f"{MANAGED_OVERLAY_PREFIX}{safe or 'Papirus'}{MANAGED_OVERLAY_SUFFIX}"
+    color = accent.removeprefix("#").casefold()
+    return (f"{MANAGED_OVERLAY_PREFIX}{safe or 'papirus'}-{color}"
+            f"{MANAGED_OVERLAY_SUFFIX}")
 
 
 def fixed_place_directories(path: Path) -> list[tuple[int, Path]]:
@@ -178,7 +187,7 @@ def write_recoloured(source: Path, target: Path, accent: str,
 
 def create_papirus_overlay(path: Path, theme: str, accent: str) -> str | None:
     """Generate Papirus folder SVGs using the exact active accent."""
-    managed_name = overlay_name(theme)
+    managed_name = overlay_name(theme, accent)
     data_home = Path(os.environ.get(
         "XDG_DATA_HOME", Path.home() / ".local/share"))
     destination = data_home / "icons" / managed_name
@@ -220,6 +229,29 @@ def create_papirus_overlay(path: Path, theme: str, accent: str) -> str | None:
                     or generic_user_folder):
                 continue
             target_places.mkdir(parents=True, exist_ok=True)
+            # Materialize alias chains from the recolored target already made
+            # above. GTK icon lookup does not continue searching this overlay
+            # after an inherited alias such as folder-publicshare resolves.
+            if source.is_symlink():
+                try:
+                    # Prefer the immediate alias name. A locally customized
+                    # Papirus theme may ultimately resolve generic aliases to
+                    # folder-red-* (or another old color), while the immediate
+                    # folder-publicshare -> folder-image-people relationship
+                    # still identifies our recolored generic target.
+                    linked_name = Path(os.readlink(source)).name
+                    resolved_target = target_places / linked_name
+                    if not resolved_target.is_file():
+                        resolved_name = source.resolve().name.replace(
+                            "-blue", "", 1)
+                        resolved_target = target_places / resolved_name
+                    if resolved_target.is_file():
+                        atomic_write(resolved_target.read_text(errors="replace"),
+                                     target_places / alias_name)
+                        linked = True
+                        continue
+                except (OSError, RuntimeError):
+                    pass
             if write_recoloured(source, target_places / alias_name, accent,
                                 require_change=True):
                 linked = True
@@ -262,9 +294,9 @@ Directories={','.join(directories)}
 
 
 def recolour_folders(theme: str, accent: str) -> str:
-    # Folder recolouring is an explicit capability of Papirus itself. A theme
-    # merely inheriting Papirus is not treated as Papirus: doing so previously
-    # replaced unrelated themes with anush-Papirus on every accent change.
+    # Folder recoloring is an explicit Papirus capability. Do not force a
+    # Papirus folder overlay onto unrelated themes merely because they inherit
+    # Papirus as a fallback; those themes stay selected and untouched.
     if not theme.casefold().startswith("papirus"):
         return theme
     path = theme_path(theme)
@@ -274,6 +306,28 @@ def recolour_folders(theme: str, accent: str) -> str:
     if not normalized:
         return theme
     return create_papirus_overlay(path, theme, normalized) or theme
+
+
+def remove_stale_overlays(theme: str, keep: str) -> None:
+    """Keep accent-specific cache invalidation without accumulating themes."""
+    data_home = Path(os.environ.get(
+        "XDG_DATA_HOME", Path.home() / ".local/share"))
+    icon_home = data_home / "icons"
+    try:
+        children = list(icon_home.iterdir())
+    except OSError:
+        return
+    for child in children:
+        if child.name == keep or not child.is_dir() \
+                or not is_managed_overlay(child.name):
+            continue
+        inherited = index_value(child, "Inherits").split(",")[0].strip()
+        if inherited != theme:
+            continue
+        try:
+            shutil.rmtree(child)
+        except OSError:
+            pass
 
 
 def set_ini_value(path: Path, section: str, key: str, value: str) -> None:
@@ -350,6 +404,8 @@ def main() -> int:
         if len(sys.argv) >= 4:
             applied = recolour_folders(selected, sys.argv[3])
         configure_desktops(applied, theme_path(applied))
+        if applied != selected:
+            remove_stale_overlays(selected, applied)
         return 0
     if len(sys.argv) == 4 and sys.argv[1] == "--accent":
         selected = sys.argv[2]
@@ -363,6 +419,8 @@ def main() -> int:
         # Re-applying the chosen theme also repairs old anush overlay settings
         # and tells running desktop settings daemons to invalidate icon caches.
         configure_desktops(applied, theme_path(applied))
+        if applied != selected:
+            remove_stale_overlays(selected, applied)
         return 0
     return 2
 
