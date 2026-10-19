@@ -18,7 +18,7 @@ WindowManagerBackend {
         windowAppIdentity: true,
         focusWindow: true,
         closeWindow: false,
-        moveWindowToWorkspace: false,
+        moveWindowToWorkspace: true,
         moveWindowToScreen: false,
         scratchpad: true,
         virtualScreens: true,
@@ -247,6 +247,16 @@ WindowManagerBackend {
     function focusWindow(id) {
         if (!connected || id === undefined || id === null) return false
         Quickshell.execDetached([msgPath, "focus", "window", String(id)])
+        return true
+    }
+
+    function moveWindowToWorkspace(windowId, workspaceId) {
+        if (!connected || windowId === undefined || windowId === null)
+            return false
+        Quickshell.execDetached([
+            ShellState.scriptsDir + "/window/move-to-workspace",
+            msgPath, String(windowId), String(workspaceId)
+        ])
         return true
     }
 

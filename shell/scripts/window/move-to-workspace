@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# skarwm moves the focused client. Keep focus and move ordered so overview
+# drag-and-drop can target an arbitrary window without racing detached IPC calls.
+set -eu
+
+message=${1:?usage: move-to-workspace SKARWM_MSG WINDOW_ID WORKSPACE_ID}
+window_id=${2:?usage: move-to-workspace SKARWM_MSG WINDOW_ID WORKSPACE_ID}
+workspace_id=${3:?usage: move-to-workspace SKARWM_MSG WINDOW_ID WORKSPACE_ID}
+
+case $window_id in
+    ''|*[!0-9]*) exit 2 ;;
+esac
+case $workspace_id in
+    ''|*[!0-9]*) exit 2 ;;
+esac
+
+"$message" focus window "$window_id"
+"$message" move workspace "$workspace_id"

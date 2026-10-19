@@ -23,6 +23,7 @@ singleton TagConfig components/Workspaces/TagConfig.qml
 singleton LauncherState components/Launcher/LauncherState.qml
 singleton BarVisibility components/Bar/BarVisibility.qml
 singleton WindowListState components/Workspaces/WindowListState.qml
+singleton WindowPreviewCache components/Workspaces/WindowPreviewCache.qml
 singleton TrayState components/Tray/TrayState.qml
 singleton DisplayConfigurationService components/Displays/DisplayConfigurationService.qml
 singleton SkarwmConfigService components/Skarwm/SkarwmConfigService.qml

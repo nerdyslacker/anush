@@ -1,0 +1,30 @@
+#!/bin/sh
+
+# Capture one X11 client into an atomic PNG used by the Alt+Tab overview.
+set -eu
+
+window_id=${1:?usage: window-preview WINDOW_ID OUTPUT}
+output=${2:?usage: window-preview WINDOW_ID OUTPUT}
+
+case $window_id in
+    0x*)
+        hexadecimal=${window_id#0x}
+        case $hexadecimal in
+            ''|*[!0-9A-Fa-f]*) exit 2 ;;
+        esac
+        ;;
+    *)
+        case $window_id in
+            ''|*[!0-9]*) exit 2 ;;
+        esac
+        ;;
+esac
+
+mkdir -p "$(dirname "$output")"
+temporary="${output}.tmp.$$.png"
+trap 'rm -f "$temporary"' EXIT HUP INT TERM
+
+magick import -silent -window "$window_id" -thumbnail '420x240>' \
+    "png:$temporary"
+mv "$temporary" "$output"
+trap - EXIT HUP INT TERM

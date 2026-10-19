@@ -44,6 +44,7 @@ Core requirements:
 - Quickshell
 - Python 3
 - `xprop`
+- ImageMagick (`magick`) for wallpaper palettes and Alt+Tab window previews
 - Fontconfig (`fc-list`)
 - JetBrainsMono Nerd Font (default UI font; other installed Nerd Fonts are selectable)
 - Symbols Nerd Font Mono

@@ -63,6 +63,11 @@ autostart : "xss-lock -- anushctl lock"
 Window-border, corner-radius, decoration, and theme controls use `skarwm-msg`
 to update the running WM without rewriting its rc file.
 
+The Alt+Tab overview uses ImageMagick to capture window previews when it opens.
+Its window cards can be dragged onto a tag in the workspace strip; anush orders
+skarwm's focus and move IPC calls so the dragged window, rather than whichever
+client was previously focused, is sent to the target tag.
+
 While anush is connected through skarwm's shell UI subscription, automatic rc
 hot reload is suspended. Shell controls apply gaps, window radius, and
 decorations through live IPC commands, then persist their values without

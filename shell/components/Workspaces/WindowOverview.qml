@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import "../.."
+import Quickshell.Io
 
 // One instance lives on every bar. Only the instance on skarwm's focused
 // output opens, while its snapshot includes windows from every output/tag.
@@ -12,6 +13,7 @@ Popout {
     property var flatWindows: []
     property int selectedWorkspaceIndex: -1
     property int selectedWindowIndex: -1
+    property bool draggingWindow: false
 
     readonly property var selectedWorkspace:
         selectedWorkspaceIndex >= 0 && selectedWorkspaceIndex < workspaceData.length
@@ -22,7 +24,11 @@ Popout {
             ? selectedWorkspace.windows[selectedWindowIndex] : null
 
     cardWidth: 760
-    cardHeight: 470
+    cardHeight: 600
+
+    function windowWorkspace(win) {
+        return Number(win?.workspace ?? win?.workspaceId)
+    }
 
     function anchorBelongsTo(rect) {
         if (!anchorItem || !rect)
@@ -34,14 +40,15 @@ Popout {
 
     function visibleWindows() {
         return Wm.windows.filter(win => !win.dock && !win.scratchpad
-            && win.workspace !== null && win.workspace !== undefined)
+            && (win.workspace !== null && win.workspace !== undefined
+                || win.workspaceId !== null && win.workspaceId !== undefined))
     }
 
     function buildSnapshot() {
         const windows = visibleWindows()
         let highest = Math.max(1, TagConfig.count)
         for (const win of windows)
-            highest = Math.max(highest, Number(win.workspace))
+            highest = Math.max(highest, windowWorkspace(win))
         for (const output of Wm.outputs) {
             const current = Number(output.current_workspace)
             if (isFinite(current)) highest = Math.max(highest, current)
@@ -50,7 +57,7 @@ Popout {
         const groups = []
         const flattened = []
         for (let tag = 1; tag <= highest; ++tag) {
-            const grouped = windows.filter(win => Number(win.workspace) === tag)
+            const grouped = windows.filter(win => windowWorkspace(win) === tag)
             grouped.sort((a, b) => {
                 const outputOrder = String(a.output).localeCompare(String(b.output))
                 if (outputOrder !== 0) return outputOrder
@@ -75,7 +82,7 @@ Popout {
     function selectWindow(win) {
         if (!win) return
         const workspaceIndex = workspaceData.findIndex(
-            workspace => workspace.id === Number(win.workspace))
+            workspace => workspace.id === windowWorkspace(win))
         if (workspaceIndex < 0) return
         selectedWorkspaceIndex = workspaceIndex
         selectedWindowIndex = workspaceData[workspaceIndex].windows.findIndex(
@@ -141,6 +148,36 @@ Popout {
         visible = false
     }
 
+    function workspaceIdForTag(tag) {
+        const workspace = Wm.workspaces.find(item =>
+            Number(item.index) + 1 === Number(tag)
+                || Number(item.id) === Number(tag))
+        return workspace ? workspace.id : String(tag)
+    }
+
+    function moveWindow(win, tag) {
+        if (!win || Wm.capabilities.moveWindowToWorkspace !== true)
+            return
+        const targetId = workspaceIdForTag(tag)
+        if (!Wm.moveWindowToWorkspace(win.id, targetId))
+            return
+        const moved = Object.assign({}, win, {
+            workspace: Number(tag), workspaceId: String(targetId)
+        })
+        const next = workspaceData.map(group => Object.assign({}, group, {
+            windows: group.id === Number(tag)
+                ? group.windows.filter(item => String(item.id) !== String(win.id))
+                    .concat([moved])
+                : group.windows.filter(item => String(item.id) !== String(win.id))
+        }))
+        workspaceData = next
+        flatWindows = next.reduce((all, group) => all.concat(group.windows), [])
+        selectedWorkspaceIndex = next.findIndex(group => group.id === Number(tag))
+        selectedWindowIndex = selectedWorkspaceIndex >= 0
+            ? next[selectedWorkspaceIndex].windows.findIndex(
+                item => String(item.id) === String(win.id)) : -1
+    }
+
     function handleCommand(action) {
         if (!visible) {
             if (action === "next") openOverview(1)
@@ -204,13 +241,31 @@ Popout {
                 required property var modelData
                 required property int index
                 readonly property bool selected: index === root.selectedWorkspaceIndex
+                readonly property bool dropTarget: workspaceDrop.containsDrag
 
-                width: 112
+                width: Math.max(72, Math.min(112,
+                    (workspaceList.width - Math.max(0,
+                        root.workspaceData.length - 1) * workspaceList.spacing)
+                        / Math.max(1, root.workspaceData.length)))
                 height: workspaceList.height
                 radius: Theme.radiusMedium
-                color: selected ? Qt.alpha(Theme.accent, 0.2) : Theme.gray2
-                border.width: selected ? 2 : 1
-                border.color: selected ? Theme.accent : Theme.gray5
+                color: dropTarget ? Qt.alpha(Theme.success, 0.25)
+                    : selected ? Qt.alpha(Theme.accent, 0.2) : Theme.gray2
+                border.width: selected || dropTarget ? 2 : 1
+                border.color: dropTarget ? Theme.success
+                    : selected ? Theme.accent : Theme.gray5
+
+                DropArea {
+                    id: workspaceDrop
+                    anchors.fill: parent
+                    keys: ["anush-window"]
+                    enabled: Wm.capabilities.moveWindowToWorkspace === true
+                    onDropped: drop => {
+                        root.moveWindow(drop.source.windowData,
+                                        workspaceCard.modelData.id)
+                        drop.acceptProposedAction()
+                    }
+                }
 
                 Column {
                     anchors.fill: parent
@@ -257,6 +312,7 @@ Popout {
                 if (currentIndex >= 0)
                     positionViewAtIndex(currentIndex, ListView.Contain)
             }
+
         }
 
         Row {
@@ -283,7 +339,7 @@ Popout {
 
         Item {
             width: parent.width
-            height: 265
+            height: 390
 
             Text {
                 anchors.centerIn: parent
@@ -298,9 +354,9 @@ Popout {
             GridView {
                 id: windowGrid
                 anchors.fill: parent
-                clip: true
+                clip: !root.draggingWindow
                 cellWidth: width / 3
-                cellHeight: 128
+                cellHeight: 190
                 model: root.selectedWorkspace ? root.selectedWorkspace.windows : []
                 currentIndex: root.selectedWindowIndex
                 interactive: contentHeight > height
@@ -309,7 +365,19 @@ Popout {
                     id: windowCard
                     required property var modelData
                     required property int index
+                    property var windowData: modelData
+                    property bool dragging: false
                     readonly property bool selected: index === root.selectedWindowIndex
+                    readonly property bool previewReady:
+                        WindowPreviewCache.isReady(modelData.id)
+                    readonly property int previewRevision: Number(
+                        WindowPreviewCache.revisions[String(modelData.id)] ?? 0)
+                    readonly property string previewFile:
+                        WindowPreviewCache.path(modelData.id)
+
+                    function capturePreview() {
+                        WindowPreviewCache.request(modelData.id, true)
+                    }
 
                     width: windowGrid.cellWidth - 7
                     height: windowGrid.cellHeight - 7
@@ -317,11 +385,97 @@ Popout {
                     color: selected ? Qt.alpha(Theme.accent, 0.22) : Theme.gray2
                     border.width: selected ? 2 : 1
                     border.color: selected ? Theme.accent : Theme.gray5
+                    opacity: dragging ? 0.45 : 1
+
+                    DragHandler {
+                        id: windowDrag
+                        target: dragProxy
+                        enabled: Wm.capabilities.moveWindowToWorkspace === true
+                        acceptedButtons: Qt.LeftButton
+                        onActiveChanged: {
+                            if (active) {
+                                windowCard.dragging = true
+                                root.draggingWindow = true
+                            } else if (windowCard.dragging) {
+                                dragProxy.Drag.drop()
+                                windowCard.dragging = false
+                                root.draggingWindow = false
+                                dragProxy.x = 0
+                                dragProxy.y = 0
+                            }
+                        }
+                    }
+
+                    Item {
+                        id: dragProxy
+                        property var windowData: windowCard.windowData
+                        x: 0
+                        y: 0
+                        width: windowCard.width
+                        height: windowCard.height
+                        z: 100
+
+                        Drag.active: windowCard.dragging
+                        Drag.source: dragProxy
+                        Drag.keys: ["anush-window"]
+                        Drag.supportedActions: Qt.MoveAction
+                        Drag.hotSpot.x: width / 2
+                        Drag.hotSpot.y: height / 2
+
+                        Rectangle {
+                            anchors.fill: parent
+                            visible: windowCard.dragging
+                            radius: Theme.radiusMedium
+                            color: Theme.gray2
+                            border.width: 2
+                            border.color: Theme.accent
+                            opacity: 0.9
+
+                            Text {
+                                anchors.centerIn: parent
+                                width: parent.width - 20
+                                text: windowCard.modelData.title || "Untitled window"
+                                horizontalAlignment: Text.AlignHCenter
+                                elide: Text.ElideRight
+                                color: Theme.fg
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSize
+                            }
+                        }
+                    }
+
+                    onModelDataChanged: Qt.callLater(windowCard.capturePreview)
+                    Component.onCompleted: windowCard.capturePreview()
 
                     Column {
                         anchors.fill: parent
-                        anchors.margins: 10
-                        spacing: 5
+                        anchors.margins: 8
+                        spacing: 4
+                        Rectangle {
+                            width: parent.width
+                            height: 104
+                            radius: Theme.radiusSmall
+                            color: Theme.surfaceSubtle
+                            clip: true
+
+                            Image {
+                                id: previewImage
+                                anchors.fill: parent
+                                source: "file://" + windowCard.previewFile
+                                    + "?revision=" + windowCard.previewRevision
+                                cache: false
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                            }
+                            Text {
+                                anchors.centerIn: parent
+                                visible: previewImage.status !== Image.Ready
+                                text: "󰖯"
+                                color: windowCard.selected ? Theme.accent : Theme.cyan
+                                font.family: Theme.iconFontFamily
+                                font.pixelSize: Theme.iconSizeLarge * 2
+                            }
+                        }
                         Row {
                             width: parent.width
                             spacing: 8
@@ -329,7 +483,7 @@ Popout {
                                 text: "󰖯"
                                 color: windowCard.selected ? Theme.accent : Theme.cyan
                                 font.family: Theme.iconFontFamily
-                                font.pixelSize: Theme.iconSizeLarge
+                                font.pixelSize: Theme.iconSize
                             }
                             Text {
                                 width: parent.width - 30
@@ -343,26 +497,15 @@ Popout {
                         }
                         Text {
                             width: parent.width
-                            height: 38
+                            height: 20
                             text: windowCard.modelData.title || "Untitled window"
                             wrapMode: Text.Wrap
-                            maximumLineCount: 2
+                            maximumLineCount: 1
                             elide: Text.ElideRight
                             color: Theme.fg
                             font.family: Theme.fontFamily
                             font.pixelSize: Theme.fontSize
                             font.bold: windowCard.selected
-                        }
-                        Text {
-                            width: parent.width
-                            text: (windowCard.modelData.output || "Unknown output") + "  ·  "
-                                + (windowCard.modelData.floating ? "Floating"
-                                   : windowCard.modelData.column_layout === "tabbed"
-                                     ? "Tabbed" : "Tiled")
-                            elide: Text.ElideRight
-                            color: windowCard.selected ? Theme.accent : Theme.brightBlack
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize - 2
                         }
                     }
 
@@ -378,13 +521,16 @@ Popout {
                     if (currentIndex >= 0)
                         positionViewAtIndex(currentIndex, GridView.Contain)
                 }
+
             }
         }
 
         Text {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
-            text: "Alt+Tab: all windows  ·  Release Alt: open  ·  Esc: cancel"
+            text: Wm.capabilities.moveWindowToWorkspace === true
+                ? "Alt+Tab: all windows  ·  Drag a preview onto a tag to move  ·  Release Alt: open"
+                : "Alt+Tab: all windows  ·  Release Alt: open  ·  Esc: cancel"
             color: Theme.brightBlack
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize - 2
