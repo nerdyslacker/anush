@@ -9,14 +9,16 @@ grid, tabbed, stacking, monocle, dwindle, and floating modes get distinct
 shapes; dynamically discovered bspwm and dwm layouts use the closest matching
 shape and fall back to a tiled diagram.
 
-The corner-radius slider always changes shell surfaces. Picom must be enabled
-for compositor-provided window corners; skarwm applies its native window radius
-live. The value is stored as `theme.cornerRadius`, where zero keeps
-non-circular surfaces square.
+The corner-radius slider always changes shell surfaces. On X11, Anush shapes
+the native bar and popup windows as well as their QML content, so rounded
+outlines do not require Picom. skarwm applies its native window radius live.
+The value is stored as `theme.cornerRadius`, where zero keeps non-circular
+surfaces square.
 
 The Picom switch starts or stops the compositor immediately and persists the
-preference. Separated bar sections need an X11 compositor so the unused panel
-area remains transparent.
+preference. It adds translucency and composited animation; native X Shape
+bounds keep separated bar gaps and rounded popup corners wrapper-free when it
+is disabled.
 
 ## Themes
 

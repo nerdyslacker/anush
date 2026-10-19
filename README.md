@@ -142,4 +142,4 @@ tools/                   development and real-WM testing tools
 ## Inspiration
 
 The desktop setup was inspired by
-[drew/dwm-setup](https://justaguy.dev/drew/dwm-setup).
+[drew/butterdwm](https://justaguy.dev/drew/butterdwm).

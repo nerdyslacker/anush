@@ -1,6 +1,7 @@
 import QtQuick
 import "../.."
 import Quickshell
+import Quickshell.Io
 
 // PanelWindow publishes the EWMH dock/strut that skarwm uses to reserve the
 // bar's space. In fit-content mode the native window itself becomes compact,
@@ -15,6 +16,7 @@ PanelWindow {
     readonly property bool separated: BarVisibility.separateSections && !compact
     readonly property bool separatedHorizontal: separated && !vertical
     readonly property bool separatedVertical: separated && vertical
+    readonly property bool compositedCorners: Wm.picomEnabled && !Wm.picomBusy
     readonly property real compactScreenMargin: 8
     readonly property int floatingGap: BarVisibility.floating ? Theme.surfaceGap : 0
     // A compact panel cannot use margins on its unanchored (centred) axis.
@@ -28,6 +30,22 @@ PanelWindow {
     readonly property real sectionEdgeOffset: BarVisibility.floating ? 0 : Theme.surfaceGap
     readonly property real maximumCompactExtent: Math.max(Theme.effectiveBarHeight, screenLongExtent > 0 ? screenLongExtent - 2 * compactScreenMargin : vertical ? compactContentHeight : compactContentWidth)
     readonly property real longExtent: vertical ? height : width
+    readonly property int nativeX: Math.round(Number(modelData?.x ?? 0)
+        + (vertical
+            ? (BarVisibility.barPosition === "right"
+                ? Number(modelData?.width ?? width) - width - root.floatingGap
+                : root.floatingGap)
+            : (compactHorizontal
+                ? (Number(modelData?.width ?? width) - width) / 2
+                : root.floatingGap)))
+    readonly property int nativeY: Math.round(Number(modelData?.y ?? 0)
+        + (vertical
+            ? (compactVertical
+                ? (Number(modelData?.height ?? height) - height) / 2
+                : root.floatingGap)
+            : (BarVisibility.barPosition === "bottom"
+                ? Number(modelData?.height ?? height) - height - root.floatingGap
+                : root.floatingGap)))
     readonly property var widgetSources: ({
             launcher: Qt.resolvedUrl("../Launcher/Launcher.qml"),
             tags: Qt.resolvedUrl("../Workspaces/Tags.qml"),
@@ -86,8 +104,100 @@ PanelWindow {
     // Keep the native window surface ARGB. Giving PanelWindow a translucent
     // color can be flattened against black by X11 compositors; the child
     // rectangle below paints the requested opacity onto this clear surface.
-    color: "transparent"
+    color: root.compositedCorners ? "transparent" : Theme.bg
     visible: Theme.barStateReady && BarVisibility.showOnScreen(modelData)
+    surfaceFormat.opaque: false
+
+    function appendShape(command, item, radius) {
+        if (!item || item.width <= 0 || item.height <= 0)
+            return
+        const rect = root.itemRect(item)
+        command.push(String(Math.round(rect.x)), String(Math.round(rect.y)),
+            String(Math.round(rect.width)), String(Math.round(rect.height)),
+            String(Math.round(radius)))
+    }
+
+    function scheduleSurfaceShape() {
+        if (!root.backingWindowVisible)
+            return
+        if (surfaceShape.running) {
+            surfaceShape.rerun = true
+            return
+        }
+        surfaceShapeTimer.restart()
+    }
+
+    function applySurfaceShape() {
+        if (!root.backingWindowVisible || root.width <= 0 || root.height <= 0
+                || surfaceShape.running)
+            return
+        const command = [
+            ShellState.scriptsDir + "/window/shape-window"
+        ]
+        if (root.compositedCorners)
+            command.push("--clear")
+        command.push(
+            String(Quickshell.processId),
+            String(root.nativeX), String(root.nativeY),
+            String(Math.round(root.width)), String(Math.round(root.height))
+        )
+        if (root.compositedCorners) {
+            surfaceShape.command = command
+            surfaceShape.running = true
+            return
+        }
+        if (root.separated) {
+            if (leftCluster.contentPresent)
+                root.appendShape(command, leftCluster, Theme.radiusMedium)
+            if (centerCluster.contentPresent)
+                root.appendShape(command, centerCluster, Theme.radiusMedium)
+            if (endCluster.contentPresent)
+                root.appendShape(command, endCluster, Theme.radiusMedium)
+        } else {
+            root.appendShape(command, panel, Theme.radiusMedium)
+        }
+        if (command.length <= 6)
+            return
+        surfaceShape.command = command
+        surfaceShape.running = true
+    }
+
+    onWindowConnected: root.scheduleSurfaceShape()
+    onBackingWindowVisibleChanged: root.scheduleSurfaceShape()
+    onWidthChanged: root.scheduleSurfaceShape()
+    onHeightChanged: root.scheduleSurfaceShape()
+    onNativeXChanged: root.scheduleSurfaceShape()
+    onNativeYChanged: root.scheduleSurfaceShape()
+    onSeparatedChanged: root.scheduleSurfaceShape()
+    onCompactChanged: root.scheduleSurfaceShape()
+
+    Timer {
+        id: surfaceShapeTimer
+        interval: 16
+        onTriggered: root.applySurfaceShape()
+    }
+
+    Process {
+        id: surfaceShape
+        property bool rerun: false
+        onExited: {
+            if (!rerun)
+                return
+            rerun = false
+            root.scheduleSurfaceShape()
+        }
+    }
+
+    Connections {
+        target: Theme
+        function onRadiusMediumChanged() { root.scheduleSurfaceShape() }
+    }
+
+    Connections {
+        target: Wm
+        function onPicomEnabledChanged() { root.scheduleSurfaceShape() }
+        function onPicomBusyChanged() { root.scheduleSurfaceShape() }
+    }
 
     WindowOverview {
         anchorItem: panel
@@ -162,6 +272,11 @@ PanelWindow {
         height: implicitHeight
         radius: Theme.radiusMedium
         color: root.separated && contentPresent ? Qt.alpha(Theme.bg, Theme.barBackgroundOpacity) : "transparent"
+        onXChanged: root.scheduleSurfaceShape()
+        onYChanged: root.scheduleSurfaceShape()
+        onWidthChanged: root.scheduleSurfaceShape()
+        onHeightChanged: root.scheduleSurfaceShape()
+        onContentPresentChanged: root.scheduleSurfaceShape()
 
         Row {
             id: horizontalLayout
@@ -205,6 +320,10 @@ PanelWindow {
         // The panel is flush with screen edges, so only round it when the
         // configured radius can be shown without changing its geometry.
         radius: Theme.radiusMedium
+        onXChanged: root.scheduleSurfaceShape()
+        onYChanged: root.scheduleSurfaceShape()
+        onWidthChanged: root.scheduleSurfaceShape()
+        onHeightChanged: root.scheduleSurfaceShape()
 
         // Widget mouse areas sit above this one and keep their own actions.
         // Right-clicking any otherwise empty part of the bar remains a stable
