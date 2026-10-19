@@ -26,6 +26,13 @@ BarModule {
                                : unitsOverride === "c" ? false
                                : Qt.locale().measurementSystem !== Locale.MetricSystem
 
+    function toggleUnits() {
+        ShellState.updateSection("weather", {
+            location: location,
+            units: useF ? "c" : "f"
+        })
+    }
+
     function loadSettings() {
         const nextUnits = String(ShellState.state.weather.units ?? "").toLowerCase()
         const nextLocation = String(ShellState.state.weather.location ?? "")
@@ -67,7 +74,9 @@ BarModule {
     label: hasWeather ? temp + "°" : fetch.running ? "…" : "!"
 
     onClicked: mouse => {
-        if (mouse.button === Qt.RightButton) {
+        if (mouse.button === Qt.MiddleButton) {
+            root.toggleUnits()
+        } else if (mouse.button === Qt.RightButton) {
             forecast.visible = false
             settings.openSettings()
         } else {

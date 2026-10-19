@@ -179,7 +179,7 @@ Singleton {
         {
             key: "commands",
             label: "Commands",
-            icon: "󰀄",
+            icon: "󰘳",
             defaultCluster: "right"
         }
     ]

@@ -1,10 +1,14 @@
 import QtQuick
 import "../.."
+import Quickshell
+import Quickshell.Io
 
-// Battery status is kept separate from CPU/RAM/disk and opens the power-state
-// controls on a left click.
+// Battery status is kept separate from CPU/RAM/disk. Left click opens the
+// power controls, middle click toggles keep-awake, and right click opens tlpui.
 BarModule {
     id: root
+
+    property bool tlpuiAvailable: false
 
     visible: BarVisibility.enabled("battery") && Sys.hasBattery
     leadingIcon: Sys.keepAwake ? "󰅶" : ""
@@ -26,6 +30,18 @@ BarModule {
     onClicked: mouse => {
         if (mouse.button === Qt.LeftButton)
             popup.visible = !popup.visible
+        else if (mouse.button === Qt.MiddleButton)
+            Sys.setKeepAwake(!Sys.keepAwake)
+        else if (mouse.button === Qt.RightButton && tlpuiAvailable)
+            Quickshell.execDetached(["tlpui"])
+    }
+
+    Process {
+        command: ["sh", "-c", "command -v tlpui 2>/dev/null"]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: root.tlpuiAvailable = text.trim() !== ""
+        }
     }
 
     BatteryPopup {

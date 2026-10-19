@@ -10,7 +10,7 @@ import Quickshell.Io
 BarModule {
     id: root
 
-    icon: "󰀄"
+    icon: "󰘳"
     iconColor: pomoDone ? Theme.bg
         : pomoRunning ? Theme.accent : Qt.alpha(Theme.fg, 0.7)
     label: pomoRunning ? fmtPomo(pomoLeft) : pomoDone ? "0:00" : ""
@@ -34,6 +34,14 @@ BarModule {
     readonly property bool pomoRunning: pomoEndMs > 0
 
     onClicked: mouse => {
+        if (mouse.button === Qt.MiddleButton) {
+            menu.visible = false
+            if (barSettingsPopup)
+                barSettingsPopup.visible = false
+            if (Wm.capabilities.keybindings === true)
+                Wm.showKeybindings()
+            return
+        }
         if (mouse.button === Qt.RightButton) {
             menu.visible = false
             if (barSettingsPopup && barSettingsAnchor) {

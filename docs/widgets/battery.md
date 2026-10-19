@@ -8,3 +8,7 @@ status when a battery is present.
 - **Left click:** Open battery, power-profile, keep-awake, and charge-limit controls.
 
   ![Battery Left Click](screenshots/battery_left_click.png)
+
+- **Middle click:** Toggle keep-awake mode.
+
+- **Right click:** Open `tlpui` when it is installed; otherwise do nothing.

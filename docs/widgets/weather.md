@@ -8,7 +8,7 @@ Shows current conditions and temperature from the configured weather location.
 
   ![Weather Left Click](screenshots/weather_left_click.png)
 
-- **Middle click:** Open the forecast, like left click.
+- **Middle click:** Toggle between Celsius and Fahrenheit.
 - **Right click:** Open location and unit settings.
 
   ![Weather Right Click](screenshots/weather_right_click.png)

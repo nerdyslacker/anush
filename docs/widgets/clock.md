@@ -8,7 +8,9 @@ Shows the current date and time and anchors the calendar and event view.
 
   ![Clock Left Click](screenshots/clock_left_click.png)
 
-- **Middle click:** Open the calendar, like left click.
+- **Middle click:** Toggle between date-and-time and time-only display.
+
+- **Hover:** Show the full date and time, including seconds.
 
 - **Right click:** Open `renCal` when installed; otherwise open the calendar.
 

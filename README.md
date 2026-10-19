@@ -19,7 +19,7 @@ notifications, desktop controls, wallpaper and theme integration while leaving
 window management to the active WM.
 
 <div align="center">
-<img src="assets/screenshot.png"/>
+<img src="assets/screenshot_rounded.png"/>
 </div>
 
 ## Supported window managers

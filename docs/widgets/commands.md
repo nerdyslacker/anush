@@ -19,6 +19,9 @@ back automatically if skarwm rejects the reload.
 
   ![Commands Left Click](screenshots/commands_left_click.png)
 
+- **Middle click:** Open the searchable keybindings view when supported by the
+  active window manager.
+
 - **Right click:** Open bar layout and visibility settings.
 
   ![Commands Right Click](screenshots/commands_right_click.png)
