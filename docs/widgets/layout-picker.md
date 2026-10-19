@@ -12,8 +12,8 @@ shape and fall back to a tiled diagram.
 The corner-radius slider always changes shell surfaces. On X11, Anush shapes
 the native bar and popup windows as well as their QML content, so rounded
 outlines do not require Picom. skarwm applies its native window radius live.
-The value is stored as `theme.cornerRadius`, where zero keeps non-circular
-surfaces square.
+The same setting is written to Dunst and reloaded live. The value is stored as
+`theme.cornerRadius`, where zero keeps non-circular surfaces square.
 
 The Picom switch starts or stops the compositor immediately and persists the
 preference. It adds translucency and composited animation; native X Shape

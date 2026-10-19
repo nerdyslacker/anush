@@ -5,10 +5,11 @@
 # monitor-sized composite remains when outputs are connected or removed.
 set -eu
 
-image=${1:?usage: wallpaper-theme IMAGE [GENERATE_THEME] [dark|light] [WM_MSG]}
+image=${1:?usage: wallpaper-theme IMAGE [GENERATE_THEME] [dark|light] [WM_MSG] [OPTIONS]}
 generate_theme=${2:-false}
 theme_mode=${3:-dark}
 wm_message=${4:-}
+shift "$(( $# < 4 ? $# : 4 ))"
 [ -f "$image" ] || {
     printf 'wallpaper-theme: no such image: %s\n' "$image" >&2
     exit 1
@@ -16,10 +17,14 @@ wm_message=${4:-}
 
 feh --bg-fill "$image"
 
+script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
 if [ "$generate_theme" = true ] || [ "$generate_theme" = 1 ]; then
-    script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
     "$script_dir/generate-wallpaper-theme" "$image" "$theme_mode" \
-        --wm-msg "$wm_message"
+        --wm-msg "$wm_message" "$@"
+elif [ "$#" -gt 0 ]; then
+    # A non-themed wallpaper still supersedes any generator orphaned from a
+    # previous rapid selection.
+    "$script_dir/generate-wallpaper-theme" --cancel "$@"
 fi
 
 # Keep the lock screen in sync when Betterlockscreen is installed.

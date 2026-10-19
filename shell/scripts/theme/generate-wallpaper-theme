@@ -2,6 +2,7 @@
 """Generate and apply a cohesive desktop palette from a wallpaper."""
 
 import colorsys
+import fcntl
 import json
 import math
 import os
@@ -11,6 +12,7 @@ import shutil
 import signal
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 
 def clamp(value, low, high):
@@ -351,6 +353,59 @@ def atomic_write(path, text):
     temporary.replace(path)
 
 
+def request_order(request_token):
+    try:
+        timestamp, serial = request_token.split("-", 1)
+        return int(timestamp), int(serial)
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def claim_request(request_file, request_token):
+    if not request_file or not request_token:
+        return True
+    request_file.parent.mkdir(parents=True, exist_ok=True)
+    lock_file = request_file.with_name(request_file.name + ".lock")
+    with lock_file.open("a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            current = request_file.read_text().strip()
+        except OSError:
+            current = ""
+        current_order = request_order(current)
+        requested_order = request_order(request_token)
+        if current_order is not None and requested_order is not None \
+                and current_order > requested_order:
+            return False
+        atomic_write(request_file, request_token + "\n")
+    return True
+
+
+def request_is_current(request_file, request_token):
+    if not request_file or not request_token:
+        return True
+    try:
+        return request_file.read_text().strip() == request_token
+    except OSError:
+        return False
+
+
+def update_matugen_metadata(state_file, image, mode, material,
+                            request_file, request_token):
+    if not request_is_current(request_file, request_token):
+        return
+    state = load_state(state_file)
+    palette = state.get("theme", {}).get("palette")
+    if not isinstance(palette, dict) or palette.get("image") != image \
+            or palette.get("mode") != mode:
+        return
+    palette["generator"] = "matugen"
+    palette["shellGenerator"] = "anush"
+    palette["material"] = material
+    if request_is_current(request_file, request_token):
+        atomic_write(state_file, json.dumps(state, indent=2) + "\n")
+
+
 def load_state(state_file):
     if state_file.is_file():
         return json.loads(state_file.read_text())
@@ -397,7 +452,6 @@ def apply_files(image, semantic, ansi, config_dir, state_file, mode,
         data["shellGenerator"] = shell_generator
     if material:
         data["material"] = material
-    state = load_state(state_file)
     atomic_write(config_dir / "rofi/colors.rasi", f"""/* Generated from wallpaper: {Path(image).name} */
 
 * {{
@@ -459,6 +513,9 @@ mark3_background {semantic['secondary']}
                            rf'\g<1>{color}\2', dunst, flags=re.MULTILINE)
         atomic_write(dunst_path, dunst)
 
+    # Reload immediately before the state write so a palette job never
+    # restores unrelated settings that changed while color extraction ran.
+    state = load_state(state_file)
     state.setdefault("theme", {})["palette"] = data
     atomic_write(state_file, json.dumps(state, indent=2) + "\n")
 
@@ -474,12 +531,30 @@ def reload_components(_wm_message=""):
 def main():
     arguments = sys.argv[1:]
     wm_message = ""
+    request_file = None
+    request_token = ""
     if "--wm-msg" in arguments:
         option_index = arguments.index("--wm-msg")
         if option_index + 1 >= len(arguments):
             raise SystemExit("generate-wallpaper-theme: --wm-msg requires a value")
         wm_message = arguments[option_index + 1]
         del arguments[option_index:option_index + 2]
+    if "--request-file" in arguments:
+        option_index = arguments.index("--request-file")
+        if option_index + 1 >= len(arguments):
+            raise SystemExit("generate-wallpaper-theme: --request-file requires a value")
+        request_file = Path(arguments[option_index + 1])
+        del arguments[option_index:option_index + 2]
+    if "--request-token" in arguments:
+        option_index = arguments.index("--request-token")
+        if option_index + 1 >= len(arguments):
+            raise SystemExit("generate-wallpaper-theme: --request-token requires a value")
+        request_token = arguments[option_index + 1]
+        del arguments[option_index:option_index + 2]
+    if not claim_request(request_file, request_token):
+        return
+    if arguments == ["--cancel"]:
+        return
 
     root = Path(__file__).resolve().parent.parent.parent.parent
     config_dir = Path(os.environ.get("ANUSH_CONFIG_DIR", root / "config"))
@@ -511,20 +586,34 @@ def main():
     elif arguments and Path(arguments[0]).is_file():
         mode = arguments[1] if len(arguments) >= 2 and arguments[1] in ("dark", "light") else "dark"
         image = str(Path(arguments[0]).resolve())
-        generated = palette_from_matugen(image, mode)
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            matugen = executor.submit(palette_from_matugen, image, mode)
+            try:
+                # Apply the inexpensive shell palette immediately. Matugen's
+                # richer toolkit metadata can arrive later without delaying
+                # the visible wallpaper/theme transition.
+                semantic, ansi = palette_from(image)
+                if not request_is_current(request_file, request_token):
+                    return
+                apply_files(image, semantic, ansi, config_dir, state_file, mode,
+                            generator="anush")
+                reload_components(wm_message)
+                generated = matugen.result()
+                if generated:
+                    _, _, material = generated
+                    update_matugen_metadata(
+                        state_file, image, mode, material,
+                        request_file, request_token)
+                return
+            except (OSError, subprocess.SubprocessError, RuntimeError):
+                generated = matugen.result()
         if generated:
             matugen_semantic, matugen_ansi, material = generated
-            try:
-                # The existing extractor follows the wallpaper's complete
-                # palette more closely than a one-seed Material scheme. Keep
-                # it for the shell while retaining matugen roles for GTK/Qt.
-                semantic, ansi = palette_from(image)
-                mode_ready = False
-                shell_generator = "anush"
-            except (OSError, subprocess.SubprocessError, RuntimeError):
-                semantic, ansi = matugen_semantic, matugen_ansi
-                mode_ready = True
-                shell_generator = "matugen"
+            semantic, ansi = matugen_semantic, matugen_ansi
+            mode_ready = True
+            shell_generator = "matugen"
+            if not request_is_current(request_file, request_token):
+                return
             apply_files(image, semantic, ansi, config_dir, state_file, mode,
                         generator="matugen", material=material,
                         mode_ready=mode_ready,
@@ -536,6 +625,8 @@ def main():
         raise SystemExit(
             "usage: generate-wallpaper-theme IMAGE [dark|light] | "
             "--default [dark|light] [ACCENT] [--wm-msg PATH]")
+    if not request_is_current(request_file, request_token):
+        return
     apply_files(image, semantic, ansi, config_dir, state_file, mode,
                 preserve_primary)
     reload_components(wm_message)

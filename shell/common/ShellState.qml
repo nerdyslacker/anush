@@ -48,6 +48,7 @@ Singleton {
     readonly property string filePath: stateDir + "/shell-state.json"
     property bool ready: false
     property var state: defaults()
+    property bool effectiveReloadPending: false
 
     function defaults() {
         return {
@@ -140,7 +141,15 @@ Singleton {
     function reloadEffective() {
         if (migration.running)
             return;
-        configLoader.running = false;
+        if (configLoader.running) {
+            effectiveReloadPending = true;
+            return;
+        }
+        startEffectiveReload();
+    }
+
+    function startEffectiveReload() {
+        effectiveReloadPending = false;
         configLoader.command = [root.scriptsDir + "/config/load-config",
             root.installedConfigPath, root.userConfigPath, root.filePath];
         configLoader.running = true;
@@ -177,6 +186,10 @@ Singleton {
         stdout: StdioCollector { id: configOutput }
         stderr: StdioCollector { id: configErrors }
         onExited: exitCode => {
+            if (root.effectiveReloadPending) {
+                Qt.callLater(() => root.startEffectiveReload());
+                return;
+            }
             const diagnostics = configErrors.text.trim();
             if (diagnostics !== "")
                 console.warn(diagnostics);

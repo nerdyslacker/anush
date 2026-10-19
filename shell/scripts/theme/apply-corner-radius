@@ -1,14 +1,37 @@
 #!/bin/sh
 
-# Keep skarwm's native window corners in sync without reloading its config.
+# Keep native window and notification corners in sync without restarting them.
 set -u
 
 radius=${1:-}
 wm_message=${2:-}
+apply_wm=${3:-true}
 case $radius in
     ''|*[!0-9]*) exit 2 ;;
 esac
 [ "$radius" -le 4096 ] || exit 2
 
-message=$(command -v "$wm_message" 2>/dev/null || true)
-[ -z "$message" ] || "$message" corner-radius "$radius" >/dev/null 2>&1 || true
+if [ "$apply_wm" = true ]; then
+    message=$(command -v "$wm_message" 2>/dev/null || true)
+    [ -z "$message" ] || "$message" corner-radius "$radius" >/dev/null 2>&1 || true
+fi
+
+config_dir=${ANUSH_CONFIG_DIR:-$(CDPATH= cd "$(dirname "$0")/../../../config" && pwd)}
+dunst_config=$config_dir/dunst/dunstrc
+if [ -f "$dunst_config" ] && [ -w "$dunst_config" ]; then
+    temporary=$(mktemp "${dunst_config}.radius.XXXXXX") || exit 1
+    if sed -E "s/^([[:space:]]*corner_radius[[:space:]]*=[[:space:]]*)[0-9]+/\\1$radius/" \
+            "$dunst_config" > "$temporary"; then
+        chmod 644 "$temporary"
+        mv "$temporary" "$dunst_config"
+    else
+        rm -f "$temporary"
+        exit 1
+    fi
+fi
+
+if command -v dunstctl >/dev/null 2>&1; then
+    dunstctl reload >/dev/null 2>&1 || true
+elif command -v pkill >/dev/null 2>&1; then
+    pkill -HUP -x dunst 2>/dev/null || true
+fi

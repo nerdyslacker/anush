@@ -39,10 +39,13 @@ Singleton {
     property string mode: "dark"
     property var themePresets: []
     property bool presetsReady: false
+    property bool initialThemeResolved: false
     property string applicationThemeStatus: ""
     property string wallpaperPresetStatus: ""
     property bool wallpaperPaletteRefreshAttempted: false
     property string externalAppearanceSignature: ""
+    property int paletteRequestSerial: 0
+    property var pendingPaletteCommand: []
     readonly property var activePreset: presetForId(presetId)
     readonly property bool matugenThemeGenerated:
         wallpaperThemeEnabled
@@ -56,14 +59,16 @@ Singleton {
     property bool cornerRadiusStateLoaded: false
     property int appliedCornerRadius: -1
     property string appliedCornerRadiusBackend: ""
+    property bool appliedCornerRadiusWindowReady: false
     readonly property int radiusSmall: Math.round(cornerRadius * 0.5)
     readonly property int radiusMedium: cornerRadius
     readonly property int radiusLarge: Math.round(cornerRadius * 1.5)
     readonly property int surfaceGap: 8
 
-    // Preset files load asynchronously. Never make a helper failure hide the
-    // panel; the bootstrap palette is replaced as soon as loading completes.
+    // Keep the persistent panel off-screen until its first real palette is
+    // ready, so startup never paints a frame with the bootstrap colors.
     readonly property bool barStateReady: ShellState.ready
+        && presetsReady && initialThemeResolved
 
     // Neutral bootstrap values are replaced when JSON loading completes.
     property color black: "#000000"
@@ -132,10 +137,9 @@ Singleton {
         "custom"
     ]
     property string accentName: "orange"
-    readonly property color accent: !wallpaperThemeEnabled
-            && usePresetAccent
-            && activePreset?.accentOverride
-        ? activePreset.accentOverride : mutedAccentColor(accentName)
+    readonly property color accent: wallpaperThemeEnabled ? primary
+        : usePresetAccent && activePreset?.accentOverride
+            ? activePreset.accentOverride : mutedAccentColor(accentName)
     readonly property color activeBackground: !wallpaperThemeEnabled
             && usePresetAccent
             && activePreset?.activeBackground
@@ -312,18 +316,22 @@ Singleton {
     }
 
     function applyExternalCornerRadius() {
-        if (!cornerRadiusStateLoaded
-                || Wm.capabilities.windowRadius !== true)
+        if (!cornerRadiusStateLoaded)
             return
+        const windowReady = Wm.connected
+            && Wm.capabilities.windowRadius === true
         if (appliedCornerRadius === cornerRadius
-                && appliedCornerRadiusBackend === Wm.backendName)
+                && appliedCornerRadiusBackend === Wm.backendName
+                && appliedCornerRadiusWindowReady === windowReady)
             return
         appliedCornerRadius = cornerRadius
         appliedCornerRadiusBackend = Wm.backendName
+        appliedCornerRadiusWindowReady = windowReady
         Quickshell.execDetached([
             root.scriptsDir + "/theme/apply-corner-radius",
             String(cornerRadius),
-            Wm.msgPath
+            Wm.msgPath,
+            windowReady ? "true" : "false"
         ])
     }
 
@@ -340,9 +348,39 @@ Singleton {
     }
 
     function runPaletteCommand(command) {
-        paletteProcess.running = false
-        paletteProcess.command = command
+        paletteRequestSerial += 1
+        const token = String(Date.now()) + "-" + String(paletteRequestSerial)
+        const requested = command.slice()
+        requested.push("--request-file", root.stateDir + "/theme-request")
+        requested.push("--request-token", token)
+        pendingPaletteCommand = requested
+        if (paletteProcess.running) {
+            paletteProcess.running = false
+            return
+        }
+        startPendingPaletteCommand()
+    }
+
+    function startPendingPaletteCommand() {
+        if (paletteProcess.running || pendingPaletteCommand.length === 0)
+            return
+        const requested = pendingPaletteCommand
+        pendingPaletteCommand = []
+        paletteProcess.command = requested
         paletteProcess.running = true
+    }
+
+    function cancelPaletteCommand() {
+        paletteRequestSerial += 1
+        const token = String(Date.now()) + "-" + String(paletteRequestSerial)
+        pendingPaletteCommand = []
+        if (paletteProcess.running)
+            paletteProcess.running = false
+        Quickshell.execDetached([
+            root.scriptsDir + "/theme/generate-wallpaper-theme", "--cancel",
+            "--request-file", root.stateDir + "/theme-request",
+            "--request-token", token
+        ])
     }
 
     function applyWallpaper(path) {
@@ -420,6 +458,8 @@ Singleton {
         presetId = preset.id
         mode = preset.mode
         wallpaperThemeEnabled = false
+        cancelPaletteCommand()
+        initialThemeResolved = true
         usePresetAccent = true
         applyPresetPalette()
         ShellState.updateSection("theme", {
@@ -453,6 +493,7 @@ Singleton {
                 loadState()
             }
         } else {
+            initialThemeResolved = true
             applyPresetPalette()
             accentName = defaultAccentName
             usePresetAccent = true
@@ -467,6 +508,7 @@ Singleton {
                     "--wm-msg", Wm.msgPath
                 ])
             } else {
+                cancelPaletteCommand()
                 applyExternalAccent(accentName)
             }
         }
@@ -591,11 +633,16 @@ Singleton {
 
     function applyActivePalette(propagateExternal) {
         const palette = ShellState.state.theme.palette
-        if (wallpaperThemeEnabled && palette
-                && String(palette.mode ?? "dark") === mode)
+        if (wallpaperThemeEnabled && wallpaperPaletteUsable(palette))
             applyWallpaperPalette(palette, propagateExternal)
         else
             applyPresetPalette()
+    }
+
+    function wallpaperPaletteUsable(palette) {
+        return palette && String(palette.mode ?? "dark") === mode
+            && palette.semantic && Array.isArray(palette.ansi)
+            && palette.ansi.length >= 16
     }
 
     function loadState() {
@@ -627,11 +674,19 @@ Singleton {
         cornerRadius = Math.max(0, Math.round(Number(theme.cornerRadius) || 0))
         cornerRadiusStateLoaded = true
         applyExternalCornerRadius()
+        const palette = theme.palette
         const appearanceSignature = JSON.stringify({
             preset: presetId,
             mode: mode,
             wallpaperEnabled: wallpaperThemeEnabled,
-            palette: theme.palette,
+            // Generator/toolkit metadata may arrive after the visible palette.
+            // Only visual roles should trigger another desktop-wide rewrite.
+            palette: palette ? {
+                image: palette.image,
+                mode: palette.mode,
+                semantic: palette.semantic,
+                ansi: palette.ansi
+            } : null,
             accent: accentName,
             customAccent: customAccent,
             usePresetAccent: usePresetAccent
@@ -640,9 +695,10 @@ Singleton {
             !== externalAppearanceSignature
         externalAppearanceSignature = appearanceSignature
         applyActivePalette(false)
+        if (!wallpaperThemeEnabled || wallpaperPaletteUsable(palette))
+            initialThemeResolved = true
         if (appearanceChanged)
             applyExternalAccent(accentName)
-        const palette = theme.palette
         if (wallpaperThemeEnabled && !wallpaperPaletteRefreshAttempted
                 && (!palette?.image || palette?.generator !== "matugen")) {
             wallpaperPaletteRefreshAttempted = true
@@ -697,9 +753,14 @@ Singleton {
         id: paletteProcess
         stderr: StdioCollector { id: paletteError }
         onExited: exitCode => {
-            if (exitCode === 0)
+            if (root.pendingPaletteCommand.length > 0) {
+                Qt.callLater(() => root.startPendingPaletteCommand())
+            } else if (exitCode === 0) {
                 ShellState.reloadEffective()
-            else {
+            } else if (root.wallpaperThemeEnabled) {
+                // A failed first-time generator falls back to the selected
+                // preset instead of leaving the panel hidden indefinitely.
+                root.initialThemeResolved = true
                 const detail = paletteError.text.trim()
                 console.warn("wallpaper theme:", detail !== ""
                     ? detail : "generator exited with " + exitCode)
@@ -744,6 +805,9 @@ Singleton {
         function onConnectedChanged() {
             if (!Wm.connected) return
             root.applyExternalAccent(root.accentName)
+            // A restarted WM has lost live-only settings even when its backend
+            // name and advertised capabilities are unchanged.
+            root.appliedCornerRadiusWindowReady = false
             root.applyExternalCornerRadius()
         }
     }
