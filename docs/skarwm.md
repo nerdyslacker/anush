@@ -18,17 +18,16 @@ autostart : "anushctl start"
 
 This is the only required skarwm line.
 
-On X11, a compositor is also required for transparent surfaces. Without one,
-the unused area around separated bar sections is rendered black and popup
-windows use square opaque corners rather than black rectangles around rounded
-content. To use the anush Picom defaults, add:
+Anush applies native X Shape bounds to its bar sections and popups, so their
+rounded outlines and cut-out wrapper areas also work without a compositor.
+Picom remains optional for translucency and animated compositing. To use the
+Anush Picom defaults, add:
 
 ```text
 autostart : "picom --config ${ANUSH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/skarwm/anush}/picom/picom.conf ${ANUSH_PICOM_ARGS:-} -b"
 ```
 
-This line is required for separated-section transparency unless another X11
-compositor is already started elsewhere.
+Without a compositor, shaped surfaces remain rounded but render fully opaque.
 
 The Layout picker's **Picom compositor** switch starts or stops Anush's Picom
 instance and stores the preference in Anush state. It does not rewrite this rc

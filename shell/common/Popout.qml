@@ -43,15 +43,20 @@ PopupWindow {
     property real surfaceOpacity: 0
     readonly property string openDirection: positionAtPoint || positionCentered
         ? "free" : BarVisibility.barPosition
+    readonly property bool compositedCorners: Wm.picomEnabled && !Wm.picomBusy
 
     default property alias content: inner.data
 
     visible: false
     grabFocus: false
-    // X11 only preserves the transparent pixels around rounded corners while
-    // a compositor owns the screen. Fall back to a fully opaque surface when
-    // Picom is off instead of exposing those pixels as a black rectangle.
-    color: Wm.picomEnabled ? "transparent" : Theme.bg
+    mask: Region { item: card; radius: Theme.radiusLarge }
+    surfaceFormat.opaque: false
+    onWidthChanged: root.scheduleSurfaceShape()
+    onHeightChanged: root.scheduleSurfaceShape()
+    // The native X Shape bound removes pixels outside the rounded card. Paint
+    // the remaining surface opaquely without Picom so ARGB pixels cannot fall
+    // back to black, while retaining translucency when Picom is present.
+    color: root.compositedCorners ? "transparent" : Theme.bg
 
     // A freshly mapped X11 popup can briefly expose an old compositor pixmap
     // before Qt submits its first frame. Set the native opacity before it maps,
@@ -64,7 +69,55 @@ PopupWindow {
     }
 
     Component.onCompleted: root.setSurfaceOpacity(0)
-    onWindowConnected: root.setSurfaceOpacity(root.surfaceOpacity)
+    onWindowConnected: {
+        root.setSurfaceOpacity(root.surfaceOpacity)
+        root.scheduleSurfaceShape()
+    }
+
+    function scheduleSurfaceShape() {
+        if (root._backingWindow)
+            surfaceShapeTimer.restart()
+    }
+
+    function applySurfaceShape() {
+        if (!root._backingWindow || surfaceShape.running)
+            return
+        const window = root._backingWindow
+        const command = [ShellState.scriptsDir + "/window/shape-window"]
+        if (root.compositedCorners)
+            command.push("--clear")
+        command.push(
+            String(Quickshell.processId),
+            String(Math.round(window.x)), String(Math.round(window.y)),
+            String(Math.round(window.width)), String(Math.round(window.height))
+        )
+        if (!root.compositedCorners)
+            command.push(
+            "0", "0", String(Math.round(root.width)),
+            String(Math.round(root.height)),
+            String(Math.round(Theme.radiusLarge)))
+        surfaceShape.command = command
+        surfaceShape.running = true
+    }
+
+    Timer {
+        id: surfaceShapeTimer
+        interval: 16
+        onTriggered: root.applySurfaceShape()
+    }
+
+    Process { id: surfaceShape }
+
+    Connections {
+        target: Theme
+        function onRadiusLargeChanged() { root.scheduleSurfaceShape() }
+    }
+
+    Connections {
+        target: Wm
+        function onPicomEnabledChanged() { root.scheduleSurfaceShape() }
+        function onPicomBusyChanged() { root.scheduleSurfaceShape() }
+    }
 
     Timer {
         id: firstFrameGate
@@ -255,6 +308,7 @@ PopupWindow {
                     root.requestKeyboardFocus()
                     inner.forceActiveFocus()
                 }
+                root.scheduleSurfaceShape()
                 outsideArmTimer.restart()
             } else {
                 PopupCoordinator.deactivate(root)
@@ -369,7 +423,7 @@ PopupWindow {
             NumberAnimation { target: card; property: "opacity"; from: 0; to: 1
                               duration: 160 }
         }
-        radius: Wm.picomEnabled ? Theme.radiusLarge : 0
+        radius: Theme.radiusLarge
         color: Theme.bg
         border.width: 1
         border.color: Qt.alpha(Theme.accent, 0.4)

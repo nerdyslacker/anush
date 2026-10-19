@@ -595,15 +595,6 @@ Popout {
                 applyFn: value => Theme.cornerRadius = Math.max(0, Math.round(value))
                 persistFn: value => Theme.persistCornerRadius(value)
             }
-
-            Text {
-                width: parent.width
-                text: "Enable picom to apply the radius to windows."
-                wrapMode: Text.WordWrap
-                color: Wm.picomEnabled ? Theme.foregroundMuted : Theme.brightOrange
-                font.family: Theme.fontFamily
-                font.pixelSize: Math.max(8, Theme.fontSize - 3)
-            }
         }
 
         Rectangle {

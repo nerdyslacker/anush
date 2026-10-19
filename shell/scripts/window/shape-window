@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+
+"""Apply a union of rounded rectangles to an X11 window's bounding shape."""
+
+from __future__ import annotations
+
+import ctypes
+import math
+import subprocess
+import sys
+import time
+
+
+class Rectangle(ctypes.Structure):
+    _fields_ = [
+        ("x", ctypes.c_int16),
+        ("y", ctypes.c_int16),
+        ("width", ctypes.c_uint16),
+        ("height", ctypes.c_uint16),
+    ]
+
+
+def rounded_rectangles(x: int, y: int, width: int, height: int,
+                       radius: int) -> list[Rectangle]:
+    width = max(0, width)
+    height = max(0, height)
+    if width == 0 or height == 0:
+        return []
+    radius = max(0, min(radius, width // 2, height // 2))
+    if radius == 0:
+        return [Rectangle(x, y, width, height)]
+
+    def inset(row: int) -> int:
+        edge = min(row, height - 1 - row)
+        if edge >= radius:
+            return 0
+        distance = radius - (edge + 0.5)
+        return math.ceil(radius - math.sqrt(max(
+            0.0, radius * radius - distance * distance)))
+
+    result: list[Rectangle] = []
+    band_y = 0
+    band_inset = inset(0)
+    for row in range(1, height):
+        next_inset = inset(row)
+        if next_inset == band_inset:
+            continue
+        result.append(Rectangle(
+            x + band_inset, y + band_y,
+            max(1, width - 2 * band_inset), row - band_y,
+        ))
+        band_y = row
+        band_inset = next_inset
+    result.append(Rectangle(
+        x + band_inset, y + band_y,
+        max(1, width - 2 * band_inset), height - band_y,
+    ))
+    return result
+
+
+def window_geometry(window: str) -> tuple[int, int, int, int] | None:
+    try:
+        result = subprocess.run(
+            ["xdotool", "getwindowgeometry", "--shell", window],
+            check=False, capture_output=True, text=True, timeout=1,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    values: dict[str, int] = {}
+    for line in result.stdout.splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key in {"X", "Y", "WIDTH", "HEIGHT"}:
+            try:
+                values[key] = int(value)
+            except ValueError:
+                return None
+    if len(values) != 4:
+        return None
+    return values["X"], values["Y"], values["WIDTH"], values["HEIGHT"]
+
+
+def find_windows(pid: str, wanted: tuple[int, int, int, int]) -> list[int]:
+    for _ in range(8):
+        try:
+            result = subprocess.run(
+                ["xdotool", "search", "--pid", pid], check=False,
+                capture_output=True, text=True, timeout=1,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return []
+        matches: list[int] = []
+        for window in result.stdout.split():
+            if window_geometry(window) == wanted:
+                try:
+                    matches.append(int(window, 0))
+                except ValueError:
+                    continue
+        if matches:
+            return matches
+        time.sleep(0.01)
+    return []
+
+
+def apply_shape(window: int, rectangles: list[Rectangle]) -> bool:
+    try:
+        xcb = ctypes.CDLL("libxcb.so.1")
+        shape = ctypes.CDLL("libxcb-shape.so.0")
+    except OSError:
+        return False
+
+    xcb.xcb_connect.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_int)]
+    xcb.xcb_connect.restype = ctypes.c_void_p
+    xcb.xcb_connection_has_error.argtypes = [ctypes.c_void_p]
+    xcb.xcb_connection_has_error.restype = ctypes.c_int
+    xcb.xcb_flush.argtypes = [ctypes.c_void_p]
+    xcb.xcb_flush.restype = ctypes.c_int
+    xcb.xcb_disconnect.argtypes = [ctypes.c_void_p]
+    shape.xcb_shape_rectangles.argtypes = [
+        ctypes.c_void_p, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8,
+        ctypes.c_uint32, ctypes.c_int16, ctypes.c_int16, ctypes.c_uint32,
+        ctypes.POINTER(Rectangle),
+    ]
+
+    connection = xcb.xcb_connect(None, None)
+    if not connection or xcb.xcb_connection_has_error(connection):
+        if connection:
+            xcb.xcb_disconnect(connection)
+        return False
+    try:
+        array_type = Rectangle * len(rectangles)
+        array = array_type(*rectangles)
+        # operation=Set, destination=Bounding, ordering=Unsorted. X Shape
+        # unions all rectangles in one request into the native window bound.
+        shape.xcb_shape_rectangles(
+            connection, 0, 0, 0, window, 0, 0,
+            len(rectangles), array,
+        )
+        xcb.xcb_flush(connection)
+    finally:
+        xcb.xcb_disconnect(connection)
+    return True
+
+
+def clear_shape(window: int) -> bool:
+    """Restore the window's default rectangular bounding region."""
+    try:
+        xcb = ctypes.CDLL("libxcb.so.1")
+        shape = ctypes.CDLL("libxcb-shape.so.0")
+    except OSError:
+        return False
+
+    xcb.xcb_connect.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_int)]
+    xcb.xcb_connect.restype = ctypes.c_void_p
+    xcb.xcb_connection_has_error.argtypes = [ctypes.c_void_p]
+    xcb.xcb_connection_has_error.restype = ctypes.c_int
+    xcb.xcb_flush.argtypes = [ctypes.c_void_p]
+    xcb.xcb_flush.restype = ctypes.c_int
+    xcb.xcb_disconnect.argtypes = [ctypes.c_void_p]
+    shape.xcb_shape_mask.argtypes = [
+        ctypes.c_void_p, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint32,
+        ctypes.c_int16, ctypes.c_int16, ctypes.c_uint32,
+    ]
+
+    connection = xcb.xcb_connect(None, None)
+    if not connection or xcb.xcb_connection_has_error(connection):
+        if connection:
+            xcb.xcb_disconnect(connection)
+        return False
+    try:
+        # operation=Set, destination=Bounding, source=None restores the
+        # server's default rectangle so a compositor can use the ARGB edge.
+        shape.xcb_shape_mask(connection, 0, 0, window, 0, 0, 0)
+        xcb.xcb_flush(connection)
+    finally:
+        xcb.xcb_disconnect(connection)
+    return True
+
+
+def self_test() -> int:
+    square = rounded_rectangles(2, 3, 10, 8, 0)
+    assert len(square) == 1
+    assert (square[0].x, square[0].y, square[0].width,
+            square[0].height) == (2, 3, 10, 8)
+    rounded = rounded_rectangles(0, 0, 20, 20, 6)
+    assert rounded
+    assert sum(rect.height for rect in rounded) == 20
+    assert rounded[0].width < 20 and rounded[-1].width < 20
+    assert max(rect.width for rect in rounded) == 20
+    return 0
+
+
+def main() -> int:
+    if sys.argv[1:] == ["--self-test"]:
+        return self_test()
+    clear = len(sys.argv) > 1 and sys.argv[1] == "--clear"
+    offset = 1 if clear else 0
+    if ((clear and len(sys.argv) != 7)
+            or (not clear
+                and (len(sys.argv) < 11 or (len(sys.argv) - 6) % 5 != 0))):
+        print(
+            "usage: shape-window [--clear] PID X Y WIDTH HEIGHT "
+            "RECT_X RECT_Y RECT_WIDTH RECT_HEIGHT RADIUS [...]",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        pid = str(int(sys.argv[1 + offset]))
+        wanted = tuple(int(value) for value in sys.argv[2 + offset:6 + offset])
+        specs = [] if clear else [int(value) for value in sys.argv[6:]]
+    except ValueError:
+        return 2
+    windows = find_windows(pid, wanted)
+    if not windows:
+        return 0
+    if clear:
+        return 0 if all(clear_shape(window) for window in windows) else 1
+    rectangles: list[Rectangle] = []
+    for index in range(0, len(specs), 5):
+        rectangles.extend(rounded_rectangles(*specs[index:index + 5]))
+    if not rectangles:
+        return 0
+    return 0 if all(apply_shape(window, rectangles) for window in windows) else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
