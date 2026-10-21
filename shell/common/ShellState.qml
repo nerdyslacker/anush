@@ -111,6 +111,10 @@ Singleton {
                 current: "",
                 history: []
             },
+            clipboard: {
+                provider: "clipmenu",
+                pasteShortcut: "auto"
+            },
             theme: {
                 accent: "orange",
                 customAccent: "#6574A8",

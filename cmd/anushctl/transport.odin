@@ -254,7 +254,80 @@ run_attached :: proc(command: []string, action: string) -> int {
     return state.exit_code
 }
 
+clipboard_provider_file :: proc(path: string) -> string {
+    if path == "" || !os.exists(path) { return "" }
+    data, read_err := os.read_entire_file(path, context.temp_allocator)
+    if read_err != nil { return "" }
+    config: struct {
+        clipboard: struct {
+            provider: string `json:"provider"`,
+        } `json:"clipboard"`,
+    }
+    if json.unmarshal(data, &config, allocator = context.temp_allocator) != nil {
+        return ""
+    }
+    if config.clipboard.provider == "minni" { return "minni" }
+    if config.clipboard.provider == "clipmenu" { return "clipmenu" }
+    return ""
+}
+
+clipboard_provider :: proc() -> string {
+    override_buf: [4096]u8
+    if configured := os.get_env_buf(override_buf[:], "ANUSH_CLIPBOARD_PROVIDER");
+            configured == "minni" || configured == "clipmenu" {
+        if configured == "minni" { return "minni" }
+        return "clipmenu"
+    }
+
+    provider := "minni"
+    root := shell_root()
+    if root != "" {
+        defaults_path := fmt.aprintf("%s/config/defaults.json", root)
+        if configured := clipboard_provider_file(defaults_path); configured != "" {
+            provider = configured
+        }
+        delete(defaults_path)
+        delete(root)
+    }
+
+    config_buf, state_buf, xdg_state_buf, home_buf: [4096]u8
+    config_path := os.get_env_buf(config_buf[:], "ANUSH_USER_CONFIG")
+    config_path_owned, state_path_owned := "", ""
+    defer if config_path_owned != "" { delete(config_path_owned) }
+    defer if state_path_owned != "" { delete(state_path_owned) }
+    if config_path == "" {
+        config_dir := user_config_dir()
+        defer if config_dir != "" { delete(config_dir) }
+        if config_dir != "" {
+            config_path_owned = fmt.aprintf("%s/config.json", config_dir)
+            config_path = config_path_owned
+        }
+    }
+
+    if configured := clipboard_provider_file(config_path); configured != "" {
+        provider = configured
+    }
+
+    state_dir := os.get_env_buf(state_buf[:], "ANUSH_STATE_DIR")
+    if state_dir != "" {
+        state_path_owned = fmt.aprintf("%s/shell-state.json", state_dir)
+    } else if xdg_state := os.get_env_buf(
+            xdg_state_buf[:], "XDG_STATE_HOME"); xdg_state != "" {
+        state_path_owned = fmt.aprintf("%s/anush/shell-state.json", xdg_state)
+    } else if home := os.get_env_buf(home_buf[:], "HOME"); home != "" {
+        state_path_owned = fmt.aprintf("%s/.local/state/anush/shell-state.json", home)
+    }
+    if state_provider := clipboard_provider_file(state_path_owned);
+            state_provider != "" {
+        provider = state_provider
+    }
+    return provider
+}
+
 run_clipboard_daemon :: proc() -> int {
+    if clipboard_provider() == "minni" {
+        return run_attached([]string{"minnid"}, "start minni clipboard daemon")
+    }
     root, ready := prepare_shell_root()
     if !ready { return EXIT_RUNTIME }
     defer delete(root)

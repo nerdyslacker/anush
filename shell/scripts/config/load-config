@@ -85,6 +85,22 @@ def main():
     effective = merge(defaults, user, "user config", diagnose=True)
     effective = merge(effective, state, "state")
 
+    provider = effective.get("clipboard", {}).get("provider")
+    if provider not in {"clipmenu", "minni"}:
+        print(
+            "anush config: 'clipboard.provider' must be 'clipmenu' or 'minni'; using default",
+            file=sys.stderr,
+        )
+        effective["clipboard"]["provider"] = defaults["clipboard"]["provider"]
+
+    paste_shortcut = effective.get("clipboard", {}).get("pasteShortcut")
+    if paste_shortcut not in {"auto", "shift+insert", "ctrl+shift+v", "ctrl+v"}:
+        print(
+            "anush config: invalid 'clipboard.pasteShortcut'; using default",
+            file=sys.stderr,
+        )
+        effective["clipboard"]["pasteShortcut"] = defaults["clipboard"]["pasteShortcut"]
+
     # State documents predating named presets only recorded light/dark.
     if "theme" in state and "preset" not in state["theme"]:
         effective["theme"]["preset"] = (

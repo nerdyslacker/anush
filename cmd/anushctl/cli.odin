@@ -23,7 +23,7 @@ Runtime commands:
   restart                        Stop and relaunch the shell
   lock                           Lock the session with Betterlockscreen
   launcher toggle               Toggle the application launcher
-  clipboard toggle|daemon       Toggle history or run its capture daemon
+  clipboard toggle|daemon       Toggle history or run the configured daemon
   sidebar toggle                Toggle the Notepad sidebar
   notes toggle|new|save|close    Control Notepad
   popup network|hotspot|bluetooth|phone Open a connectivity popup

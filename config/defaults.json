@@ -58,6 +58,10 @@
     "current": "",
     "history": []
   },
+  "clipboard": {
+    "provider": "minni",
+    "pasteShortcut": "auto"
+  },
   "theme": {
     "accent": "orange",
     "customAccent": "#6574A8",

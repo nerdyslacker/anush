@@ -72,7 +72,10 @@ Quickshell's native hard reload and keeps the process instance. `restart`
 waits for the old instance to stop, launches its replacement, and verifies that
 its IPC endpoint is ready. `lock` invokes Betterlockscreen and
 returns its exit status. The `daemon` and `restore` commands provide stable
-skarwm autostart entry points for anush-owned clipboard and wallpaper behavior.
+skarwm autostart entry points for clipboard-daemon and wallpaper behavior.
+`clipboard daemon` runs `minnid` when the configured provider is `minni` and
+the existing clipmenu daemon otherwise. Use only this command or a separate
+service supervisor, not both.
 
 The writable override directory is `$ANUSH_CONFIG_DIR` when set, otherwise
 `$XDG_CONFIG_HOME/skarwm/anush` or `$HOME/.config/skarwm/anush`. The CLI finds

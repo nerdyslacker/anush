@@ -18,6 +18,7 @@ singleton ShellControl common/ShellControl.qml
 singleton ShellActions common/ShellActions.qml
 singleton KeyboardState components/Keyboard/KeyboardState.qml
 singleton ClipboardState components/Clipboard/ClipboardState.qml
+MinniProvider components/Clipboard/MinniProvider.qml
 singleton ColorPickerState components/ColorPicker/ColorPickerState.qml
 singleton TagConfig components/Workspaces/TagConfig.qml
 singleton LauncherState components/Launcher/LauncherState.qml
