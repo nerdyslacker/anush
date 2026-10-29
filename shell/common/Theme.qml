@@ -282,7 +282,22 @@ Singleton {
             root.background.toString(),
             root.surface.toString(),
             root.disabled.toString(),
-            root.outline.toString()
+            root.outline.toString(),
+            root.red.toString(),
+            root.green.toString(),
+            root.yellow.toString(),
+            root.blue.toString(),
+            root.magenta.toString(),
+            root.cyan.toString(),
+            root.white.toString(),
+            root.brightBlack.toString(),
+            root.brightRed.toString(),
+            root.brightGreen.toString(),
+            root.brightYellow.toString(),
+            root.brightBlue.toString(),
+            root.brightMagenta.toString(),
+            root.brightCyan.toString(),
+            root.brightWhite.toString()
         ])
         AppearanceService.applyAccent(selected.toString())
     }

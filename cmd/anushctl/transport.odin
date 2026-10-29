@@ -59,7 +59,7 @@ user_config_dir :: proc() -> string {
 
 seed_writable_config :: proc(root, target: string) {
     if target == "" { return }
-    directories := [5]string{"dunst", "fastfetch", "kitty", "picom", "rofi"}
+    directories := [6]string{"dunst", "fastfetch", "kitty", "nare", "picom", "rofi"}
     for directory in directories {
         destination := fmt.aprintf("%s/%s", target, directory)
         defer delete(destination)
