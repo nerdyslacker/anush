@@ -4,14 +4,31 @@
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from pathlib import Path
 
 
-ROLLBACK_PATH = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "anush-display-rollback.json"
+def rollback_path():
+    configured = os.environ.get("XDG_RUNTIME_DIR", "")
+    if not configured:
+        raise RuntimeError("A private XDG_RUNTIME_DIR is required")
+    directory = Path(configured)
+    try:
+        metadata = directory.stat(follow_symlinks=False)
+    except OSError as error:
+        raise RuntimeError("A private XDG_RUNTIME_DIR is required") from error
+    if not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != os.getuid() \
+            or metadata.st_mode & 0o077:
+        raise RuntimeError("XDG_RUNTIME_DIR must be owned by the current user and private")
+    return directory / "anush-display-rollback.json"
+
+
+ROLLBACK_PATH = None
 OUTPUT_RE = re.compile(
     r"^(\S+) connected(?P<primary> primary)?(?: (?P<w>\d+)x(?P<h>\d+)"
     r"(?P<x>[+-]\d+)(?P<y>[+-]\d+))?.*?(?:(?P<pw>\d+)mm x (?P<ph>\d+)mm)?$")
@@ -128,8 +145,24 @@ def rollback_record():
     return json.loads(ROLLBACK_PATH.read_text())
 
 
+def write_rollback(value):
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".anush-display-rollback.", dir=ROLLBACK_PATH.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as temporary:
+            json.dump(value, temporary)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary_name, ROLLBACK_PATH)
+    finally:
+        Path(temporary_name).unlink(missing_ok=True)
+
+
 def main():
+    global ROLLBACK_PATH
     command = sys.argv[1] if len(sys.argv) > 1 else "list"
+    if command in {"apply", "keep", "revert", "watchdog"}:
+        ROLLBACK_PATH = rollback_path()
     if command == "list":
         print(json.dumps({"backend": "xrandr", "supportsMirroring": True,
                           "supportsPrimary": True, "outputs": enumerate_outputs()}))
@@ -137,7 +170,7 @@ def main():
         outputs = json.loads(sys.argv[2])
         validate(outputs)
         token = uuid.uuid4().hex
-        ROLLBACK_PATH.write_text(json.dumps({"token": token, "outputs": enumerate_outputs()}))
+        write_rollback({"token": token, "outputs": enumerate_outputs()})
         try:
             apply_outputs(outputs)
         except Exception:

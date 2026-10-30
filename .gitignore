@@ -1,3 +1,5 @@
 local/
 build/
 tests/
+__pycache__/
+*.pyc

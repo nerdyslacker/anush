@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -21,17 +22,34 @@ def fail(message: str) -> "None":
     raise SystemExit(1)
 
 
+def read_instance(directory: Path, owner: int) -> tuple[int, str, str] | None:
+    pid_path = directory / "pid"
+    interface_path = directory / "wifi_iface"
+    try:
+        paths = (directory, pid_path, interface_path)
+        metadata = [path.stat(follow_symlinks=False) for path in paths]
+        if not stat.S_ISDIR(metadata[0].st_mode) \
+                or any(not stat.S_ISREG(value.st_mode) for value in metadata[1:]) \
+                or any(value.st_uid != owner or value.st_mode & 0o022 for value in metadata):
+            return None
+        pid = int(pid_path.read_text().strip())
+        ap_interface = interface_path.read_text().strip()
+    except (OSError, ValueError):
+        return None
+    base = directory.name[len("create_ap."):].split(".conf.", 1)[0]
+    if pid <= 0 or not NAME.fullmatch(base) or not NAME.fullmatch(ap_interface):
+        return None
+    return pid, base, ap_interface
+
+
 def instances() -> dict[int, tuple[str, str]]:
     result: dict[int, tuple[str, str]] = {}
     for directory in Path("/tmp").glob("create_ap.*.conf.*"):
-        try:
-            pid = int((directory / "pid").read_text().strip())
-            ap_interface = (directory / "wifi_iface").read_text().strip()
-        except (OSError, ValueError):
+        instance = read_instance(directory, 0)
+        if instance is None:
             continue
+        pid, base, ap_interface = instance
         if Path("/proc", str(pid)).exists():
-            name = directory.name
-            base = name[len("create_ap."):].split(".conf.", 1)[0]
             result[pid] = (base, ap_interface)
     return result
 

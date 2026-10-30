@@ -106,22 +106,19 @@ Singleton {
     }
 
     function activateNetwork(network, password) {
-        if (!network || network.stateChanging || busy || !wifiDevice)
+        if (!network || network.stateChanging || busy)
             return
         error = ""
-        if (network.connected) {
-            runAction(["nmcli", "device", "disconnect", wifiDevice.name],
-                "Disconnecting " + network.name + "…")
-        } else if (network.known || savedWifi.indexOf(network.name) !== -1) {
+        if (network.connected)
+            network.disconnect()
+        else if (network.known
+                || network.security === QsNetwork.WifiSecurityType.Open)
+            network.connect()
+        else if (savedWifi.indexOf(network.name) !== -1)
             runAction(["nmcli", "connection", "up", "id", network.name],
                 "Connecting to " + network.name + "…")
-        } else if (network.security === QsNetwork.WifiSecurityType.Open) {
-            runAction(["nmcli", "device", "wifi", "connect", network.name],
-                "Connecting to " + network.name + "…")
-        } else {
-            runAction(["nmcli", "device", "wifi", "connect", network.name,
-                "password", password], "Connecting to " + network.name + "…")
-        }
+        else
+            network.connectWithPsk(password)
     }
 
     function reportConnectionFailure(reason) {

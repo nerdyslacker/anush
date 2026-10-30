@@ -104,15 +104,8 @@ BarModule {
     property string _buf: ""
     Process {
         id: fetch
-        // Verify TLS normally. If wttr.in specifically fails certificate
-        // validation (curl 60), retry the same HTTPS URL without validation;
-        // the response is parsed as data and never executed.
-        command: ["sh", "-c",
-            "curl -sfL -m 10 --proto '=https' \"$1\"; " +
-            "status=$?; if [ \"$status\" -eq 60 ]; then " +
-            "exec curl -skfL -m 10 --proto '=https' \"$1\"; fi; " +
-            "exit \"$status\"",
-            "weather-fetch", root.requestUrl]
+        command: ["curl", "-sfL", "-m", "10", "--proto", "=https",
+            root.requestUrl]
         running: true
         stdout: SplitParser {
             onRead: line => root._buf += line

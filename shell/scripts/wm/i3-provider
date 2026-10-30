@@ -221,8 +221,6 @@ def normalize(raw):
         output = str(workspace.get("output", ""))
         fallback_index = indexes.get(output, 0)
         indexes[output] = fallback_index + 1
-        number = int(workspace.get("num", -1))
-        index = number - 1 if number > 0 else fallback_index
         name = str(workspace.get("name", ""))
         node = workspace_nodes.get(name, {})
         workspace_layout = str(node.get("workspace_layout") or "")
@@ -235,7 +233,7 @@ def normalize(raw):
         workspaces.append({
             "id": name,
             "name": name,
-            "index": index,
+            "index": fallback_index,
             "screenId": output,
             "active": workspace.get("visible") is True,
             "focused": workspace.get("focused") is True,
