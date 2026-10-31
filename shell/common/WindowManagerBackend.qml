@@ -14,6 +14,8 @@ Scope {
     property var workspaces: []
     property var windows: []
     property var layouts: []
+    property bool configurationReady: false
+    property var configuration: ({})
 
     signal changed()
     signal actionFailed(string action, string reason)
@@ -48,9 +50,11 @@ Scope {
     }
     function setLayout(command) { return unsupported("setLayout") }
     function setGaps(value) { return unsupported("setGaps") }
-    function setDecorationsEnabled(enabled) {
+    function persistGaps(value) { return false }
+    function setDecorationsEnabled(enabled, persist) {
         return unsupported("setDecorationsEnabled")
     }
+    function persistWindowRadius(value) { return false }
     function addReminder(minutes, message) {
         return unsupported("addReminder")
     }

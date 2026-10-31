@@ -13,7 +13,6 @@ decoration_active_foreground=${7:-$foreground}
 decoration_inactive_foreground=${8:-$foreground}
 decoration_active_border=${9:-$accent}
 decoration_inactive_border=${10:-$secondary}
-decorations_enabled=${11:-}
 background=${12:-}
 surface=${13:-}
 disabled=${14:-}
@@ -58,10 +57,6 @@ valid_color "$decoration_active_foreground" || exit 2
 valid_color "$decoration_inactive_foreground" || exit 2
 valid_color "$decoration_active_border" || exit 2
 valid_color "$decoration_inactive_border" || exit 2
-case $decorations_enabled in
-    true|false|'') ;;
-    *) exit 2 ;;
-esac
 if [ "$#" -ge 30 ]; then
     for color in "$background" "$surface" "$disabled" "$outline" \
             "$red" "$green" "$yellow" "$blue" "$magenta" "$cyan" \
@@ -142,8 +137,7 @@ rewrite_key() {
 
 rewrite_decoration_palette() {
     file=$1
-    [ -z "$decorations_enabled" ] \
-        || rewrite_key "$file" decorations_enabled "$decorations_enabled"
+    # Decoration enablement belongs to the rc/UI sync, not palette updates.
     rewrite_key "$file" decoration_color_source explicit
     rewrite_key "$file" decoration_accent "$accent"
     rewrite_key "$file" decoration_active_background "$decoration_active_background"

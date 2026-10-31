@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Apply anush's decoration switch without reloading skarwm.
+# Persist anush's decoration switch and apply it without reloading skarwm.
 set -u
 
 enabled=${1:-}
@@ -11,4 +11,7 @@ case $enabled in
 esac
 
 message=$(command -v "$wm_message" 2>/dev/null || true)
+editor=$(CDPATH= cd "$(dirname "$0")/../skarwm" && pwd)/config-editor
+SKARWM_MSG=$wm_message "$editor" set decorations_enabled "$enabled" >/dev/null \
+    || exit 1
 [ -z "$message" ] || "$message" decorations "$enabled" >/dev/null 2>&1 || true

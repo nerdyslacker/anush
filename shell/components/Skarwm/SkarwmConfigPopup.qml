@@ -32,6 +32,10 @@ Popout {
     ]
     readonly property var decorationSettings: [
         { key: "decorations_enabled", label: "Native decorations", kind: "bool" },
+        { key: "decoration_audio_enabled", label: "Audio controls", kind: "bool" },
+        { key: "decoration_audio_show_percentage", label: "Show volume percentage", kind: "bool" },
+        { key: "decoration_audio_slider_width", label: "Volume slider width", kind: "number", suffix: "px" },
+        { key: "decoration_audio_volume_step", label: "Volume step", kind: "number", suffix: "%" },
         { key: "decoration_show_title", label: "Show window title", kind: "bool" },
         { key: "decoration_titlebar_height", label: "Titlebar height", kind: "number", suffix: "px" },
         { key: "decoration_border_width", label: "Frame border", kind: "number", suffix: "px" },
@@ -477,6 +481,8 @@ Popout {
             Rectangle {
                 id: pagePanel
                 width: parent.width - 190; height: parent.height
+                enabled: !SkarwmConfigService.loading
+                    && !SkarwmConfigService.saving
                 radius: Theme.radiusMedium; color: Theme.gray1
                 border.width: 1; border.color: Theme.gray5
 

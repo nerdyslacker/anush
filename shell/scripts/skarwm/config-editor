@@ -21,6 +21,10 @@ SETTINGS = {
     "norm_outer_border": "#3A3A3A",
     "sel_outer_border": "#E0AF68",
     "decorations_enabled": False,
+    "decoration_audio_enabled": True,
+    "decoration_audio_show_percentage": True,
+    "decoration_audio_slider_width": 90,
+    "decoration_audio_volume_step": 5,
     "decoration_titlebar_height": 20,
     "decoration_border_width": 1,
     "decoration_resize_hit_width": 4,
@@ -55,8 +59,9 @@ SETTINGS = {
 }
 
 BOOL_KEYS = {
-    "decorations_enabled", "decoration_show_title", "focus_follows_mouse",
-    "animations", "bar_enabled",
+    "decorations_enabled", "decoration_audio_enabled",
+    "decoration_audio_show_percentage", "decoration_show_title",
+    "focus_follows_mouse", "animations", "bar_enabled",
 }
 INT_RANGES = {
     "outer_gap": (-4096, 4096), "inner_gap": (-4096, 4096),
@@ -64,6 +69,8 @@ INT_RANGES = {
     "decoration_titlebar_height": (16, 128),
     "decoration_border_width": (0, 32),
     "decoration_resize_hit_width": (1, 32),
+    "decoration_audio_slider_width": (70, 100),
+    "decoration_audio_volume_step": (1, 25),
     "preview_hover_delay_ms": (0, 5000),
     "animation_duration_ms": (0, 5000), "animation_fps": (1, 240),
     "bar_height": (1, 512), "bar_font_size": (6, 72),
@@ -143,7 +150,7 @@ def quote(value: object) -> str:
 
 
 def active_path() -> Path | None:
-    command = shutil.which("skarwm-msg")
+    command = shutil.which(os.environ.get("SKARWM_MSG") or "skarwm-msg")
     if command:
         try:
             result = subprocess.run([command, "get-version"], text=True,
@@ -185,9 +192,17 @@ def empty_document(path: Path) -> dict:
     }
 
 
+def inherit_decoration_border_width(document: dict) -> None:
+    """An omitted decoration width follows border_width, matching skarwm."""
+    if not any("decoration_border_width" in values
+               for values in document["_fileSettings"].values()):
+        document["settings"]["decoration_border_width"] = document["settings"]["border_width"]
+
+
 def parse(path: Path) -> dict:
     document = empty_document(path)
     if not path.exists():
+        inherit_decoration_border_width(document)
         return document
     # An existing rc graph replaces the built-in lists completely. Source
     # metadata lets the editor write each row back to the file it came from.
@@ -336,6 +351,7 @@ def parse(path: Path) -> dict:
             stack.pop()
 
     parse_file(root)
+    inherit_decoration_border_width(document)
     document["_serialized"] = {
         source: serialize_source(document, source)
         for source in document["_sources"]
@@ -378,7 +394,11 @@ def serialize_source(document: dict, source: str) -> str:
     if settings:
         lines.extend(["", "# General and window appearance"])
     keys = SETTINGS if is_root else settings
+    file_settings = document.get("_fileSettings", {}).get(source, {})
     for key in keys:
+        # An omitted frame width keeps inheriting border_width; only overrides are pinned.
+        if key == "decoration_border_width" and key not in file_settings:
+            continue
         default = SETTINGS[key]
         value = settings.get(key, default)
         if key in BOOL_KEYS:
@@ -511,6 +531,53 @@ def serialize(document: dict) -> str:
     return serialize_source(document, str(document.get("path", active_path())))
 
 
+def set_settings(values: list[str]) -> dict:
+    if not values or len(values) % 2:
+        raise ValueError("set requires setting/value pairs")
+    path = active_path()
+    if path is None:
+        raise ValueError("Cannot determine skarwm configuration path")
+    path = path.resolve()
+    allowed = {"decorations_enabled", "outer_gap", "inner_gap", "corner_radius"}
+    updates: dict[str, str] = {}
+    for key, raw in zip(values[::2], values[1::2]):
+        if key not in allowed:
+            raise ValueError(f"Unknown skarwm setting: {key}")
+        if key in BOOL_KEYS:
+            if raw not in ("true", "false"):
+                raise ValueError(f"{key} must be true or false")
+            updates[key] = raw
+        elif key in INT_RANGES:
+            updates[key] = str(integer(raw, key, *INT_RANGES[key]))
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    found: set[str] = set()
+    for index, line in enumerate(lines):
+        key = line.split(":", 1)[0].strip() if ":" in line else ""
+        if key in updates:
+            lines[index] = f"{key} : {updates[key]}"
+            found.add(key)
+    for key, value in updates.items():
+        if key not in found:
+            lines.append(f"{key} : {value}")
+
+    mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write("\n".join(lines) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, mode)
+        os.replace(temporary, path)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+    return parse(path)
+
+
 def save(document: dict, reload_wm: bool) -> dict:
     path = active_path()
     if path is None:
@@ -580,6 +647,8 @@ def main() -> int:
             raise ValueError("Cannot determine skarwm configuration path")
         if command == "read":
             result = parse(path)
+        elif command == "set":
+            result = set_settings(sys.argv[2:])
         elif command in ("save", "save-reload"):
             result = save(json.loads(sys.stdin.readline()), command == "save-reload")
         else:

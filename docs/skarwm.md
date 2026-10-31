@@ -60,8 +60,7 @@ autostart : "anushctl clipboard daemon"
 autostart : "xss-lock -- anushctl lock"
 ```
 
-Window-border, corner-radius, decoration, and theme controls use `skarwm-msg`
-to update the running WM without rewriting its rc file.
+Window-border and theme controls use `skarwm-msg` to update the running WM.
 
 The Alt+Tab overview uses ImageMagick to capture window previews when it opens.
 Its window cards can be dragged onto a tag in the workspace strip; anush orders
@@ -70,8 +69,9 @@ client was previously focused, is sent to the target tag.
 
 While anush is connected through skarwm's shell UI subscription, automatic rc
 hot reload is suspended. Shell controls apply gaps, window radius, and
-decorations through live IPC commands, then persist their values without
-reloading the WM or closing open popups. Anush persists them in its own state;
-the skarwm rc remains the standalone fallback. Explicit reload commands and **Save &
-Reload** in the skarwm editor still reload the configuration. Normal automatic
-hot reload resumes as soon as the shell disconnects.
+decorations through live IPC commands, then persist them to the active rc file
+without reloading the WM or closing open popups. Editing those values in the rc
+file also updates the shell controls and their mirrored shell-state values.
+Explicit reload commands and **Save & Reload** in the skarwm editor still
+reload the configuration. Normal automatic hot reload resumes as soon as the
+shell disconnects.

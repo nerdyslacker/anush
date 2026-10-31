@@ -169,7 +169,7 @@ Singleton {
         if (serialized === JSON.stringify(state))
             return;
         state = next;
-        stateFile.setText(JSON.stringify(next, null, 2) + "\n");
+        stateFile.setText(JSON.stringify(state, null, 2) + "\n");
     }
 
     Process {

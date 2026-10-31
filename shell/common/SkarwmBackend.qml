@@ -61,6 +61,8 @@ WindowManagerBackend {
         registeredScratchpads = []
         activeWinId = ""
         title = ""
+        configurationReady = false
+        configuration = ({})
         changed()
     }
 
@@ -120,7 +122,8 @@ WindowManagerBackend {
     function acceptWorkspaceConfig(line) {
         try {
             const value = JSON.parse(line)
-            const entries = value?.document?.workspaceLayouts
+            const document = value?.document
+            const entries = document?.workspaceLayouts
             if (!Array.isArray(entries)) return
             const next = ({})
             for (const entry of entries) {
@@ -132,6 +135,8 @@ WindowManagerBackend {
                     }
             }
             workspaceConfigurations = next
+            configuration = document.settings ?? ({})
+            configurationReady = true
             changed()
         } catch (error) {
             console.warn("skarwm workspace configuration:", error)
@@ -276,15 +281,52 @@ WindowManagerBackend {
 
     function setGaps(value) {
         if (!connected) return false
+        configuration = Object.assign({}, configuration, {
+            outer_gap: value,
+            inner_gap: value
+        })
         Quickshell.execDetached([msgPath, "gaps", String(value)])
         return true
     }
 
-    function setDecorationsEnabled(enabled) {
+    function persistGaps(value) {
         if (!active) return false
+        configuration = Object.assign({}, configuration, {
+            outer_gap: value,
+            inner_gap: value
+        })
         Quickshell.execDetached([
-            ShellState.scriptsDir + "/theme/apply-window-decorations",
-            enabled === true ? "true" : "false", msgPath
+            Theme.scriptsDir + "/skarwm/config-editor", "set",
+            "outer_gap", String(value), "inner_gap", String(value)
+        ])
+        return true
+    }
+
+    function setDecorationsEnabled(enabled, persist) {
+        if (!active) return false
+        configuration = Object.assign({}, configuration, {
+            decorations_enabled: enabled === true
+        })
+        if (persist === false)
+            Quickshell.execDetached([
+                msgPath, "decorations", enabled === true ? "true" : "false"
+            ])
+        else
+            Quickshell.execDetached([
+                ShellState.scriptsDir + "/theme/apply-window-decorations",
+                enabled === true ? "true" : "false", msgPath
+            ])
+        return true
+    }
+
+    function persistWindowRadius(value) {
+        if (!active) return false
+        configuration = Object.assign({}, configuration, {
+            corner_radius: value
+        })
+        Quickshell.execDetached([
+            Theme.scriptsDir + "/skarwm/config-editor", "set",
+            "corner_radius", String(value)
         ])
         return true
     }
@@ -420,8 +462,10 @@ WindowManagerBackend {
                     const change = String(event.change)
                     if (change.startsWith("ui-")) {
                         if (change === "ui-notice"
-                                && String(event.text ?? "") === "Configuration reloaded")
+                                && String(event.text ?? "") === "Configuration reloaded") {
+                            root.refresh()
                             return
+                        }
                         root.uiEvent(event)
                         return
                     }

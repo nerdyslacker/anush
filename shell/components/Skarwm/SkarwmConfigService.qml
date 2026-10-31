@@ -36,6 +36,7 @@ Singleton {
     }
 
     function setSetting(key, value) {
+        if (loading || saving) return
         const next = clone(pending)
         next.settings[key] = value
         if (!next._fileSettings) next._fileSettings = {}
@@ -48,6 +49,7 @@ Singleton {
     function list(name) { return pending[name] ?? [] }
 
     function updateItem(name, index, values) {
+        if (loading || saving) return
         const next = clone(pending)
         if (!Array.isArray(next[name]) || index < 0 || index >= next[name].length) return
         if (values !== null && typeof values === "object")
@@ -59,6 +61,7 @@ Singleton {
     }
 
     function addItem(name, value) {
+        if (loading || saving) return
         const next = clone(pending)
         if (!Array.isArray(next[name])) next[name] = []
         if (value !== null && typeof value === "object") {
@@ -78,6 +81,7 @@ Singleton {
     }
 
     function removeItem(name, index) {
+        if (loading || saving) return
         const next = clone(pending)
         if (!Array.isArray(next[name]) || index < 0 || index >= next[name].length) return
         next[name].splice(index, 1)

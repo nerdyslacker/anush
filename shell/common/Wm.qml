@@ -49,6 +49,9 @@ Singleton {
     readonly property var screens: backend.screens ?? []
     readonly property var workspaces: backend.workspaces ?? []
     readonly property var windows: backend.windows ?? []
+    readonly property bool backendConfigurationReady:
+        backend.configurationReady === true
+    readonly property var backendConfiguration: backend.configuration ?? ({})
 
     readonly property var outputs: backend === skarwmBackend
         ? skarwmBackend.rawOutputs : compatibilityOutputs()
@@ -145,6 +148,7 @@ Singleton {
     property string appliedWmSettingsBackend: ""
     property int appliedGap: -1
     property int appliedDecorations: -1
+    property bool updatingBackendConfiguration: false
 
     function compatibilityOutputs() {
         return screens.map(screen => {
@@ -343,7 +347,10 @@ Singleton {
     function setGaps(value, persist) {
         const next = Math.min(40, Math.max(0, Math.round(value)))
         gaps = next
-        if (capabilities.gaps === true && backend.setGaps(next)) {
+        updatingBackendConfiguration = true
+        const applied = capabilities.gaps === true && backend.setGaps(next)
+        updatingBackendConfiguration = false
+        if (applied) {
             appliedWmSettingsBackend = backendName
             appliedGap = next
         }
@@ -352,19 +359,30 @@ Singleton {
     }
     function persistGaps(value) {
         gaps = Math.min(40, Math.max(0, Math.round(value)))
+        updatingBackendConfiguration = true
+        backend.persistGaps(gaps)
+        updatingBackendConfiguration = false
         ShellState.updateSection("windowManager", { gap: gaps })
     }
     function setDecorationsEnabled(enabled) {
         decorationsEnabled = enabled === true
-        ShellState.updateSection("windowManager", {
-            decorations: decorationsEnabled
-        })
+        updatingBackendConfiguration = true
         if (capabilities.decorationStyling === true) {
             if (backend.setDecorationsEnabled(decorationsEnabled)) {
                 appliedWmSettingsBackend = backendName
                 appliedDecorations = decorationsEnabled ? 1 : 0
             }
         }
+        updatingBackendConfiguration = false
+        ShellState.updateSection("windowManager", {
+            decorations: decorationsEnabled
+        })
+    }
+    function persistWindowRadius(value) {
+        updatingBackendConfiguration = true
+        const persisted = backend.persistWindowRadius(value)
+        updatingBackendConfiguration = false
+        return persisted
     }
     function toggleScratchpad(register) {
         return requireCapability("scratchpad", "toggleScratchpad")
@@ -425,29 +443,54 @@ Singleton {
     }
 
     function loadWindowManagerState() {
-        const saved = Number(ShellState.state.windowManager.gap)
-        if (!isNaN(saved)) gaps = Math.min(40, Math.max(0, Math.round(saved)))
-        decorationsEnabled = ShellState.state.windowManager.decorations === true
+        // Read the backend directly: this runs from its change signals, where
+        // Wm's own bindings (backendConfigurationReady) can still be stale.
+        const configuration = backend.configuration ?? ({})
+        const skarwmConfiguration = backendName === "skarwm"
+            && backend.configurationReady === true
+        if (skarwmConfiguration) {
+            const configuredGap = Number(configuration.outer_gap)
+            if (!isNaN(configuredGap))
+                gaps = Math.min(40, Math.max(0, Math.round(configuredGap)))
+            decorationsEnabled = configuration.decorations_enabled === true
+            const savedGap = Number(ShellState.state.windowManager.gap)
+            const savedDecorations =
+                ShellState.state.windowManager.decorations === true
+            if (savedGap !== gaps || savedDecorations !== decorationsEnabled)
+                ShellState.updateSection("windowManager", {
+                    gap: gaps,
+                    decorations: decorationsEnabled
+                })
+        } else {
+            const saved = Number(ShellState.state.windowManager.gap)
+            if (!isNaN(saved))
+                gaps = Math.min(40, Math.max(0, Math.round(saved)))
+            decorationsEnabled = ShellState.state.windowManager.decorations === true
+        }
         const savedPicom = ShellState.state.windowManager.picom
         if (!picomPreferenceLoaded && typeof savedPicom === "boolean") {
             picomPreferenceLoaded = true
             setPicomEnabled(savedPicom, false)
         }
-        if (!connected)
+        if (backend.connected !== true)
+            return
+        if (backendName === "skarwm" && backend.configurationReady !== true)
             return
         if (appliedWmSettingsBackend !== backendName) {
             appliedWmSettingsBackend = backendName
             appliedGap = -1
             appliedDecorations = -1
         }
+        updatingBackendConfiguration = true
         if (capabilities.gaps === true && appliedGap !== gaps
                 && backend.setGaps(gaps))
             appliedGap = gaps
         const decorationsValue = decorationsEnabled ? 1 : 0
         if (capabilities.decorationStyling === true
                 && appliedDecorations !== decorationsValue
-                && backend.setDecorationsEnabled(decorationsEnabled))
+                && backend.setDecorationsEnabled(decorationsEnabled, false))
             appliedDecorations = decorationsValue
+        updatingBackendConfiguration = false
     }
 
     function detectWindowManager() {
@@ -528,6 +571,11 @@ Singleton {
     Connections {
         target: root.backend
         function onChanged() { root.rememberFocusedWindow() }
+        function onConfigurationChanged() {
+            if (!root.updatingBackendConfiguration)
+                root.loadWindowManagerState()
+        }
+        function onConfigurationReadyChanged() { root.loadWindowManagerState() }
         function onActionFailed(action, reason) {
             root.actionFailed(action, reason)
         }

@@ -277,8 +277,7 @@ Singleton {
             selected.toString(),
             root.activeBorder.toString(),
             root.activeBorder.toString(),
-            ShellState.state.windowManager.decorations === true
-                ? "true" : "false",
+            "",
             root.background.toString(),
             root.surface.toString(),
             root.disabled.toString(),
@@ -326,7 +325,20 @@ Singleton {
 
     function persistCornerRadius(value) {
         cornerRadius = Math.max(0, Math.round(Number(value) || 0))
+        Wm.persistWindowRadius(cornerRadius)
         ShellState.updateSection("theme", { cornerRadius: cornerRadius })
+        applyExternalCornerRadius()
+    }
+
+    function loadSkarwmCornerRadius() {
+        if (Wm.backendName !== "skarwm" || !Wm.backendConfigurationReady)
+            return
+        const configured = Number(Wm.backendConfiguration.corner_radius)
+        if (!isFinite(configured)) return
+        const radius = Math.max(0, Math.round(configured))
+        cornerRadius = radius
+        if (Number(ShellState.state.theme.cornerRadius) !== radius)
+            ShellState.updateSection("theme", { cornerRadius: radius })
         applyExternalCornerRadius()
     }
 
@@ -686,7 +698,12 @@ Singleton {
             mode = selected.mode
         }
         wallpaperThemeEnabled = theme.wallpaperEnabled === true
-        cornerRadius = Math.max(0, Math.round(Number(theme.cornerRadius) || 0))
+        const configuredRadius = Wm.backendName === "skarwm"
+            && Wm.backendConfigurationReady
+            ? Number(Wm.backendConfiguration.corner_radius) : NaN
+        cornerRadius = isFinite(configuredRadius)
+            ? Math.max(0, Math.round(configuredRadius))
+            : Math.max(0, Math.round(Number(theme.cornerRadius) || 0))
         cornerRadiusStateLoaded = true
         applyExternalCornerRadius()
         const palette = theme.palette
@@ -815,6 +832,13 @@ Singleton {
 
     Connections {
         target: Wm
+        function onBackendConfigurationChanged() {
+            if (!Wm.updatingBackendConfiguration)
+                root.loadSkarwmCornerRadius()
+        }
+        function onBackendConfigurationReadyChanged() {
+            root.loadSkarwmCornerRadius()
+        }
         function onCapabilitiesChanged() { root.applyExternalCornerRadius() }
         function onBackendNameChanged() { root.applyExternalCornerRadius() }
         function onConnectedChanged() {
