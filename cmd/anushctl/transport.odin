@@ -134,6 +134,12 @@ ensure_fastfetch_config :: proc(config_dir: string) {
 configure_shell_environment :: proc(root: string) {
     configure_icon_theme_environment()
 
+    renderer_buf, session_type_buf: [64]u8
+    if os.get_env_buf(renderer_buf[:], "QT_QUICK_BACKEND") == "" &&
+            os.get_env_buf(session_type_buf[:], "XDG_SESSION_TYPE") == "x11" {
+        _ = os.set_env("QT_QUICK_BACKEND", "software")
+    }
+
     skarwm_msg_buf: [4096]u8
     if os.get_env_buf(skarwm_msg_buf[:], "SKARWM_MSG") == "" {
         skarwm_msg, _ := filepath.join(

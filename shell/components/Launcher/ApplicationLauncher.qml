@@ -57,6 +57,8 @@ Popout {
     }
 
     readonly property var applications: {
+        if (!root.visible)
+            return []
         const entries = DesktopEntries.applications.values.filter(app => {
             if (app.noDisplay)
                 return false
